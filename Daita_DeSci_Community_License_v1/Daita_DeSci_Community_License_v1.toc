@@ -1,0 +1,11 @@
+\contentsline {section}{\numberline {I}Preamble – The DeSciX Virtual University \& App Store: Internal Collaboration, External Value Return}{1}{section.1}%
+\contentsline {subsection}{\numberline {A}About the DeSciX Community}{2}{subsection.1.1}%
+\contentsline {subsection}{\numberline {B}About the DeSciX Community}{4}{subsection.1.2}%
+\contentsline {subsection}{\numberline {C}Examples}{6}{subsection.1.3}%
+\contentsline {section}{\numberline {II}Membership Agreement Details}{7}{section.2}%
+\contentsline {subsection}{\numberline {A}Definitions}{7}{subsection.2.1}%
+\contentsline {subsection}{\numberline {B}Notice}{9}{subsection.2.2}%
+\contentsline {section}{\numberline {III}Community Licenses: From DeSciX DAO's to Members}{9}{section.3}%
+\contentsline {subsection}{\numberline {A}DeSciX Community Source Code License (DCSL)}{9}{subsection.3.1}%
+\contentsline {subsection}{\numberline {B}DeSciX Platform as a Service (DPaaS) Community Agreement}{14}{subsection.3.2}%
+\contentsline {section}{\numberline {IV}Living Community Agreement, AI Enabled Smart Contract}{23}{section.4}%
