@@ -1,6 +1,9 @@
 # PprobablyEqualsNP
 
-This repository contains a formalization (in Lean 4) and a LaTeX paper for the claim that physics is NP-complete and that \(P = NP\), based on entropy and coding theory arguments.
+This repository contains a formalization (in Lean 4) and a LaTeX paper for the claim that physics is NP-complete and that \(P = NP\), based significantly on the all but lost math proof I call Rota's Entropy Theorem, from my former MIT professor, the late Gian-Carlo Rota. His book on Probability Theory, never published, has this and many other gems:https://archive.org/details/GianCarlo_Rota_and_Kenneth_Baclawski__An_Introduction_to_Probability_and_Random_Processes/page/n367/mode/2up
+
+The title of the paper is a play on the famous "P vs NP" problem in computer science and the notion from information theory/Shannon's Coding Theorem that in the limit, the error of coding a message becomes arbitrarily small as the message length increases - P equals NP in the limit. The paper is a work in progress, and I welcome feedback and contributions.
+
 
 ## Getting Started
 
