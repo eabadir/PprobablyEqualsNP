@@ -1,8 +1,8 @@
-PWD /Users/eabadir/Documents/Code/PnPproofs/PprobablyEqualsNP/LeanProof/Paper
+PWD /Users/eabadir/Documents/Code/PnPproofs/PprobablyEqualsNP/PprobablyEqualsNP/Paper
 INPUT /usr/local/texlive/2024/texmf.cnf
 INPUT /usr/local/texlive/2024/texmf-dist/web2c/texmf.cnf
 INPUT /usr/local/texlive/2024/texmf-var/web2c/pdftex/pdflatex.fmt
-INPUT /Users/eabadir/Documents/Code/PnPproofs/PprobablyEqualsNP/LeanProof/Paper/PprobablyEqualsNP_formal.tex
+INPUT /Users/eabadir/Documents/Code/PnPproofs/PprobablyEqualsNP/PprobablyEqualsNP/Paper/PprobablyEqualsNP_formal.tex
 OUTPUT PprobablyEqualsNP_formal.log
 INPUT /usr/local/texlive/2024/texmf-dist/tex/latex/base/report.cls
 INPUT /usr/local/texlive/2024/texmf-dist/tex/latex/base/report.cls

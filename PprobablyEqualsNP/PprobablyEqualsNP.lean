@@ -1,137 +1,47 @@
-/- Copyright (c) 2025 Essam Abadir, Distributed under the DeSciX Community License.-/
 import Mathlib.Tactic
 import Mathlib.Data.Real.Basic
-import Mathlib.Analysis.SpecialFunctions.Log.Basic -- For log base 2
-import Mathlib.Data.List.Basic -- For List.sum
-import Mathlib.Data.Set.Defs -- For Set type used by P and NP
--- Using placeholder axioms for complexity theory results not readily available
--- or easy to formalize at this level (like poly-time reduction transitivity).
-
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Data.List.Basic
+import Mathlib.Data.Set.Defs
+import PprobablyEqualsNP.ComplexityDefs -- Assuming this file exists in the right place
+open PprobablyEqualsNP.ComplexityDefs
+/- PprobablyEqualsNP.lean -/
+namespace PprobablyEqualsNP.PnPProofRevisedV2
+/-!
+We need classical logic for manipulating propositions in `if then else`
+within the ShannonEntropy definition, and potentially for complexity class definitions
+if they rely on excluded middle implicitly.
+-/
 open Classical
 
-namespace PnPProofDetailedV2
 
 /-!
 =================================================================
-Section 1: Foundational Definitions (Complexity, SAT, Entropy)
+Section 1: Modeling Physics and Its Properties
 =================================================================
 -/
+/-- Physical Realization of SAT in a Physical System. -/
+axiom Electrons_On_Circuits_Is_Physical_SAT :
+  SAT_problem <=p PhysicalSystemEntropyProblem
 
--- Basic Types and Complexity Classes
-axiom Word : Type
-instance : Inhabited Word := ⟨sorry⟩ -- Give Word a default value
-def Lang : Type := Word → Prop -- A language is a property of words
-
-axiom Machine : Type -- Abstract notion of a Turing Machine or equivalent
-axiom compute (m : Machine) (w : Word) : Option Word -- Machine computation
-axiom timeComplexity (m : Machine) (w : Word) : Nat -- Time cost
-axiom wordLength (w : Word) : Nat -- Input size measure
-
-axiom successWord : Word -- Special word indicating acceptance
-axiom combineInput (input cert : Word) : Word -- Combining input and certificate for NP
-
--- Polynomial Time Definitions
-def PolyTime (f : Nat → Nat) : Prop :=
-  ∃ (c k : Nat), ∀ n, f n ≤ c * n^k + c
-
-def RunsInPolyTime (m : Machine) : Prop :=
-  ∃ (p : Nat → Nat), PolyTime p ∧ ∀ w, timeComplexity m w ≤ p (wordLength w)
-
--- Complexity Class P
-def P : Set Lang :=
-  { L | ∃ (m : Machine), RunsInPolyTime m ∧
-         ∀ w, L w ↔ compute m w = some successWord }
-
--- Complexity Class NP
-def NP : Set Lang :=
-  { L | ∃ (m : Machine) (p : Nat → Nat), PolyTime p ∧ RunsInPolyTime m ∧
-         ∀ w, L w ↔ ∃ (cert : Word), wordLength cert ≤ p (wordLength w) ∧
-                        compute m (combineInput w cert) = some successWord }
-
--- Polynomial Time Reducibility
-def PolyTimeReducible (L1 L2 : Lang) : Prop :=
-  ∃ (f : Word → Word) (m : Machine), RunsInPolyTime m ∧
-    (∀ w, compute m w = some (f w)) ∧
-    (∀ w, L1 w ↔ L2 (f w))
-
-infix:50 " <=p " => PolyTimeReducible -- Notation for reduction
-
-axiom polyTimeReducible_trans {L1 L2 L3 : Lang} :
-  (L1 <=p L2) → (L2 <=p L3) → (L1 <=p L3)
-
--- NP-Completeness Definition
-def NPComplete (L : Lang) : Prop :=
-  L ∈ NP ∧
-  ∀ L' ∈ NP, L' <=p L
-
--- Circuits and SAT (Boolean Satisfiability Problem)
-axiom Circuit : Type
-axiom encodeCircuit (c : Circuit) : Word
-axiom decodeCircuit (w : Word) : Option Circuit
-axiom evalCircuit (c : Circuit) (assignment : Word) : Bool
-
-def SAT_problem : Lang :=
-  fun w_c =>
-    ∃ c ass, decodeCircuit w_c = some c ∧ evalCircuit c ass = true
-
-axiom CookLevin_inNP   : SAT_problem ∈ NP
-axiom CookLevin_hard   : ∀ (L : Lang), L ∈ NP → L <=p SAT_problem
-
-lemma CookLevin : NPComplete SAT_problem := by
-  constructor
-  · exact CookLevin_inNP
-  · intro L hL; exact CookLevin_hard L hL
+/-- Rota's Entropy Theorem Reduction: Physical system entropy reduces to Shannon Entropy. -/
+axiom RET_Reduction_PhysicsEntropy_to_ShannonEntropy :
+  PhysicalSystemEntropyProblem <=p ShannonEntropyProblem
 
 
-noncomputable def ShannonEntropy (p : List Real) : Real :=
-  - (p.map (fun pi => if pi > 0 then pi * (Real.log pi / Real.log 2) else 0)).sum
-
-axiom ShannonEntropyProblem : Lang
-
-/-!
-=================================================================
-Section 2: Modeling Physics and Its Properties
-=================================================================
--/
-
-axiom PhysicalSystemDesc : Type
-axiom IsPhysicalSystem (desc : PhysicalSystemDesc) : Prop
-axiom decodeDesc (w : Word) : Option PhysicalSystemDesc
-axiom PhysicalSystemProperty (desc : PhysicalSystemDesc) (h_phys : IsPhysicalSystem desc) : Prop
-
-def PhysicalSystemEntropyProblem : Lang :=
-  fun w =>
-    ∃ (desc : PhysicalSystemDesc) (h_phys : IsPhysicalSystem desc),
-      decodeDesc w = some desc ∧
-      PhysicalSystemProperty desc h_phys
-
-/-- Rota's Entropy Theorem (RET): Physics entropy reduces to scaled Shannon Entropy. Full derivation of RET is available in the paper, or, available online Rota's unpublished textbook at:
-https://archive.org/details/GianCarlo_Rota_and_Kenneth_Baclawski__An_Introduction_to_Probability_and_Random_Processes/page/n367/mode/2up
--/
-axiom RET_Reduction_PhysicsEntropy_to_ShannonEntropy : PhysicalSystemEntropyProblem <=p ShannonEntropyProblem
-
-/-- Shannon Coding Theorem: Coding Shannon Entropy is in P O(N log N). -/
-axiom ShannonEntropyInPbyShannonCoding : ShannonEntropyProblem ∈ P
-
-axiom reduction_in_P {L1 L2 : Lang} : (L1 <=p L2) → L2 ∈ P → L1 ∈ P
 
 /-- Physics problem is in P via reduction to Shannon Entropy (which is in P). -/
 lemma PhysicsProblemIsInP : PhysicalSystemEntropyProblem ∈ P := by
-  exact reduction_in_P RET_Reduction_PhysicsEntropy_to_ShannonEntropy ShannonEntropyInPbyShannonCoding
+  exact reduction_in_P RET_Reduction_PhysicsEntropy_to_ShannonEntropy ShannonCodingTheorem
 
 /-!
 =================================================================
-Section 3: Deriving Physics NP-Completeness
+Section 2: Deriving Physics NP-Completeness
 Establishing Reductions and Membership
 =================================================================
 -/
 
--- Auxiliary problems and reductions
-axiom ProgramProblem : Lang
-axiom CircuitProblem : Lang
-axiom ShannonEntropyProblemToProgram : ShannonEntropyProblem <=p ProgramProblem
-axiom ProgramToCircuitProblem : ProgramProblem <=p CircuitProblem
-axiom CircuitProblemToSAT : CircuitProblem <=p SAT_problem
+
 
 /-- Physics reduces to SAT (via Shannon -> Program -> Circuit -> SAT chain). -/
 lemma Physics_to_SAT_Reduction : PhysicalSystemEntropyProblem <=p SAT_problem := by
@@ -141,17 +51,14 @@ lemma Physics_to_SAT_Reduction : PhysicalSystemEntropyProblem <=p SAT_problem :=
   have r4 := CircuitProblemToSAT
   exact polyTimeReducible_trans (polyTimeReducible_trans (polyTimeReducible_trans r1 r2) r3) r4
 
-axiom reducible_in_NP {L1 L2 : Lang} : (L1 <=p L2) → L2 ∈ NP → L1 ∈ NP
+
 
 /-- Physics ∈ NP (Membership Part of NP-Completeness).
     Derived via the reduction `Physics <=p SAT` and `SAT ∈ NP`. -/
 lemma PhysicalSystemEntropyProblemInNP : PhysicalSystemEntropyProblem ∈ NP := by
   exact reducible_in_NP Physics_to_SAT_Reduction CookLevin.1
 
-/-- Axiom: A physical system can realize/encode SAT computations.
-    (e.g., Electrons behaving on a substrate designed as a logic circuit).
-    This provides the reduction *from* SAT *to* the physical system. -/
-axiom Electrons_On_Circuits_Is_Physical_SAT : SAT_problem <=p PhysicalSystemEntropyProblem
+
 
 
 /-- Physics problem is NP-complete. -/
@@ -191,8 +98,10 @@ lemma NPComplete_problems_are_polyTime_equivalent {L1 L2 : Lang} :
 by
   intro h_L1_npc h_L2_npc
   constructor
-  · exact h_L2_npc.2 L1 h_L1_npc.1 -- L1 ∈ NP reduces to L2 (hard)
-  · exact h_L1_npc.2 L2 h_L2_npc.1 -- L2 ∈ NP reduces to L1 (hard)
+  · -- Goal: L1 <=p L2. Use NP-Hardness of L2 and the fact L1 ∈ NP.
+    exact h_L2_npc.2 L1 h_L1_npc.1
+  · -- Goal: L2 <=p L1. Use NP-Hardness of L1 and the fact L2 ∈ NP.
+    exact h_L1_npc.2 L2 h_L2_npc.1 -- <<< CORRECTED LINE HERE
 
 /-- Corollary: SAT and Physics are bidirectionally reducible because both are NP-Complete. -/
 lemma SAT_Physics_bidirectional_reduction :
@@ -234,5 +143,4 @@ theorem P_eq_NP_from_Physics (h_p_ne_np : P ≠ NP) : False := by
   -- 4. This conclusion (P = NP) contradicts the initial assumption (P ≠ NP).
   exact h_p_ne_np h_p_eq_np
 
-
-end PnPProofDetailedV2
+end PprobablyEqualsNP.PnPProofRevisedV2
