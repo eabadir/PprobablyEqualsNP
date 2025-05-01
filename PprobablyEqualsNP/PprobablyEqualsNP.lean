@@ -125,8 +125,6 @@ Section 4: Deriving NP-Completeness and the Contradiction (Steps j, k, l)
 =================================================================
 -/
 
-axiom P_and_NPComplete_implies_P_eq_NP (L : Lang) :
-  L ∈ P → NPComplete L → P = NP
 
 -- Main Theorem: Assuming P ≠ NP leads to a contradiction.
 theorem P_eq_NP_from_Physics (h_p_ne_np : P ≠ NP) : False := by

@@ -100,3 +100,6 @@ axiom CircuitProblem : Lang
 axiom ShannonEntropyProblemToProgram : ShannonEntropyProblem <=p ProgramProblem
 axiom ProgramToCircuitProblem : ProgramProblem <=p CircuitProblem
 axiom CircuitProblemToSAT : CircuitProblem <=p SAT_problem
+
+axiom P_and_NPComplete_implies_P_eq_NP (L : Lang) :
+  L ∈ P → NPComplete L → P = NP
