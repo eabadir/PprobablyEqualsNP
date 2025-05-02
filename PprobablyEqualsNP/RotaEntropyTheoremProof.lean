@@ -107,7 +107,7 @@ variable {H : ∀ {n : ℕ}, (Fin n → NNReal) → Real} (hH : IsEntropyFunctio
 -- ##################################################
 
 /-- Property: f₀(1) = 0 -/
-theorem f0_1_eq_0 : f₀ H 1 = 0 := by
+theorem f0_1_eq_0 (hH : IsEntropyFunction H) : f₀ H 1 = 0 := by
   have h1 : 1 > 0 := Nat.one_pos
   simp only [f₀, dif_pos h1, f] -- Use definition of f₀ and f for n=1
   -- Show that the uniform distribution function for n=1 is (λ _ : Fin 1 => 1)
@@ -116,8 +116,8 @@ theorem f0_1_eq_0 : f₀ H 1 = 0 := by
     simp only [uniformProb, dif_pos h1] -- Simplify uniformProb for n=1
     rw [Nat.cast_one, inv_one] -- Simplify (↑1)⁻¹ to 1
   rw [h_unif1_func]
-  -- Use the assumed property prop0_H1_eq_0 from the structure instance hH
-  exact hH.prop0_H1_eq_0 -- Access the field from the hH instance
+  -- Use the assumed property prop0_H1_eq_0 from the explicitly passed hH instance
+  exact hH.prop0_H1_eq_0
 
 /-!
 Next Step: Prove `f0_mono : Monotone (f₀ H)`.
