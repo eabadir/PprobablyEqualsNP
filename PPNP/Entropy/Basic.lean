@@ -8,7 +8,7 @@ import Mathlib.Data.Fintype.Fin -- Instances for Fin n
 import Mathlib.Algebra.Order.Field.Basic -- For inv_one etc.
 import Mathlib.Algebra.GroupWithZero.Units.Basic -- Provides mul_inv_cancel₀
 
-namespace EntropyDefsBasic
+namespace PPNP.Entropy.Basic
 
 open BigOperators Fin Real Topology NNReal Filter Nat
 
@@ -168,9 +168,9 @@ theorem f0_mono (hH : IsEntropyFunction H) : Monotone (f₀ H) := by
 Chunk 1 Completed. Next Step: Chunk 2 - The Power Law `f₀(n^k) = k * f₀(n)`.
 -/
 
-end EntropyDefsBasic
+end PPNP.Entropy.Basic
 
-export EntropyDefsBasic (
+export PPNP.Entropy.Basic (
   stdEntropy
   IsEntropyFunction
   uniformProb

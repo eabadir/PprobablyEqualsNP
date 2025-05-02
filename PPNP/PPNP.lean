@@ -3,8 +3,8 @@ import Mathlib.Data.Real.Basic
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Set.Defs
-import PPNPComplexityDefs -- Assuming this file exists in the right place
-open PPNPComplexityDefs
+import PPNP.Complexity -- Assuming this file exists in the right place
+open PPNP.Complexity
 /- PPNPlean -/
 namespace PPNPPnPProofRevisedV2
 /-!

@@ -3,8 +3,8 @@ import Mathlib.Data.Real.Basic
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Set.Defs
-/- ComplexityDefs.lean -/
-namespace PPNPComplexityDefs
+/- Complexity.lean -/
+namespace PPNP.Complexity.Basic
 /-!
   Section 1: Foundational Definitions (Complexity, SAT, Entropy)
   This module gathers key abstract types, complexity class definitions, and axioms.
@@ -103,3 +103,5 @@ axiom CircuitProblemToSAT : CircuitProblem <=p SAT_problem
 
 axiom P_and_NPComplete_implies_P_eq_NP (L : Lang) :
   L ∈ P → NPComplete L → P = NP
+
+end PPNP.Complexity.Basic

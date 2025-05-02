@@ -20,12 +20,12 @@ import Mathlib.Data.Real.Basic -- Basic Real properties
 import Mathlib.Tactic.Linarith -- Inequality solver
 
 -- Import previous definitions and theorems
-import PPNPEntropyDefsBasic
-import PPNPEntropyDefsPowerLaw
+import PPNP.Entropy.Basic
+import PPNP.Entropy.PowerLaw
 
-open EntropyDefsBasic EntropyDefsPowerLaw
+open PPNP.Entropy.Basic PPNP.Entropy.Pow
 
-namespace EntropyDefsLogFormula
+namespace PPNP.Entropy.LogF
 
 open BigOperators Fin Real Topology NNReal Filter Nat Set
 
@@ -36,9 +36,9 @@ variable {H : ∀ {n : ℕ}, (Fin n → NNReal) → Real} (hH : IsEntropyFunctio
 
 /-- Lemma: `f₀ H b ≥ 0` for `b ≥ 1`. -/
 lemma f0_nonneg (hH : IsEntropyFunction H) {b : ℕ} (hb : b ≥ 1) : f₀ H b ≥ 0 := by
-  have h_mono_prop : Monotone (f₀ H) := EntropyDefsBasic.f0_mono hH
+  have h_mono_prop : Monotone (f₀ H) := PPNP.Entropy.Basic.f0_mono hH
   have h_mono_ineq : f₀ H 1 ≤ f₀ H b := h_mono_prop hb
-  have h_f0_1_zero : f₀ H 1 = 0 := EntropyDefsBasic.f0_1_eq_0 hH
+  have h_f0_1_zero : f₀ H 1 = 0 := PPNP.Entropy.Basic.f0_1_eq_0 hH
   rw [h_f0_1_zero] at h_mono_ineq
   exact h_mono_ineq
 
@@ -188,8 +188,7 @@ by
   -- The inequality now matches the goal
   exact h_exp_lt
 
-/-- Lemma: For any `x ≥ 1` and integer `b ≥ 2`, there exists an integer `k` such that
-    `b^k ≤ x < b^(k+1)`. This `k` is `floor(log_b(x))`. -/
+/-- Lemma: For any `x ≥ 1` and integer `b ≥ 2`, there exists an integer `k` such that `b^k ≤ x < b^(k+1)`. This `k` is `floor(log_b(x))`. -/
 lemma exists_k_log_bounds {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
   ∃ k : ℕ, (b : ℝ) ^ k ≤ x ∧ x < (b : ℝ) ^ (k + 1) := by
   -- Define k as the floor of log base b of x
@@ -208,4 +207,4 @@ Chunk 3.2 Completed. `exists_k_log_bounds` is proven using helper lemmas.
 Next Step: Chunk 3.3 - Inequalities from Trapping
 -/
 
-end EntropyDefsLogFormula
+end PPNP.Entropy.LogF

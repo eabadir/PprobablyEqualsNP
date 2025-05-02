@@ -14,9 +14,9 @@ import Mathlib.Algebra.Ring.Nat -- For Nat.cast_add_one etc
 import Mathlib.Tactic.Linarith -- For proving simple inequalities
 
 -- Import the definitions from Chunk 1
-import PPNPEntropyDefsBasic
+import PPNP.Entropy.Basic
 
-namespace EntropyDefsPowerLaw
+namespace PPNP.Entropy.Pow
 
 open BigOperators Fin Real Topology NNReal Filter Nat
 
@@ -79,4 +79,4 @@ theorem f0_pow_eq_mul
       k
       hk
 
-end EntropyDefsPowerLaw
+end PPNP.Entropy.Pow
