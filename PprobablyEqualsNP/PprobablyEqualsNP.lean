@@ -3,10 +3,10 @@ import Mathlib.Data.Real.Basic
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Set.Defs
-import PprobablyEqualsNP.ComplexityDefs -- Assuming this file exists in the right place
-open PprobablyEqualsNP.ComplexityDefs
-/- PprobablyEqualsNP.lean -/
-namespace PprobablyEqualsNP.PnPProofRevisedV2
+import PPNPComplexityDefs -- Assuming this file exists in the right place
+open PPNPComplexityDefs
+/- PPNPlean -/
+namespace PPNPPnPProofRevisedV2
 /-!
 We need classical logic for manipulating propositions in `if then else`
 within the ShannonEntropy definition, and potentially for complexity class definitions
@@ -141,4 +141,4 @@ theorem P_eq_NP_from_Physics (h_p_ne_np : P ≠ NP) : False := by
   -- 4. This conclusion (P = NP) contradicts the initial assumption (P ≠ NP).
   exact h_p_ne_np h_p_eq_np
 
-end PprobablyEqualsNP.PnPProofRevisedV2
+end PPNPPnPProofRevisedV2

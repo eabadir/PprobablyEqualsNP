@@ -4,7 +4,7 @@ import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Set.Defs
 /- ComplexityDefs.lean -/
-namespace PprobablyEqualsNP.ComplexityDefs
+namespace PPNPComplexityDefs
 /-!
   Section 1: Foundational Definitions (Complexity, SAT, Entropy)
   This module gathers key abstract types, complexity class definitions, and axioms.

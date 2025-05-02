@@ -20,8 +20,8 @@ import Mathlib.Data.Real.Basic -- Basic Real properties
 import Mathlib.Tactic.Linarith -- Inequality solver
 
 -- Import previous definitions and theorems
-import PprobablyEqualsNP.EntropyDefsBasic
-import PprobablyEqualsNP.EntropyDefsPowerLaw
+import PPNPEntropyDefsBasic
+import PPNPEntropyDefsPowerLaw
 
 open EntropyDefsBasic EntropyDefsPowerLaw
 

@@ -14,7 +14,7 @@ import Mathlib.Algebra.Ring.Nat -- For Nat.cast_add_one etc
 import Mathlib.Tactic.Linarith -- For proving simple inequalities
 
 -- Import the definitions from Chunk 1
-import PprobablyEqualsNP.EntropyDefsBasic
+import PPNPEntropyDefsBasic
 
 namespace EntropyDefsPowerLaw
 

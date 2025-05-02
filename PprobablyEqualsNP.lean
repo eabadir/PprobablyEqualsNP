@@ -1,3 +1,3 @@
-import PprobablyEqualsNP.ComplexityDefs
-import PprobablyEqualsNP.PartitionTheoryDefs
-import PprobablyEqualsNP.RotaEntropyTheoremProof
+import PPNPComplexityDefs
+import PPNPPartitionTheoryDefs
+import PPNPRotaEntropyTheoremProof
