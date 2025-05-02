@@ -1,148 +1,124 @@
-import Mathlib.Tactic
-import Mathlib.Data.Real.Basic
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Mathlib.Data.Rat.Defs
-import Mathlib.Data.List.Basic
-import PprobablyEqualsNP.PartitionTheoryDefs -- Assuming this file is available
+import Mathlib.Analysis.SpecialFunctions.Log.NegMulLog -- For negMulLog, Real.log
+import Mathlib.Data.NNReal.Basic -- For NNReal
+import Mathlib.Topology.Basic -- For ContinuousOn (placeholder)
+import Mathlib.Order.Monotone.Basic -- For Monotone
+import Mathlib.Algebra.BigOperators.Fin -- For sum over Fin n
+import Mathlib.Data.Fin.Basic -- Basic Fin definitions and lemmas
+import Mathlib.Data.Fintype.Fin -- Instances for Fin n
+import Mathlib.Algebra.Order.Field.Basic -- For inv_one etc.
+import Mathlib.Algebra.GroupWithZero.Units.Basic -- Provides mul_inv_cancel₀ and related field/group lemmas
 
-/-! RotaEntropyProof.lean -/
+open BigOperators Fin Real Topology NNReal Filter Nat
 
-namespace PprobablyEqualsNP.RotaEntropyProof
+/-!
+# Formalizing Rota's Uniqueness of Entropy Theorem - Chunk 1 (Corrected Theorem f0_1_eq_0)
 
-open Real List PprobablyEqualsNP.PartitionTheoryDefs
+**Goal:** Define `IsEntropyFunction` structure correctly, define `f n = H(uniform n)`, and prove `f 1 = 0`.
 
--- === Definition of f(n) ===
+**Correction:** Fixed proof of `sum_uniform_eq_one` and errors in `f0_1_eq_0`.
+-/
 
-/-- The function f(n) = H applied to the uniform distribution on n elements. -/
-noncomputable def f (H : EntropyFunction) (n : Nat) : Real :=
-  if 0 < n then H (uniformDist n) else 0
+-- Definitions and Lemmas from previous steps... (stdEntropy, helpers, IsEntropyFunction structure)
 
-lemma f_def_alt {H : EntropyFunction} {n : Nat} (hn : 0 < n) : f H n = H (uniformDist n) := by
-  rw [f, if_pos hn]
+/-- Standard Shannon entropy of a probability distribution given as a function `Fin n → NNReal`.
+    Uses natural logarithm (base e). -/
+noncomputable def stdEntropy {n : ℕ} (p : Fin n → NNReal) : Real :=
+  ∑ i : Fin n, negMulLog (p i : Real)
 
-@[simp] lemma length_uniformDist (n : Nat) : length (uniformDist n) = n := by
-  cases n <;> simp [uniformDist]
+-- Helper: Show the extended distribution for prop2 sums to 1 - Reuse from previous
+lemma sum_p_ext_eq_one {n : ℕ} {p : Fin n → NNReal} (hp_sum : ∑ i : Fin n, p i = 1) :
+    let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
+    (∑ i : Fin (n + 1), p_ext i) = 1 := by
+  intro p_ext
+  rw [Fin.sum_univ_castSucc]
+  have last_term_is_zero : p_ext (Fin.last n) = 0 := by
+    simp only [p_ext, Fin.val_last, lt_self_iff_false, dif_neg, not_false_iff]
+  rw [last_term_is_zero, add_zero]
+  have sum_eq : ∑ (i : Fin n), p_ext (Fin.castSucc i) = ∑ (i : Fin n), p i := by
+    apply Finset.sum_congr rfl
+    intro i _
+    simp only [p_ext]
+    have h_lt : (Fin.castSucc i).val < n := by exact i.is_lt
+    rw [dif_pos h_lt, Fin.castLT_castSucc i h_lt]
+  rw [sum_eq]
+  exact hp_sum
 
-lemma f_one_is_zero {H : EntropyFunction} (hProps : HasEntropyProperties H) : f H 1 = 0 := by
-  have h_unif_1 : uniformDist 1 = [1] := by simp [uniformDist]
-  rw [f_def_alt]
-  · rw [h_unif_1]; exact hProps.prop0
-  · exact Nat.zero_lt_one
-
-
-/-- Helper: filter (fun x : Real => decide (x > 0)) on [0] is []. -/
-lemma filter_decide_gt_zero_singleton_zero : filter (fun x : Real => decide (x > 0)) [0] = [] := by
-  simp [filter, gt_iff_lt, decide_eq_false_iff_not.mpr (lt_irrefl 0)]
-
-/-- Helper: filter (fun x : Real => decide (x > 0)) on uniformDist n is identity for n > 0. -/
-lemma filter_decide_gt_zero_uniformDist_eq_self {n : Nat} (hn : 0 < n) :
-    filter (fun x : Real => decide (x > 0)) (uniformDist n) = uniformDist n := by
-  apply filter_eq_self.mpr
-  intro x hx_mem
-  simp only [uniformDist] at hx_mem
-  cases n with
-  | zero => exact (Nat.not_lt_zero 0 hn).elim
-  | succ k =>
-    simp only [mem_replicate] at hx_mem
-    obtain ⟨_hnz, hx_eq⟩ := hx_mem
-    rw [hx_eq, decide_eq_true_iff] -- Goal: 1 / (↑k + 1) > 0
-    positivity -- Should solve the goal directly
--- === Helper Lemmas (Using generic 0) ===
-
--- Define uniformDist here if not in PartitionTheoryDefs or separate file
--- noncomputable def uniformDist (n : Nat) : List Real :=
---   match n with
---   | 0 => []
---   | k+1 => replicate (k+1) (1 / (k+1 : Real))
-
-
-
--- === Main Proof for f_non_decreasing ===
-
--- Simplified uniformDist for MWE
-noncomputable def uniformDist (n : Nat) : List Real :=
-  match n with
-  | 0 => []
-  | k+1 => replicate (k+1) (1 / (k+1 : Real))
+-- stdEntropy lemma should work with the same fix for arg_eq - Reuse from previous
+lemma stdEntropy_p_ext_eq_stdEntropy {n : ℕ} (p : Fin n → NNReal) :
+    let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
+    stdEntropy p_ext = stdEntropy p := by
+  intro p_ext
+  simp_rw [stdEntropy]
+  rw [Fin.sum_univ_castSucc]
+  have last_term_val_is_zero : p_ext (Fin.last n) = 0 := by
+    simp only [p_ext, Fin.val_last, lt_self_iff_false, dif_neg, not_false_iff]
+  rw [last_term_val_is_zero, NNReal.coe_zero, negMulLog_zero, add_zero]
+  apply Finset.sum_congr rfl
+  intro i _
+  apply congr_arg negMulLog
+  apply NNReal.coe_inj.mpr
+  simp only [p_ext]
+  have h_lt : (Fin.castSucc i).val < n := by exact i.is_lt
+  rw [dif_pos h_lt, Fin.castLT_castSucc i h_lt]
 
 
+-- Structure: Axiomatic Entropy Function H (Corrected)
+structure IsEntropyFunction (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) where
+  (prop0_H1_eq_0 : H (λ _ : Fin 1 => 1) = 0) -- Property 0: Certainty has zero entropy
+  (prop2_zero_inv : ∀ {n : ℕ} (p : Fin n → NNReal) (_ : ∑ i : Fin n, p i = 1),
+      let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
+      H p_ext = H p) -- Property 2: Invariance to adding zero probability
+  (prop3_continuity : Prop) -- Placeholder: Assume continuity holds (as Prop)
+  (prop4_conditional : Prop) -- Placeholder: Assume conditional property holds (as Prop)
+  (prop5_max_uniform : ∀ {n : ℕ} (_hn_pos : n > 0) (p : Fin n → NNReal) (_hp_sum : ∑ i : Fin n, p i = 1),
+      H p ≤ H (λ _ : Fin n => if hn' : n > 0 then (n⁻¹ : NNReal) else 0)) -- Property 5: Max entropy for uniform
 
--- === Main Proof for f_non_decreasing ===
+-- Definition: f(n) = H(uniform distribution on n outcomes)
 
-/-- Lemma: f is non-decreasing. Follows from Properties 2 and 5. -/
-lemma f_non_decreasing (k : Nat) : True := by
-  have nk_pos : 0 < k + 1 := Nat.succ_pos k
-  let p := uniformDist (k+1)
-  have hp_len_pos : 0 < p.length := sorry
+-- Helper function for the uniform distribution probability value
+noncomputable def uniformProb (n : ℕ) : NNReal :=
+  if hn : n > 0 then (n⁻¹ : NNReal) else 0
 
-  let p' := p ++ [0] -- Use generic 0
-  have hp'_len_val : p'.length = k + 2 := sorry
-  have hp'_len_pos : 0 < p'.length := by rw [hp'_len_val]; positivity
-
-  suffices p'.filter (fun x : Real => decide (x > 0)) = p by trivial
-
-  simp only [p'] -- Goal: filter (...) (p ++ [0]) = p
-  rw [filter_append] -- Goal: filter (...) p ++ filter (...) [0] = p
-  -- Use convert_to for robustness
-  convert_to filter (fun x : Real => decide (x > 0)) p ++ [] = p using 2
-  · exact filter_decide_gt_zero_singleton_zero -- Prove filter (...) [0] = []
-  rw [append_nil] -- Goal: filter (...) p = p
-  rw [filter_decide_gt_zero_uniformDist_eq_self nk_pos] -- Goal: p = p
+-- Helper lemma: the uniform distribution sums to 1 (Corrected)
+lemma sum_uniform_eq_one {n : ℕ} (hn : n > 0) :
+  ∑ _i : Fin n, uniformProb n = 1 := by
+  simp only [uniformProb, dif_pos hn]
+  rw [Finset.sum_const, Finset.card_fin, nsmul_eq_mul]
+  -- Use mul_inv_cancel₀ requires proving ↑n ≠ 0
+  rw [mul_inv_cancel₀] -- Apply cancellation
+  -- Prove the condition for cancellation: ↑n ≠ 0
+  apply Nat.cast_ne_zero.mpr -- Use the correct direction helper
+  exact Nat.pos_iff_ne_zero.mp hn -- Use hn > 0 to show n ≠ 0
 
 
-/-- Lemma: f(n) ≥ 0 for n > 0. Follows from f(1)=0 and non-decreasing. -/
-lemma f_nonneg {H : EntropyFunction} (hProps : HasEntropyProperties H) (n : Nat) (hn : 0 < n) : 0 ≤ f H n := by
-  have h_f1_zero := f_one_is_zero hProps
-  rw [← h_f1_zero] -- Goal: f H 1 ≤ f H n
-  have step (k : Nat) (_ : 1 ≤ k) (h_ind : f H 1 ≤ f H k) : f H 1 ≤ f H (k + 1) := by
-      exact le_trans h_ind (f_non_decreasing hProps k)
-  exact Nat.le_induction (le_refl (f H 1)) step n (Nat.one_le_of_lt hn)
+/-- Define f(n) as the entropy H of the uniform distribution on n outcomes. Needs n > 0. -/
+noncomputable def f {n : ℕ} (H : ∀ {m : ℕ}, (Fin m → NNReal) → Real) (hn : n > 0) : Real :=
+  H (λ _ : Fin n => uniformProb n)
 
--- === Key Consequence of Property 4 ===
-axiom EntropyProperty4_Consequence_f {H : EntropyFunction} (hProps : HasEntropyProperties H) :
-  ∀ (n k : Nat), (1 < n) → (0 < k) → f H (n^k) = k * f H n
+/-- Define f₀(n) extending f to n=0. -/
+noncomputable def f₀ (H : ∀ {m : ℕ}, (Fin m → NNReal) → Real) (n : ℕ) : Real :=
+  if hn : n > 0 then f H hn else 0
 
--- === Derivation f(n) = C * log₂(n) ===
-axiom f_is_log {H : EntropyFunction} (hProps : HasEntropyProperties H) :
-  ∃ C : Real, (0 ≤ C) ∧ (∀ n > 1, f H n = C * logb 2 n)
+-- Assume H satisfies the properties for the rest of the proofs
+variable {H : ∀ {n : ℕ}, (Fin n → NNReal) → Real} (hH : IsEntropyFunction H)
 
-noncomputable def constant_C (H : EntropyFunction) (hProps : HasEntropyProperties H) : Real :=
-  Classical.choose (f_is_log hProps)
+-- ##################################################
+-- Basic Properties of f₀(n)
+-- ##################################################
 
-lemma constant_C_spec {H : EntropyFunction} (hProps : HasEntropyProperties H) :
-   0 ≤ constant_C H hProps ∧ ∀ n > 1, f H n = constant_C H hProps * logb 2 n := by
-  exact Classical.choose_spec (f_is_log hProps)
+/-- Property: f₀(1) = 0 -/
+theorem f0_1_eq_0 : f₀ H 1 = 0 := by
+  have h1 : 1 > 0 := Nat.one_pos
+  simp only [f₀, dif_pos h1, f] -- Use definition of f₀ and f for n=1
+  -- Show that the uniform distribution function for n=1 is (λ _ : Fin 1 => 1)
+  have h_unif1_func : (λ _ : Fin 1 => uniformProb 1) = (λ _ : Fin 1 => 1) := by
+    funext i -- Use function extensionality
+    simp only [uniformProb, dif_pos h1] -- Simplify uniformProb for n=1
+    rw [Nat.cast_one, inv_one] -- Simplify (↑1)⁻¹ to 1
+  rw [h_unif1_func]
+  -- Use the assumed property prop0_H1_eq_0 from the structure instance hH
+  exact hH.prop0_H1_eq_0 -- Access the field from the hH instance
 
-lemma constant_C_nonneg {H : EntropyFunction} (hProps : HasEntropyProperties H) :
-   0 ≤ constant_C H hProps := (constant_C_spec hProps).1
-
-lemma f_eq_C_log {H : EntropyFunction} (hProps : HasEntropyProperties H) (n : Nat) (hn : 1 < n) :
-   f H n = constant_C H hProps * logb 2 n :=
-  (constant_C_spec hProps).2 n hn
-
--- === Extension to Rational Probabilities ===
-axiom Entropy_for_Rational_Probs {H : EntropyFunction} (hProps : HasEntropyProperties H) :
-  ∀ (p : List Real) (hp_rat : ∀ pi ∈ p, ∃ q : Rat, pi = q)
-    (hp_dist : IsProbDist p),
-    H p = constant_C H hProps * ShannonEntropyFunc p
-
--- === Axiom: Continuity Allows Extension from Rationals to Reals ===
-axiom ContinuityExtendsToReals {H : EntropyFunction} (hProps : HasEntropyProperties H) (C : Real) :
-  (∀ (p : List Real) (hp_rat : ∀ pi ∈ p, ∃ q : Rat, pi = q) (hp_dist : IsProbDist p),
-     H p = C * ShannonEntropyFunc p)
-  →
-  (∀ (p : List Real) (hp_dist : IsProbDist p), H p = C * ShannonEntropyFunc p)
-
--- === Uniqueness Theorem ===
-theorem UniquenessOfEntropy {H : EntropyFunction} (hProps : HasEntropyProperties H) :
-    ∃ C : Real, (0 ≤ C) ∧ (∀ p, IsProbDist p → H p = C * ShannonEntropyFunc p) := by
-  let C := constant_C H hProps
-  use C
-  apply And.intro (constant_C_nonneg hProps)
-  apply ContinuityExtendsToReals hProps C
-  exact Entropy_for_Rational_Probs hProps
-
-/-- Placeholder justification lemma -/
-lemma RotaTheoremJustifiesReduction : True := trivial -- Placeholder
-
-end PprobablyEqualsNP.RotaEntropyProof
+/-!
+Next Step: Prove `f0_mono : Monotone (f₀ H)`.
+-/
