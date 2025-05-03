@@ -4,7 +4,7 @@ import PPNP.Entropy.LogF
 import PPNP.Entropy.PartitionTheory
 import Mathlib.Tactic.NormNum -- For evaluating numerals
 
-open PPNP.Entropy.Basic PPNP.Entropy.Pow PPNP.Entropy.LogF Real Nat
+open PPNP.Entropy.Basic PPNP.Entropy.PowerLaw PPNP.Entropy.LogF Real Nat
 
 -- Assume the existence of an entropy function H satisfying the properties
 variable {H : ∀ {n : ℕ}, (Fin n → NNReal) → Real} (hH : IsEntropyFunction H)

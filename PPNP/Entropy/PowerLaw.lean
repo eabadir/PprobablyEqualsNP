@@ -16,7 +16,7 @@ import Mathlib.Tactic.Linarith -- For proving simple inequalities
 -- Import the definitions from Chunk 1
 import PPNP.Entropy.Basic
 
-namespace PPNP.Entropy.Pow
+namespace PPNP.Entropy.PowerLaw
 
 open BigOperators Fin Real Topology NNReal Filter Nat
 
@@ -79,4 +79,4 @@ theorem f0_pow_eq_mul
       k
       hk
 
-end PPNP.Entropy.Pow
+end PPNP.Entropy.PowerLaw
