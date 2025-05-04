@@ -21,7 +21,7 @@ example : f₀ H 2 ≤ f₀ H 3 := by
 
 -- Test lemma for the power law from PowerLaw.lean
 example : f₀ H (2 ^ 3) = (3 : ℝ) * f₀ H 2 := by
-  have h_pow := f0_pow_eq_mul hH (by norm_num : 2 ≥ 1) (by norm_num : 3 ≥ 1)
+  have h_pow := uniformEntropy_power_law hH (by norm_num : 2 ≥ 1) (by norm_num : 3 ≥ 1)
   -- The goal directly matches the theorem statement after substituting values
   exact h_pow
 
