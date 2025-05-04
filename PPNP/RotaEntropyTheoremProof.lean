@@ -4,13 +4,12 @@ import Mathlib.Analysis.SpecialFunctions.Log.Basic -- For logb
 import Mathlib.Data.List.Basic -- Contains List.sum_replicate
 import Mathlib.Data.List.Defs -- For List.replicate
 
-/-! PartitionTheoryDefs.lean -/
-namespace PprobablyEqualsNP.PartitionTheoryDefs
+
+namespace RotaEntropyTheoremProof
 
 open Classical Real List
 
 -- === Probability Distributions ===
-
 /-- A predicate asserting that a list of real numbers represents a
     finite probability distribution (non-negative, sums to 1). -/
 def IsProbDist (p : List Real) : Prop :=
@@ -74,4 +73,4 @@ structure HasEntropyProperties (H : EntropyFunction) : Prop where
   prop5 : EntropyProperty5 H -- Now refers to the defined proposition
   -- Property 4 is implicitly used via its consequences in the proof module
 
-end PprobablyEqualsNP.PartitionTheoryDefs
+end RotaEntropyTheoremProof
