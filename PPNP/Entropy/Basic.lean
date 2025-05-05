@@ -20,20 +20,44 @@ import Mathlib.Algebra.Order.Floor.Defs -- Floor definitions
 import Mathlib.Tactic.Linarith -- Inequality solver
 import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
 
+import PPNP.Util.Basic
+
 namespace PPNP.Entropy.Basic
 
 open BigOperators Fin Real Topology NNReal Filter Nat
+open PPNP.Util.Basic
 
 /-!
-# Formalizing Rota's Uniqueness of Entropy Theorem - Chunk 1 Completed
-
+# Formalizing Rota's Uniqueness of Entropy Theorem
 **Goal:** Define `IsEntropyFunction` structure correctly, define `f n = H(uniform n)`,
 prove `f 1 = 0`, and prove `f` is monotone.
 
 **Correction:** Fixed all previous issues and added proof for `f0_mono`.
 -/
 
--- Definitions and Lemmas from previous steps... (stdShannonEntropyLn, helpers, IsEntropyFunction structure)
+
+/-- Define f(n) as the entropy H of the uniform distribution on n outcomes. Needs n > 0. -/
+noncomputable def f {n : ℕ} (H : ∀ {m : ℕ}, (Fin m → NNReal) → Real) (_hn : n > 0) : Real :=
+  H (λ _ : Fin n => uniformProb n)
+
+/-- Define f₀(n) extending f to n=0. -/
+noncomputable def f₀ (H : ∀ {m : ℕ}, (Fin m → NNReal) → Real) (n : ℕ) : Real :=
+  if hn : n > 0 then f H hn else 0
+
+
+/--
+Definition: The constant `C` relating `f₀` to `log`.
+It is defined as `f₀ H 2 / log 2` if the entropy function `H` is non-trivial
+(meaning `f₀` is not identically zero for `n ≥ 1`), and `0` otherwise.
+We use base `b=2` for the definition.
+-/
+noncomputable def C_constant (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) : ℝ :=
+  -- Explicitly use Classical.propDecidable for the condition so we don't have to Open Classical
+  let _inst : Decidable (∃ n' ≥ 1, f₀ H n' ≠ 0) := Classical.propDecidable _
+  if _h : ∃ n' ≥ 1, f₀ H n' ≠ 0 then
+    f₀ H 2 / Real.log 2
+  else
+    0
 
 /-- Standard Shannon entropy of a probability distribution given as a function `Fin n → NNReal`.
     Uses natural logarithm (base e). -/
@@ -42,6 +66,7 @@ noncomputable def stdShannonEntropyLn {n : ℕ} (p : Fin n → NNReal) : Real :=
 
 def probabilitySimplex {n : ℕ} : Set (Fin n → NNReal) :=
   { p | ∑ i, p i = 1 }
+
 
 noncomputable def product_dist {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) : Fin (n * m) → NNReal :=
   fun k =>
@@ -55,6 +80,86 @@ noncomputable def product_dist {n m : ℕ} (p : Fin n → NNReal) (q : Fin m →
     -- ji.2 has type Fin n
     -- Match types: p needs Fin n (ji.2), q needs Fin m (ji.1)
     p ji.2 * q ji.1
+
+
+
+
+/-- Product of two uniform distributions is uniform on the product space. -/
+lemma uniformProb_product_uniformProb_is_uniformProb
+    {n m : ℕ} (hn : n > 0) (hm : m > 0) :
+    product_dist
+        (fun _ : Fin n     => uniformProb n)
+        (fun _ : Fin m     => uniformProb m)
+      = (fun _ : Fin (n*m) => uniformProb (n * m)) := by
+  -- point‑wise equality of functions on `Fin (n*m)`
+  funext k
+  /- 1 ▸ reduce to an identity in `ℝ≥0` -/
+  simp [product_dist, uniformProb, mul_pos hn hm]  -- goal: ↑n⁻¹ * ↑m⁻¹ = ↑(n*m)⁻¹
+
+  /- 2 ▸ build the `≠ 0` hypotheses in `ℝ≥0` via `exact_mod_cast` -/
+  have hn_ne_zero : n ≠ 0 := (Nat.pos_iff_ne_zero).1 hn
+  have hm_ne_zero : m ≠ 0 := (Nat.pos_iff_ne_zero).1 hm
+  have h_n : (n : ℝ≥0) ≠ 0 := by exact_mod_cast hn_ne_zero  -- `norm_cast` trick :contentReference[oaicite:0]{index=0}
+  have h_m : (m : ℝ≥0) ≠ 0 := by exact_mod_cast hm_ne_zero
+
+  /- 3 ▸ convert the product of inverses to the inverse of a product -/
+  -- The left factor is `↑m⁻¹ * ↑n⁻¹`, so we use the lemma with arguments in that order.
+  rw [nnreal_inv_mul_inv_eq_inv_mul h_m h_n]
+
+  /- 4 ▸ finish by rewriting inside the inverse and using commutativity -/
+  rw [mul_comm] --`mul_comm` is a lemma that rewrites `a * b = b * a`
+  simp [hn, hm, mul_comm, nnreal_coe_nat_mul n m]  -- evaluates the `if`s and rewrites `↑n * ↑m`
+
+-- Structure: Axiomatic Entropy Function H
+structure IsEntropyFunction (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) where
+  (prop0_H1_eq_0 : H (λ _ : Fin 1 => 1) = 0)
+  (prop2_zero_inv : ∀ {n : ℕ} (p : Fin n → NNReal) (_ : ∑ i : Fin n, p i = 1),
+      let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
+      H p_ext = H p)
+  (prop3_continuity : ∀ n : ℕ, ContinuousOn H (probabilitySimplex (n := n)))
+  (prop4_additivity_product : ∀ {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) (_hp : ∑ i, p i = 1) (_hq : ∑ j, q j = 1),
+    H (product_dist p q) = H p + H q)
+  (prop5_max_uniform : ∀ {n : ℕ} (_hn_pos : n > 0) (p : Fin n → NNReal) (_hp_sum : ∑ i : Fin n, p i = 1),
+      H p ≤ H (λ _ : Fin n => if _hn' : n > 0 then (n⁻¹ : NNReal) else 0)) -- NOTE: hn' check is redundant due to hn_pos
+
+
+
+/-- Core additivity property: `f₀(nm) = f₀(n) + f₀(m)`. -/
+theorem f0_mul_eq_add_f0 (hH : IsEntropyFunction H) {n m : ℕ} (hn : n ≥ 1) (hm : m ≥ 1) :
+    f₀ H (n * m) = f₀ H n + f₀ H m := by
+  -- 1. Derive positivity from hypotheses n ≥ 1, m ≥ 1
+  have hn_pos : n > 0 := one_le_iff_pos.mp hn
+  have hm_pos : m > 0 := one_le_iff_pos.mp hm
+  have hnm_pos : n * m > 0 := Nat.mul_pos hn_pos hm_pos
+
+  -- 2. Define the uniform distributions involved
+  let unif_n := fun (_ : Fin n) => uniformProb n
+  let unif_m := fun (_ : Fin m) => uniformProb m
+  let unif_nm := fun (_ : Fin (n * m)) => uniformProb (n * m)
+
+  -- 3. Verify the sum = 1 hypotheses for the component distributions
+  have h_sum_n : ∑ i, unif_n i = 1 := sum_uniform_eq_one hn_pos
+  have h_sum_m : ∑ i, unif_m i = 1 := sum_uniform_eq_one hm_pos
+
+  -- 4. Apply Axiom 4 (prop4_additivity_product)
+  have H_prod_eq_sum_H : H (product_dist unif_n unif_m) = H unif_n + H unif_m :=
+    hH.prop4_additivity_product unif_n unif_m h_sum_n h_sum_m
+
+  -- 5. Substitute the result that the product of uniforms is uniform
+  have prod_is_uniform : product_dist unif_n unif_m = unif_nm :=
+    uniformProb_product_uniformProb_is_uniformProb hn_pos hm_pos
+  rw [prod_is_uniform] at H_prod_eq_sum_H
+  -- Equation is now: H unif_nm = H unif_n + H unif_m
+
+  -- 6. Translate from H(uniform) to f₀ using definitions of f₀ and f
+  -- Goal: f₀ H (n * m) = f₀ H n + f₀ H m
+  -- LHS: f₀ H (n * m) = f H hnm_pos = H unif_nm (using dif_pos hnm_pos, and def of f)
+  -- RHS: f₀ H n + f₀ H m = f H hn_pos + f H hm_pos = H unif_n + H unif_m
+  -- So the goal becomes H unif_nm = H unif_n + H unif_m
+  -- We use simp_rw to apply these definitions and positivity proofs
+  simp_rw [f₀, dif_pos hn_pos, dif_pos hm_pos, dif_pos hnm_pos, f]
+  -- The goal now directly matches the derived equation H_prod_eq_sum_H
+  exact H_prod_eq_sum_H
 
 -- Helper: Show the extended distribution for prop2 sums to 1 - Reuse from previous
 lemma sum_p_ext_eq_one {n : ℕ} {p : Fin n → NNReal} (hp_sum : ∑ i : Fin n, p i = 1) :
@@ -93,38 +198,6 @@ lemma stdShannonEntropyLn_p_ext_eq_stdShannonEntropyLn {n : ℕ} (p : Fin n → 
   rw [dif_pos h_lt, Fin.castLT_castSucc i h_lt]
 
 
--- Structure: Axiomatic Entropy Function H
-structure IsEntropyFunction (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) where
-  (prop0_H1_eq_0 : H (λ _ : Fin 1 => 1) = 0)
-  (prop2_zero_inv : ∀ {n : ℕ} (p : Fin n → NNReal) (_ : ∑ i : Fin n, p i = 1),
-      let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
-      H p_ext = H p)
-  (prop3_continuity : ∀ n : ℕ, ContinuousOn H (probabilitySimplex (n := n)))
-  (prop4_additivity_product : ∀ {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) (hp : ∑ i, p i = 1) (hq : ∑ j, q j = 1),
-    H (product_dist p q) = H p + H q)
-  (prop5_max_uniform : ∀ {n : ℕ} (_hn_pos : n > 0) (p : Fin n → NNReal) (_hp_sum : ∑ i : Fin n, p i = 1),
-      H p ≤ H (λ _ : Fin n => if _hn' : n > 0 then (n⁻¹ : NNReal) else 0)) -- NOTE: hn' check is redundant due to hn_pos
-
--- Definition: f(n) = H(uniform distribution on n outcomes)
-noncomputable def uniformProb (n : ℕ) : NNReal :=
-  if _hn : n > 0 then (n⁻¹ : NNReal) else 0
-
--- Helper lemma: the uniform distribution sums to 1
-lemma sum_uniform_eq_one {n : ℕ} (hn : n > 0) :
-  ∑ _i : Fin n, uniformProb n = 1 := by
-  simp only [uniformProb, dif_pos hn]
-  rw [Finset.sum_const, Finset.card_fin, nsmul_eq_mul]
-  rw [mul_inv_cancel₀]
-  apply Nat.cast_ne_zero.mpr
-  exact Nat.pos_iff_ne_zero.mp hn
-
-/-- Define f(n) as the entropy H of the uniform distribution on n outcomes. Needs n > 0. -/
-noncomputable def f {n : ℕ} (H : ∀ {m : ℕ}, (Fin m → NNReal) → Real) (_hn : n > 0) : Real :=
-  H (λ _ : Fin n => uniformProb n)
-
-/-- Define f₀(n) extending f to n=0. -/
-noncomputable def f₀ (H : ∀ {m : ℕ}, (Fin m → NNReal) → Real) (n : ℕ) : Real :=
-  if hn : n > 0 then f H hn else 0
 
 
 -- ##################################################
@@ -197,28 +270,27 @@ Chunk 1 Completed. Next Step: Chunk 2 - The Power Law `f₀(n^k) = k * f₀(n)`.
 ### Chunk 2: The Power Law `f₀(n^k) = k * f₀(n)`
 
 **Step 1: State the Assumed Lemma (Consequence of Prop 4)**
--/
-
-/-- Assumed step relation derived from Property 4 (Conditional Entropy). -/
-lemma uniformEntropy_product_recursion {n k : ℕ} (hn : n ≥ 1) (hk : k ≥ 1) :
-    f₀ H (n ^ (k + 1)) = f₀ H (n ^ k) + f₀ H n := by
-  sorry -- Assumed consequence of hH.prop4_conditional applied to specific partitions
-
-/-!
 **Step 2: Prove the Main Power Law `uniformEntropy_power_law`**
+ Assumed step relation derived from Property 4 (Conditional Entropy). -/
 
-Use the assumed step relation and induction on `k` starting from 1,
-breaking the proof into helper lemmas.
--/
+lemma uniformEntropy_product_recursion {n k : ℕ} (hH : IsEntropyFunction H) (hn : n ≥ 1) (_hk : k ≥ 1) : -- hk is not used here but kept for consistency
+    f₀ H (n ^ (k + 1)) = f₀ H (n ^ k) + f₀ H n := by
+  -- Rewrite n^(k+1) as n * n^k to match f0_mul_eq_add_f0's a * b form
+  rw [pow_succ'] -- n^(k+1) = n * n^k
 
-/-- Cast a successor into a sum: `↑(m + 1) = ↑m + 1`. -/
-lemma cast_add_one_real (m : ℕ) : ↑(m + 1) = ↑m + 1 :=
-  Nat.cast_add_one m
+  -- Prove the hypothesis n^k ≥ 1 needed for f0_mul_eq_add_f0
+  have hnk_ge1 : n ^ k ≥ 1 := by
+    -- Use the provided Nat.one_le_pow lemma
+    exact Nat.one_le_pow k n hn
 
-lemma add_mul_right (m : ℕ) (c : ℝ) :
-    ↑m * c + c = (m + 1 : ℝ) * c := by
-  ring          -- ← one line, succeeds
+  -- Apply the core additivity theorem f0_mul_eq_add_f0 H n (n^k)
+  -- Need arguments H, n, n^k and hypotheses n ≥ 1 (hn) and n^k ≥ 1 (hnk_ge1)
+  have h_add := f0_mul_eq_add_f0 hH hn hnk_ge1
+  -- h_add: f₀ H (n * n ^ k) = f₀ H n + f₀ H (n ^ k)
 
+  -- Rewrite the goal using h_add and commutativity of addition
+  rw [h_add, add_comm] -- Goal: f₀ H n + f₀ H (n ^ k) = f₀ H (n ^ k) + f₀ H n
+  -- The goal is now identical.
 
 /-- Power law for `f₀`: `f₀(n^k) = k * f₀(n)`. -/
 theorem uniformEntropy_power_law
@@ -231,15 +303,20 @@ theorem uniformEntropy_power_law
   have base : P 1 := by
     simp [P, pow_one]
 
-  -- step : `m ≥ 1 → P m → P (m+1)`
+  -- step : `m ≥ 1 → P m → P (m + 1)`
   have step : ∀ m, 1 ≤ m → P m → P (m + 1) := by
     intro m hm ih
     -- unfold the predicate
     simp [P] at ih ⊢
-    -- entropy step (assumed consequence of conditional entropy)
-    have hstep := uniformEntropy_product_recursion (H := H) hn hm
+    -- entropy step (using the proven recursion)
+    -- Correctly pass the IsEntropyFunction instance _hH first
+    have hstep := uniformEntropy_product_recursion _hH hn hm -- Corrected line
+    -- hstep: f₀ H (n ^ (m + 1)) = f₀ H (n ^ m) + f₀ H n
+
     -- rewrite with the step relation and IH
-    simpa [ih, add_mul_right m (f₀ H n)] using hstep
+    rw [hstep, ih] -- Goal: ↑m * f₀ H n + f₀ H n = ↑(m + 1) * f₀ H n
+    -- Simplify using ring tactic or explicit algebra
+    ring -- Applies distributive law
 
   -- perform the induction starting at 1
   simpa [P] using
@@ -262,176 +339,9 @@ lemma f0_nonneg (hH : IsEntropyFunction H) {b : ℕ} (hb : b ≥ 1) : f₀ H b �
   exact h_mono_ineq
 
 /-!
-### Chunk 3.2: The Trapping Argument Setup
+### The Trapping Argument Setup
 -/
 
-/-- Helper lemma: `1 < b` for `b ≥ 2` -/
-lemma one_lt_cast_of_ge_two {b : ℕ} (hb : b ≥ 2) : 1 < (b : ℝ) :=
-  Nat.one_lt_cast.mpr (Nat.lt_of_succ_le hb)
-
-/-- Helper lemma: `0 < b` for `b ≥ 2` -/
-lemma cast_pos_of_ge_two {b : ℕ} (hb : b ≥ 2) : 0 < (b : ℝ) :=
-  Nat.cast_pos.mpr (Nat.lt_of_succ_le (by linarith [hb] : 1 ≤ b))
-
-/-- Lemma: floor of `Real.logb b x` is at most `Real.logb b x`. -/
-lemma floor_logb_le {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-  (Nat.floor (Real.logb b x) : ℝ) ≤ Real.logb b x := -- Cast floor to Real
-by
-  have hb_gt_one_real : 1 < (b : ℝ) := one_lt_cast_of_ge_two hb
-  exact Nat.floor_le (Real.logb_nonneg hb_gt_one_real hx)
-
-/-- Lemma: `log b > 0` for `b ≥ 2`. -/
-lemma log_b_pos {b : ℕ} (hb : b ≥ 2) : Real.log b > 0 := by
-  apply Real.log_pos -- Changes goal to `↑b > 1`
-  -- Explicitly show the cast is greater than 1
-  have hb_gt_one_real : (b : ℝ) > 1 := by
-    -- Convert Nat inequality `b ≥ 2` to Real inequality `↑b ≥ 2`
-    have hb_ge_2_real : (b : ℝ) ≥ (2 : ℝ) := Nat.cast_le.mpr hb
-    -- Use linarith: `↑b ≥ 2` implies `↑b > 1` because `2 > 1`
-    linarith [hb_ge_2_real]
-  exact hb_gt_one_real
-
-
-
-/-- Lemma: `Real.logb b x * Real.log b = Real.log x`. Needs `b > 0`, `b ≠ 1`, `x > 0`. -/
-lemma logb_mul_log_eq_log {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-  Real.logb b x * Real.log b = Real.log x :=
-by
-  -- Need b ≠ 1 for logb definition
-  have b_ne_one : (b : ℝ) ≠ 1 := ne_of_gt (one_lt_cast_of_ge_two hb)
-  -- Need b > 0 for logb definition
-  have b_pos : 0 < (b : ℝ) := cast_pos_of_ge_two hb
-  -- Need x > 0 for logb definition
-  have x_pos : 0 < x := by linarith [hx]
-
-  -- Use the definition: Real.logb b x = Real.log x / Real.log b
-  rw [Real.logb] -- Unfolds the definition
-
-  -- Simplify (log x / log b) * log b = log x
-  -- Use div_mul_cancel₀ which requires log b ≠ 0
-  rw [div_mul_cancel₀]
-  -- Prove log b ≠ 0
-  exact Real.log_ne_zero_of_pos_of_ne_one b_pos b_ne_one
-
-/-- Intermediate Lemma: `k * log b ≤ log x` where `k = floor(logb b x)`. -/
-lemma floor_logb_mul_log_le_log {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-  (Nat.floor (Real.logb b x) : ℝ) * Real.log b ≤ Real.log x :=
-by
-  have h_floor_le_logb_real : (Nat.floor (Real.logb b x) : ℝ) ≤ Real.logb b x :=
-    floor_logb_le hb hx
-  have h_log_b_nonneg : 0 ≤ Real.log b := le_of_lt (log_b_pos hb)
-  have h_mul_log : (Nat.floor (Real.logb b x) : ℝ) * Real.log b ≤ Real.logb b x * Real.log b :=
-    mul_le_mul_of_nonneg_right h_floor_le_logb_real h_log_b_nonneg
-  rw [logb_mul_log_eq_log hb hx] at h_mul_log
-  exact h_mul_log
-
-/-- Intermediate Lemma: From `y * log b ≤ log x`, prove `b ^ y ≤ x`. Uses `rpow`. -/
-lemma rpow_le_of_mul_log_le_log {b : ℕ} {x y : ℝ} (hb : b ≥ 2) (hx_pos : 0 < x)
-    (h_mul_log : y * Real.log b ≤ Real.log x) :
-    (b : ℝ) ^ y ≤ x :=
-by
-  have hb_pos_real : 0 < (b : ℝ) := cast_pos_of_ge_two hb
-  -- Apply exp to both sides (exp is strictly monotone)
-  have h_exp_le_exp : Real.exp (y * Real.log b) ≤ Real.exp (Real.log x) :=
-    Real.exp_le_exp.mpr h_mul_log
-  -- Simplify LHS using x ^ y = exp(y * log x)
-  rw [mul_comm y (Real.log b)] at h_exp_le_exp -- Commute for rpow_def_of_pos
-  rw [← Real.rpow_def_of_pos hb_pos_real] at h_exp_le_exp -- LHS is now (b : ℝ) ^ y
-  -- Simplify RHS using exp(log x) = x
-  rw [Real.exp_log hx_pos] at h_exp_le_exp -- RHS is now x
-  exact h_exp_le_exp
-
-
-/-- Lemma: `(b : ℝ) ^ (Nat.floor (Real.logb b x) : ℝ) ≤ x` for `b ≥ 2` and `x ≥ 1`. -/
-lemma rpow_floor_logb_le_x {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-  (b : ℝ) ^ (Nat.floor (Real.logb b x) : ℝ) ≤ x := -- Exponent is Real cast
-by
-  have h_mul_log : (Nat.floor (Real.logb b x) : ℝ) * Real.log b ≤ Real.log x :=
-    floor_logb_mul_log_le_log hb hx
-  have hx_pos : 0 < x := by linarith [hx]
-  exact rpow_le_of_mul_log_le_log hb hx_pos h_mul_log
-
-/-- Helper Lemma: `(b : ℝ) ^ k ≤ x` where `k = Nat.floor (Real.logb b x)`. Uses Nat exponent. -/
-lemma pow_nat_floor_logb_le_x {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-  (b : ℝ) ^ (Nat.floor (Real.logb b x)) ≤ x :=
-by
-  let k := Nat.floor (Real.logb b x)
-  -- Get the inequality with Real exponent from the existing lemma
-  have h_le_real_exp : (b : ℝ) ^ (k : ℝ) ≤ x := rpow_floor_logb_le_x hb hx
-  -- Need b ≥ 0 to use rpow_natCast
-  have hb_nonneg : 0 ≤ (b : ℝ) := le_of_lt (cast_pos_of_ge_two hb)
-  -- Rewrite the inequality using rpow_natCast (forward direction) to match the goal (Nat exponent)
-  rw [Real.rpow_natCast (b : ℝ) k] at h_le_real_exp
-  -- The hypothesis now matches the goal
-  exact h_le_real_exp
-
-/-- Helper Lemma: `x < (b : ℝ) ^ (k + 1)` where `k = Nat.floor (Real.logb b x)`. Uses Nat exponent. -/
-lemma x_lt_pow_succ_floor_logb {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-  x < (b : ℝ) ^ (Nat.floor (Real.logb b x) + 1) :=
-by
-  let k := Nat.floor (Real.logb b x)
-  have hb_pos : 0 < (b : ℝ) := cast_pos_of_ge_two hb
-  have hx_pos : 0 < x := by linarith [hx]
-  have log_b_pos' : 0 < Real.log b := log_b_pos hb
-
-  -- Start from Nat.lt_floor_add_one
-  have lt_floor_add_one : Real.logb b x < (k : ℝ) + 1 :=
-    Nat.lt_floor_add_one (Real.logb b x)
-
-  -- Multiply by log b (positive)
-  have h_mul_log_lt : Real.logb b x * Real.log b < ((k : ℝ) + 1) * Real.log b :=
-    (mul_lt_mul_right log_b_pos').mpr lt_floor_add_one
-
-  -- Substitute log x using logb_mul_log_eq_log
-  rw [logb_mul_log_eq_log hb hx] at h_mul_log_lt -- log x < (k+1) * log b
-
-  -- Apply exp (strictly monotone)
-  have h_exp_lt : Real.exp (Real.log x) < Real.exp (((k : ℝ) + 1) * Real.log b) :=
-    Real.exp_lt_exp.mpr h_mul_log_lt
-
-  -- Simplify LHS using exp_log
-  rw [Real.exp_log hx_pos] at h_exp_lt -- x < exp(...)
-
-  -- Simplify RHS using rpow_def_of_pos (backwards)
-  rw [mul_comm ((k : ℝ) + 1) (Real.log b), ← Real.rpow_def_of_pos hb_pos] at h_exp_lt -- Changed: Added ←
-  -- Now have: x < (b : ℝ) ^ ((k : ℝ) + 1)
-
-  -- Rewrite exponent using Nat.cast_add_one
-  have exp_eq : (k : ℝ) + 1 = (↑(k + 1) : ℝ) := (Nat.cast_add_one k).symm
-  rw [exp_eq] at h_exp_lt -- x < (b : ℝ) ^ (↑(k + 1) : ℝ)
-
-  -- Rewrite the expression in the hypothesis using rpow_natCast (forward direction)
-  have hb_nonneg : 0 ≤ (b : ℝ) := le_of_lt hb_pos -- Need b ≥ 0 for rpow_natCast
-  rw [Real.rpow_natCast (b : ℝ) (k + 1)] at h_exp_lt -- x < (b : ℝ) ^ (k + 1) (Nat exponent)
-
-  -- The inequality now matches the goal
-  exact h_exp_lt
-
-/-- Lemma: For any `x ≥ 1` and integer `b ≥ 2`, there exists an integer `k` such that `b^k ≤ x < b^(k+1)`. This `k` is `floor(log_b(x))`. Uses Nat exponent version. -/
-lemma exists_nat_pow_bounds {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-  ∃ k : ℕ, (b : ℝ) ^ k ≤ x ∧ x < (b : ℝ) ^ (k + 1) := by
-  -- Define k as the floor of log base b of x
-  let k := Nat.floor (Real.logb b x)
-  -- Claim existence of this k
-  use k
-  -- Prove the two inequalities using the helper lemmas with Nat exponents
-  constructor
-  · exact pow_nat_floor_logb_le_x hb hx
-  · exact x_lt_pow_succ_floor_logb hb hx
-
-
-lemma exists_k_log_bounds {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-  ∃ k : ℕ, (b : ℝ) ^ k ≤ x ∧ x < (b : ℝ) ^ (k + 1) := by
-  -- Define k as the floor of log base b of x
-  let k := Nat.floor (Real.logb b x)
-  -- Claim existence of this k
-  use k
-  -- Prove the two inequalities
-  constructor
-  · -- Prove (b : ℝ) ^ k ≤ x
-    exact pow_nat_floor_logb_le_x hb hx
-  · -- Prove x < (b : ℝ) ^ (k + 1)
-    exact x_lt_pow_succ_floor_logb hb hx
 
 /-!
 ### Chunk 3.3: Inequalities from Trapping `f₀ H (n^m)`
@@ -748,58 +658,6 @@ lemma div_bounds_from_mul_bounds {A B C D E : ℝ} (hC : C > 0) (hD : D > 0)
 /-! ### Chunk 3.4 - Breakdown Step 3 -/
 
 
-/-- Helper: Prove 1 ≤ (b:ℝ)^k by induction for b ≥ 1. -/
-lemma one_le_pow_of_one_le_real {b : ℝ} (hb : 1 ≤ b) (k : ℕ) : 1 ≤ b ^ k := by
-  induction k with
-  | zero =>
-    simp only [pow_zero, le_refl] -- 1 ≤ 1
-  | succ k ih => -- ih: 1 ≤ b^k. Goal: 1 ≤ b^(k+1)
-    rw [pow_succ] -- Goal: 1 ≤ b^k * b
-    -- We know 1 ≤ b (hb)
-    -- We know 1 ≤ b^k (ih)
-    -- Since 1 ≤ b, we have 0 ≤ 1 ≤ b, so b is non-negative.
-    have hb_nonneg : 0 ≤ b := le_trans zero_le_one hb
-    -- Multiply the inequality ih (1 ≤ b^k) by b (non-negative) on the right:
-    -- 1 * b ≤ b^k * b
-    -- We need `mul_le_mul_of_nonneg_right` which holds in `LinearOrderedSemiring` like ℝ
-    have h_mul_le : 1 * b ≤ b ^ k * b := by
-      apply mul_le_mul_of_nonneg_right
-      · exact ih -- The inequality 1 ≤ b^k
-      · exact hb_nonneg -- Proof that the multiplier b is non-negative
-
-    simp only [one_mul] at h_mul_le -- Simplify 1 * b to b. Now: b ≤ b^k * b
-    -- We have 1 ≤ b (hb) and b ≤ b^k * b (h_mul_le)
-    -- By transitivity of ≤ :
-    exact le_trans hb h_mul_le
-
-/-- Lemma: `1 ≤ (n : ℝ) ^ (m : ℝ)` given `n ≥ 1, m ≥ 1`. -/
-lemma one_le_rpow_cast_pow {n m : ℕ} (hn : n ≥ 1) :
-    1 ≤ (n : ℝ) ^ (m : ℝ) := by
-  -- Cast n ≥ 1 to Real: ↑n ≥ 1
-  have hn_real_ge_1 : (n : ℝ) ≥ 1 := Nat.one_le_cast.mpr hn
-  -- Cast m ≥ 1 implies m ≥ 0 in Real: ↑m ≥ 0
-  have hm_real_nonneg : 0 ≤ (m : ℝ) := Nat.cast_nonneg m -- m ≥ 1 → m ≥ 0 holds for Nat
-
-  -- Rewrite 1 as 1 ^ ↑m using Real.one_rpow
-  rw [← Real.one_rpow (m : ℝ)] -- Goal: 1 ^ ↑m ≤ ↑n ^ ↑m
-
-  -- Apply Real.rpow_le_rpow {x y : ℝ} (hx : 0 ≤ x) (hxy : x ≤ y) {r : ℝ} (hr : 0 ≤ r) : x ^ r ≤ y ^ r
-  -- Here x=1, y=↑n, r=↑m
-  apply Real.rpow_le_rpow
-  · -- Prove 0 ≤ 1
-    exact zero_le_one
-  · -- Prove 1 ≤ ↑n
-    exact hn_real_ge_1
-  · -- Prove 0 ≤ ↑m
-    exact hm_real_nonneg
-
--- Helper lemma (should be placed earlier or imported)
-lemma one_le_pow_cast {n m : ℕ} (hn : n ≥ 1) :
-    1 ≤ (n : ℝ) ^ m := by
-  have hn_real_ge_1 : (n : ℝ) ≥ 1 := Nat.one_le_cast.mpr hn
-  -- Use library lemma for powers of reals ≥ 1
-  exact one_le_pow_of_one_le_real hn_real_ge_1 m
-
 /-! ## Chunk 3.3: THEOREM!!! Trapping Inequalities
 Theorem: Establishes the core trapping inequalities relating the ratio `f₀ H n / f₀ H b`
 to the ratio `k / m` derived from integer power bounds `b^k ≤ n^m < b^(k+1)`.
@@ -861,167 +719,6 @@ theorem uniformEntropy_ratio_bounds_by_rational (hH : IsEntropyFunction H) (hH_n
 
 /-! ## Chunk 3.4: logb properties -/
 
-lemma one_le_implies_pos {x : ℝ} (hx : x ≥ 1) : 0 < x := by linarith
-
-/-- Lemma: `logb b` is monotone increasing for base `b ≥ 2` and arguments ≥ 1. -/
-lemma logb_le_logb_of_le {b : ℕ} {y z : ℝ} (hb : b ≥ 2) (hy : y ≥ 1) (hz : z ≥ 1) (h_le : y ≤ z) :
-    Real.logb b y ≤ Real.logb b z := by
-  -- Preconditions for Real.logb
-  have hb_pos : 0 < (b : ℝ) := cast_pos_of_ge_two hb
-  have hb_ne_one : (b : ℝ) ≠ 1 := ne_of_gt (one_lt_cast_of_ge_two hb)
-  have hy_pos : 0 < y := one_le_implies_pos hy
-  have hz_pos : 0 < z := one_le_implies_pos hz
-
-  -- Use Real.logb_le_logb which requires base > 1
-  have hb_gt_one : (b : ℝ) > 1 := one_lt_cast_of_ge_two hb
-  exact (Real.logb_le_logb hb_gt_one hy_pos hz_pos).mpr h_le
-
-/-! ### Chunk 3.4c: logb of a power -/
-
-/-- Lemma: `logb b (b^k) = k` for Nat exponent k. -/
-lemma logb_pow_eq_self {b k : ℕ} (hb : b ≥ 2) :
-    Real.logb b ((b : ℝ) ^ k) = (k : ℝ) := by
-  -- Need base > 0 and base ≠ 1 for logb
-  have hb_pos : 0 < (b : ℝ) := cast_pos_of_ge_two hb
-  have hb_ne_one : (b : ℝ) ≠ 1 := ne_of_gt (one_lt_cast_of_ge_two hb)
-
-  -- Use Real.logb_rpow after casting k to ℝ using Real.rpow_nat_cast
-  -- Rewrite the Nat power to Real power (rpow) using conv
-  conv =>
-    lhs       -- Focus on the left-hand side: logb (↑b) (↑b ^ k)
-    arg 2     -- Focus on the second argument: ↑b ^ k
-    rw [← Real.rpow_natCast (b : ℝ) k] -- Rewrite ↑b ^ k to ↑b ^ (↑k : ℝ) using the theorem backwards
-  -- Goal is now logb (↑b) (↑b ^ (↑k : ℝ)) = ↑k
-
-  -- Apply Real.logb_rpow, providing the required proofs for the base b (which is ↑b here)
-  rw [Real.logb_rpow hb_pos hb_ne_one] -- Goal: ↑k = ↑k
-  -- The proof is complete as the goal becomes an identity.
-
-/-! ### Chunk 3.4d: Lower bound on k using logb -/
-
-
-
-
-/-- Lemma: `k ≤ logb b x` given `(b : ℝ) ^ k ≤ x`. -/
-lemma k_le_logb_rpow {b k : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1)
-    (hk_le_x_pow : (b : ℝ) ^ k ≤ x) :
-    (k : ℝ) ≤ Real.logb b x := by
-  -- Apply logb b to both sides of hk_le_x_pow using monotonicity
-  have h_logb_le : Real.logb b ((b : ℝ) ^ k) ≤ Real.logb b x := by
-    apply logb_le_logb_of_le hb
-    · -- Prove 1 ≤ (b:ℝ)^k using the helper lemma
-      apply one_le_pow_of_one_le_real
-      · exact Nat.one_le_cast.mpr (Nat.le_of_lt hb) -- Need base ≥ 1
-      -- k is the exponent argument
-    · exact hx -- Given x ≥ 1
-    · exact hk_le_x_pow
-
-  -- Simplify the LHS using logb_pow_eq_self (ensure it's defined above)
-  have h_lhs_eq_k : Real.logb b ((b : ℝ) ^ k) = (k : ℝ) := logb_pow_eq_self hb
-
-  -- Rewrite the LHS in the inequality
-  rw [h_lhs_eq_k] at h_logb_le
-  exact h_logb_le
-
--- Define define the lemma logb_lt_logb_of_lt using Real.logb_lt_logb and place it before its usage.
--- This lemma states that if b ≥ 2 and x, y ≥ 1, then logb b x < logb b y if x < y.
-lemma logb_lt_logb_of_lt {b : ℝ} (hb : b ≥ 2) {x y : ℝ} (hx : x ≥ 1) (hxy : x < y) :
-    Real.logb b x < Real.logb b y := by
-  -- Preconditions for Real.logb_lt_logb
-  have hb_gt_one : 1 < b := by linarith -- b ≥ 2 implies b > 1
-  have hx_pos : 0 < x := one_le_implies_pos hx -- x ≥ 1 implies x > 0
-  -- hy_pos is not directly needed by Real.logb_lt_logb signature but good practice
-
-  -- Apply the lemma from Real.logb with the correct arguments
-  apply Real.logb_lt_logb hb_gt_one hx_pos hxy
-
-/-- Lemma: `logb b x < k + 1` given `x < (b : ℝ) ^ (k + 1)`. -/
-lemma logb_rpow_lt_k_plus_1 {b k : ℕ} {x : ℝ} (hb_nat : b ≥ 2) (hx : x ≥ 1)
-    (hx_lt_kp1 : x < (b : ℝ) ^ (k + 1)) :
-    Real.logb b x < (k + 1 : ℝ) := by
-  -- Cast b to Real for logb operations
-  let b_real := (b : ℝ)
-  have hb : b_real ≥ 2 := by exact Nat.cast_le.mpr hb_nat
-
-  -- Apply logb b to both sides of hx_lt_kp1 using strict monotonicity
-  have h_logb_lt : Real.logb b_real x < Real.logb b_real (b_real ^ (k + 1)) := by
-    -- Apply the lemma directly with the available hypotheses
-    apply logb_lt_logb_of_lt hb hx hx_lt_kp1
-    -- Removed the incorrect proof steps that followed the apply
-
-  -- Simplify the RHS using logb_pow_eq_self
-  have h_rhs_eq_kp1 : Real.logb b_real (b_real ^ (k + 1)) = (k + 1 : ℝ) := by
-    -- Rewrite the RHS goal `(k + 1 : ℝ)` to `↑(k + 1)` using Nat.cast_add_one backwards
-    rw [← Nat.cast_add_one]
-    -- Now the goal is `logb b_real (b_real ^ (k + 1)) = ↑(k + 1)`
-    -- Since b_real = ↑b, this matches the type of logb_pow_eq_self
-    exact logb_pow_eq_self hb_nat-- Corrected line
-
-  -- Rewrite the RHS in the inequality
-  rw [h_rhs_eq_kp1] at h_logb_lt
-  exact h_logb_lt
-
-lemma logb_rpow_bounds_k {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-    ∃ k : ℕ, Real.logb b x - 1 < (k : ℝ) ∧ (k : ℝ) ≤ Real.logb b x := by
-  -- Use exists_nat_pow_bounds to find k such that b^k ≤ x < b^(k+1)
-  rcases exists_nat_pow_bounds hb hx with ⟨k, h_bk_le_x, h_x_lt_bkp1⟩
-
-  -- Prove the two inequalities for this k
-  use k
-  constructor
-  · -- Prove logb b x - 1 < k
-    -- Start from x < b^(k+1)
-    have h_logb_lt_kp1 : Real.logb b x < (k + 1 : ℝ) := by
-      apply logb_rpow_lt_k_plus_1 hb hx h_x_lt_bkp1
-    -- The rewrite is not needed as ↑(k + 1) is often automatically ↑k + 1
-    -- Subtract 1 from both sides using linarith
-    linarith [h_logb_lt_kp1]
-  · -- Prove k ≤ logb b x
-    -- Start from b^k ≤ x
-    have h_k_le_logb : (k : ℝ) ≤ Real.logb b x := by
-      apply k_le_logb_rpow hb hx h_bk_le_x
-    exact h_k_le_logb
-
-/-- Lemma: `logb b (n^m) = m * logb b n` for Real exponent m.
-Requires `b > 0`, `b ≠ 1` (implicit in `Real.logb`), and `n ≥ 1`. -/
-lemma logb_rpow_eq_mul_logb {b n : ℕ} {m : ℝ} (hn : n ≥ 1) :
-    Real.logb b ((n : ℝ) ^ m) = m * Real.logb b n := by
-  -- Precondition required explicitly by the lemma Real.logb_rpow_eq_mul_logb_of_pos
-  have hn_pos : 0 < (n : ℝ) := Nat.cast_pos.mpr (by linarith [hn] : n > 0)
-  -- (Implicit preconditions 0 < ↑b and ↑b ≠ 1 are handled by logb's definition)
-
-  -- Apply the lemma, providing only the required explicit argument hn_pos
-  exact Real.logb_rpow_eq_mul_logb_of_pos hn_pos
-  -- Lean matches the implicit b in the lemma with ↑b from the goal,
-  -- x with ↑n, and y with m.
-
-/-! ### Chunk 3.4h: Logarithmic Trapping - Final Bound -/
-
--- Assume lemmas from LogF.lean (like logb_rpow_eq_mul_logb etc.) are available
-
-/-- Lemma: `logb b (n^m) = m * logb b n` for Nat exponent m. -/
-lemma logb_pow_eq_mul_logb_nat {b n m : ℕ} (_hb : b ≥ 2) (_hn : n ≥ 1) : -- hb, hn proofs not needed by logb_pow
-    Real.logb b ((n : ℝ) ^ m) = (m : ℝ) * Real.logb b n := by
-  -- The goal is logb (↑b) (↑n ^ m) = ↑m * logb ↑b ↑n
-  -- The lemma statement is logb b' (x' ^ k') = ↑k' * logb b' x'
-  -- Unifying: b' = ↑b, x' = ↑n, k' = m
-  -- The instantiated lemma statement is identical to the goal.
-  exact Real.logb_pow (b : ℝ) (n : ℝ) m
-
-
-/-! Step 1: Prove logb b x = m * logb b n -/
-lemma prove_logb_x_eq {n m b : ℕ} (hn : n ≥ 1) (hb : b ≥ 2) (x : ℝ) (hx_def : x = (n : ℝ) ^ m) :
-    Real.logb b x = (m : ℝ) * Real.logb b n := by
-  -- Substitute the definition of x into the goal
-  rw [hx_def] -- Goal: logb ↑b (↑n ^ m) = ↑m * logb ↑b ↑n
-  -- Apply the lemma for Nat exponents
-  exact logb_pow_eq_mul_logb_nat hb hn
-
--- Retry Step 1 using the corrected lemma name for Nat powers
-lemma prove_logb_x_eq_nat {n m b : ℕ} (hn : n ≥ 1) (hb : b ≥ 2) (x : ℝ) (hx_def : x = (n : ℝ) ^ m) :
-    Real.logb b x = (m : ℝ) * Real.logb b n := by
-  rw [hx_def] -- Goal: logb ↑b (↑n ^ m) = ↑m * logb ↑b ↑n
-  exact logb_pow_eq_mul_logb_nat hb hn
 
 /--
 Lemma: Guarantees the existence of `k : ℕ` satisfying both the power bounds
@@ -1088,99 +785,10 @@ lemma k_from_f0_trap_satisfies_pow_bounds (hH : IsEntropyFunction H) (hH_nonzero
       -- Use (b / c ≤ e / d ↔ b * d ≤ e * c) with b=f₀ H n, c=f₀ H b, e=k+1, d=m
       rwa [div_le_div_iff₀ hf0b_pos hm_pos_real] -- Goal: f₀ H n / f₀ H b ≤ (k + 1) / m
 
-/--
-Lemma: If `k` satisfies the power bounds `(b : ℝ) ^ k ≤ x < (b : ℝ) ^ (k + 1)`,
-then `k` also satisfies the logarithmic bounds `logb b x - 1 < k` and `k ≤ logb b x`.
--/
-lemma logb_x_bounds_k {b k : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1)
-    (h_pow_bounds : (b : ℝ) ^ k ≤ x ∧ x < (b : ℝ) ^ (k + 1)) :
-    Real.logb b x - 1 < (k : ℝ) ∧ (k : ℝ) ≤ Real.logb b x := by
-  -- Deconstruct the power bounds
-  rcases h_pow_bounds with ⟨h_lower_pow, h_upper_pow⟩
-
-  -- Prove the two required inequalities
-  constructor
-  · -- Prove logb b x - 1 < k
-    -- Use the upper power bound: x < b^(k+1)
-    have h_logb_lt_kp1 : Real.logb b x < (k + 1 : ℝ) := by
-      apply logb_rpow_lt_k_plus_1 hb hx h_upper_pow
-    -- Rearrange using linarith
-    linarith [h_logb_lt_kp1]
-  · -- Prove k ≤ logb b x
-    -- Use the lower power bound: b^k ≤ x
-    have h_k_le_logb : (k : ℝ) ≤ Real.logb b x := by
-      apply k_le_logb_rpow hb hx h_lower_pow
-    exact h_k_le_logb
-
-/--
-Lemma: Translates bounds on `logb b x` in terms of `k` to bounds on
-`m * logb b n` using the identity `logb b x = m * logb b n` where `x = (n:ℝ)^m`.
--/
-lemma logb_n_times_m_bounds_k {n m b k : ℕ} (hn : n ≥ 1) (hb : b ≥ 2)
-    (x : ℝ) (hx_def : x = (n : ℝ) ^ m)
-    (h_logb_x_bounds : Real.logb b x - 1 < (k : ℝ) ∧ (k : ℝ) ≤ Real.logb b x) :
-    (m : ℝ) * Real.logb b n - 1 < (k : ℝ) ∧ (k : ℝ) ≤ (m : ℝ) * Real.logb b n := by
-  -- Prove the identity logb b x = m * logb b n
-  have h_logb_x_eq : Real.logb b x = (m : ℝ) * Real.logb b n := by
-    apply prove_logb_x_eq_nat hn hb x hx_def
-
-  -- Rewrite the logb expression in the hypothesis bounds using the identity
-  rw [h_logb_x_eq] at h_logb_x_bounds
-
-  -- The hypothesis now directly matches the goal
-  exact h_logb_x_bounds
-
-/--
-Lemma: Converts bounds involving `m * logb b n` to bounds involving `logb b n`
-by dividing by `m`. Requires `m ≥ 1`.
--/
-lemma logb_n_bounds_k_div_m {n m b k : ℕ} (_hn : n ≥ 1) (_hb : b ≥ 2) (hm : m ≥ 1)
-    (h_logb_nm_bounds : (m : ℝ) * Real.logb b n - 1 < (k : ℝ) ∧ (k : ℝ) ≤ (m : ℝ) * Real.logb b n) :
-    Real.logb b n - 1 / (m : ℝ) < (k : ℝ) / (m : ℝ) ∧ (k : ℝ) / (m : ℝ) ≤ Real.logb b n := by
-  -- Deconstruct the input hypothesis
-  rcases h_logb_nm_bounds with ⟨h_lower_mul, h_upper_mul⟩
-
-  -- Need m > 0 for division properties
-  have hm_pos : 0 < (m : ℝ) := Nat.cast_pos.mpr (by linarith [hm] : m > 0)
-
-  constructor
-  · -- Prove logb b n - 1 / m < k / m
-    calc
-      Real.logb b n - 1 / (m : ℝ) = ((m : ℝ) * Real.logb b n - 1) / m := by
-        field_simp [hm_pos, mul_comm] -- Added mul_comm
-      -- Use div_lt_div_iff_of_pos_right, which requires a < b to prove a / c < b / c
-      _ < (k : ℝ) / m := by exact (div_lt_div_iff_of_pos_right hm_pos).mpr h_lower_mul
-
-  · -- Prove k / m ≤ logb b n
-    -- Use div_le_iff₀' which states (a / c ≤ b ↔ a ≤ c * b) for c > 0.
-    -- Let a = k, c = m, b = logb b n.
-    -- Goal is k / m ≤ logb b n. The lemma rewrites this to k ≤ m * logb b n.
-    -- This is exactly h_upper_mul.
-    exact (div_le_iff₀' hm_pos).mpr h_upper_mul
-
 
 
 /-! ### Chunk 3.4 - Breakdown Step 5 - Helper 4: Real Arithmetic Equivalence -/
-lemma lt_add_iff_sub_left_real (a b c : ℝ) : a < b + c ↔ a - c < b := by
-  -- Prove forward direction: a < b + c → a - c < b
-  apply Iff.intro
-  · intro h
-    calc
-      a - c < b + c - c := by exact sub_lt_sub_right h c
-      _ = b := by ring -- Simplifies b + c - c to b
-  · -- Prove backward direction: a - c < b → a < b + c
-    intro h
-    calc
-      a = a - c + c := by ring -- Rewrite a
-      _ < b + c := by exact add_lt_add_right h c
 
-/-! ### Chunk 3.4 - Breakdown Step 5 - Helper 5: Negation of Division -/
-lemma helper_neg_div (a b : ℝ) : -(a / b) = -a / b := by
-  field_simp -- Try field_simp first
-
-
-lemma helper_neg_sub (a b : ℝ) : -(a - b) = b - a := by
-  exact neg_sub a b
 
 /--
 Lemma: Proves the lower bound part of the absolute difference inequality.
@@ -1228,17 +836,7 @@ lemma prove_diff_lower_bound {f0_ratio logb_val k_val m_val : ℝ}
   -- 7. Check goal
   exact h_step6
 
-lemma le_add_iff_sub_left_real (a b c : ℝ) : a ≤ b + c ↔ a - b ≤ c := by
-  apply Iff.intro
-  · intro h -- a ≤ b + c
-    calc
-      a - b ≤ (b + c) - b := by exact sub_le_sub_right h b
-      _ = c := by ring
-  · intro h -- a - b ≤ c
-    calc
-      a = a - b + b := by ring
-      _ ≤ c + b := by exact add_le_add_right h b
-      _ = b + c := by rw [add_comm]
+
 
 /--
 Lemma: Proves the upper bound part of the absolute difference inequality.
@@ -1321,37 +919,6 @@ theorem logarithmic_trapping (hH : IsEntropyFunction H) (hH_nonzero : ∃ n' ≥
     -- This is exactly h_diff_upper
     exact h_diff_upper
 
-/-! ### Chunk 3.5 - Limit Argument Helpers -/
-
-/--
-Lemma (Archimedean Helper): For any `ε > 0`, there exists a natural number `m ≥ 1`
-such that `1 / (m : ℝ) ≤ ε`.
--/
-lemma exists_one_le_nat_one_div_le {ε : ℝ} (hε : ε > 0) :
-    ∃ m : ℕ, m ≥ 1 ∧ 1 / (m : ℝ) ≤ ε := by
-  -- Use the Archimedean property to find a natural k such that 1 / (k + 1) < ε
-  rcases exists_nat_one_div_lt hε with ⟨k, hk⟩
-  -- Let m = k + 1
-  let m := k + 1
-  -- Claim existence of this m
-  use m
-  -- Prove the two required properties: m ≥ 1 and 1 / m ≤ ε
-  constructor
-  · -- Prove m ≥ 1
-    exact Nat.succ_pos k -- k + 1 is always ≥ 1 for any Nat k
-  · -- Prove 1 / m ≤ ε
-    -- We have hk : 1 / (↑k + 1) < ε
-    -- Substitute m = k + 1 into hk
-    have h_one_div_m_lt_ε : 1 / (m : ℝ) < ε := by
-      -- Simplify the goal using the definition of m
-      simp only [m]
-      -- Rewrite ↑(k + 1) using Nat.cast_add_one
-      rw [Nat.cast_add_one k]
-      -- Apply the hypothesis hk
-      exact hk
-    -- Use le_of_lt to convert the strict inequality to ≤
-    exact le_of_lt h_one_div_m_lt_ε
-
 
 /--
 Lemma (Core Limit Argument): If the absolute difference between two real numbers `x` and `y`
@@ -1391,16 +958,6 @@ lemma uniformEntropy_ratio_eq_logb (hH : IsEntropyFunction H) (hH_nonzero : ∃ 
   exact logarithmic_trapping hH hH_nonzero hn hm hb
 
 
--- Replacements for Mathlib3 lemmas that are not in Mathlib4 yet
-lemma pos_of_ge_one {x : ℝ} (h : 1 ≤ x) : 0 < x :=
-  lt_of_lt_of_le zero_lt_one h
-
-lemma pos_of_one_le {n : ℕ} (h : 1 ≤ n) : 0 < n :=
-  Nat.lt_of_lt_of_le Nat.zero_lt_one h
-
-lemma logb_eq_log {b x : ℝ} :
-    logb b x = log x / log b := by
-  rw [logb]
 
 -- Replacement for logb_eq_log_div_log
 lemma f0_ratio_eq_log_ratio (hH : IsEntropyFunction H) (hH_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0)
@@ -1425,19 +982,6 @@ lemma f0_ratio_eq_log_ratio (hH : IsEntropyFunction H) (hH_nonzero : ∃ n' ≥ 
   -- Step 4: Substitute the rewritten logb into the equality from Step 1
   rw [h_eq_logb, h_logb_rewrite]
 
-/--
-Definition: The constant `C` relating `f₀` to `log`.
-It is defined as `f₀ H 2 / log 2` if the entropy function `H` is non-trivial
-(meaning `f₀` is not identically zero for `n ≥ 1`), and `0` otherwise.
-We use base `b=2` for the definition.
--/
-noncomputable def C_constant (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) : ℝ :=
-  -- Explicitly use Classical.propDecidable for the condition so we don't have to Open Classical
-  let _inst : Decidable (∃ n' ≥ 1, f₀ H n' ≠ 0) := Classical.propDecidable _
-  if _h : ∃ n' ≥ 1, f₀ H n' ≠ 0 then
-    f₀ H 2 / Real.log 2
-  else
-    0
 
 
 /--
@@ -1637,7 +1181,7 @@ Theorem (Chunk 3 Goal): There exists a non-negative constant `C` such that
 for all `n > 0`, the entropy of the uniform distribution `f H n` is equal
 to `C * log n`.
 -/
-theorem isCShannonEntropy (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH : IsEntropyFunction H) :
+theorem RotaEntropyTheorem (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH : IsEntropyFunction H) :
     ∃ C ≥ 0, ∀ n (hn : n > 0), f H hn = C * Real.log n := by
   -- Step 1: Define the constant C using the existing definition
   let C := C_constant H
@@ -1664,14 +1208,3 @@ theorem isCShannonEntropy (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH : 
     exact f0_eq_C_log_cases H hH hn_ge_1
 
 end PPNP.Entropy.Basic
-
-export PPNP.Entropy.Basic (
-  stdShannonEntropyLn
-  IsEntropyFunction
-  uniformProb
-  sum_uniform_eq_one
-  f
-  f₀
-  f0_1_eq_0
-  f0_mono
-)

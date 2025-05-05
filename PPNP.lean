@@ -1,3 +1,3 @@
 import PPNP.Complexity.Basic
-import PPNP.Entropy.PartitionTheory
+import PPNP.Util.Basic
 import PPNP.RotaEntropyTheoremProof
