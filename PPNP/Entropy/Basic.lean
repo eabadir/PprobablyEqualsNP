@@ -40,6 +40,22 @@ prove `f 1 = 0`, and prove `f` is monotone.
 noncomputable def stdShannonEntropyLn {n : ℕ} (p : Fin n → NNReal) : Real :=
   ∑ i : Fin n, negMulLog (p i : Real)
 
+def probabilitySimplex {n : ℕ} : Set (Fin n → NNReal) :=
+  { p | ∑ i, p i = 1 }
+
+noncomputable def product_dist {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) : Fin (n * m) → NNReal :=
+  fun k =>
+    -- Assuming finProdFinEquiv : Fin m × Fin n ≃ Fin (m * n)
+    -- Use its inverse finProdFinEquiv.symm : Fin (m * n) ≃ Fin m × Fin n
+    -- Cast k : Fin (n * m) to k' : Fin (m * n) using Nat.mul_comm
+    let k' : Fin (m * n) := Equiv.cast (congrArg Fin (Nat.mul_comm n m)) k
+    -- Apply inverse to get pair of type Fin m × Fin n
+    let ji := finProdFinEquiv.symm k'
+    -- ji.1 has type Fin m
+    -- ji.2 has type Fin n
+    -- Match types: p needs Fin n (ji.2), q needs Fin m (ji.1)
+    p ji.2 * q ji.1
+
 -- Helper: Show the extended distribution for prop2 sums to 1 - Reuse from previous
 lemma sum_p_ext_eq_one {n : ℕ} {p : Fin n → NNReal} (hp_sum : ∑ i : Fin n, p i = 1) :
     let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
@@ -83,8 +99,9 @@ structure IsEntropyFunction (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) whe
   (prop2_zero_inv : ∀ {n : ℕ} (p : Fin n → NNReal) (_ : ∑ i : Fin n, p i = 1),
       let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
       H p_ext = H p)
-  (prop3_continuity : Prop)
-  (prop4_conditional : Prop)
+  (prop3_continuity : ∀ n : ℕ, ContinuousOn H (probabilitySimplex (n := n)))
+  (prop4_additivity_product : ∀ {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) (hp : ∑ i, p i = 1) (hq : ∑ j, q j = 1),
+    H (product_dist p q) = H p + H q)
   (prop5_max_uniform : ∀ {n : ℕ} (_hn_pos : n > 0) (p : Fin n → NNReal) (_hp_sum : ∑ i : Fin n, p i = 1),
       H p ≤ H (λ _ : Fin n => if _hn' : n > 0 then (n⁻¹ : NNReal) else 0)) -- NOTE: hn' check is redundant due to hn_pos
 

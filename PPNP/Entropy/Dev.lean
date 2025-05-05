@@ -19,11 +19,8 @@ import Mathlib.Data.Nat.Log -- Nat.log
 import Mathlib.Algebra.Order.Floor.Defs -- Floor definitions
 import Mathlib.Tactic.Linarith -- Inequality solver
 import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
-
-/-
-A playground for testing and developing theorems related to entropy and information theory before they are added to the main library.
--/
-
+import Mathlib.Logic.Equiv.Fin.Basic
+import Mathlib.Logic.Equiv.Defs
 
 -- Import previous definitions and theorems
 import PPNP.Entropy.Basic
@@ -32,3 +29,23 @@ namespace PPNP.Entropy
 
 open BigOperators Fin Real Topology NNReal Filter Nat Set
 open PPNP.Entropy.Basic
+
+def probabilitySimplex {n : ℕ} : Set (Fin n → NNReal) :=
+  { p | ∑ i, p i = 1 }
+
+#check finProdFinEquiv
+
+lemma uniformProb_product_uniformProb_is_uniformProb {n m : ℕ} (hn : n > 0) (hm : m > 0) :
+    product_dist (fun _ => uniformProb n) (fun _ => uniformProb m) = (fun _ => uniformProb (n * m)) := by
+  funext k
+  simp only [product_dist, uniformProb, dif_pos hn, dif_pos hm, dif_pos (mul_pos hn hm)]
+  -- Goal: (uniformProb n) * (uniformProb m) = uniformProb (n * m)
+  -- Which simplifies to: (↑n)⁻¹ * (↑m)⁻¹ = (↑(n * m))⁻¹
+  rw [NNReal.inv_mul_inv₀] -- Goal: (↑n * ↑m)⁻¹ = (↑(n * m))⁻¹
+  · -- Prove the arguments inside the inverse are equal
+    apply congr_arg (fun x => x⁻¹) -- Apply inverse to both sides of the equality we want to prove
+    exact NNReal.coe_nat_cast_mul n m -- Prove ↑n * ↑m = ↑(n * m)
+  · -- Prove ↑n ≠ 0 for NNReal.inv_mul_inv₀
+    exact NNReal.coe_ne_zero.mpr (Nat.pos_iff_ne_zero.mp hn)
+  · -- Prove ↑m ≠ 0 for NNReal.inv_mul_inv₀
+    exact NNReal.coe_ne_zero.mpr (Nat.pos_iff_ne_zero.mp hm)
