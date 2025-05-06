@@ -1,17 +1,33 @@
+import Mathlib.Analysis.SpecialFunctions.Log.NegMulLog -- For negMulLog, Real.log
+import Mathlib.Algebra.BigOperators.Fin -- For sum over Fin n
 import Mathlib.Data.Fin.Basic -- Basic Fin definitions and lemmas
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.Multiset.Defs
-import Mathlib.Data.Fintype.Card -- Fintype.card, Fintype.ofEquiv, Fintype.card_congr
-import Mathlib.Data.Sym.Card -- Sym.card_sym_eq_multichoose
-import Mathlib.Data.Nat.Choose.Basic -- Nat.choose, Nat.multichoose_eq, Nat.choose_pos
-import Mathlib.Data.NNReal.Basic -- For NNReal
-import Mathlib.Logic.Equiv.Fintype -- Fintype.equivFin
-import Mathlib.Data.Fintype.Basic -- Fintype instances
-import Mathlib.Data.Finset.Basic -- Finset.univ, Finset.mem_univ
-import Mathlib.Data.Multiset.Fintype -- Fintype instance for Sym (Fin N) M
-import Mathlib.Tactic.Positivity -- positivity tactic
-import Mathlib.Algebra.Group.Defs -- nsmul_eq_mul (implicitly used or needed)
-import Mathlib.Analysis.SpecialFunctions.Log.Basic -- Real.log for final entropy calculation
+import Mathlib.Data.Fintype.Fin -- Instances for Fin n
+import Mathlib.Algebra.GroupWithZero.Units.Basic -- Provides mul_inv_cancel₀
+import Mathlib.Data.Nat.Basic -- Basic Nat properties
+--import Mathlib.Data.NNReal.Basic -- For NNReal
+--import Mathlib.Topology.Basic -- For ContinuousOn (placeholder)
+--import Mathlib.Order.Monotone.Basic -- For Monotone
+--import Mathlib.Algebra.Order.Field.Basic -- For inv_one etc.
+--import Mathlib.Analysis.SpecialFunctions.Log.Base -- Real.logb
+--import Mathlib.Analysis.SpecialFunctions.Pow.Real -- Real.rpow
+--import Mathlib.Data.Complex.Basic -- For Complex.exp_re if needed
+--import Mathlib.Analysis.SpecificLimits.Basic -- tendsto_one_div_atTop_zero
+--import Mathlib.Data.Real.Basic -- Basic Real properties
+--import Mathlib.Order.Filter.Basic -- Filter bases etc.
+--import Mathlib.Topology.Order.Basic -- OrderTopology
+--import Mathlib.Data.Nat.Log -- Nat.log
+--import Mathlib.Algebra.Order.Floor.Defs -- Floor definitions
+--import Mathlib.Tactic.Linarith -- Inequality solver
+--import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
+--import Mathlib.Logic.Equiv.Fin.Basic
+--import Mathlib.Logic.Equiv.Defs
+--import Mathlib.GroupTheory.Congruence.Basic
+
+import Mathlib.Data.Multiset.Bind
+import Mathlib.Data.Multiset.Basic
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+
+
 namespace PPNP.Entropy.Physics
 
 open BigOperators Multiset Finset
@@ -19,7 +35,11 @@ open BigOperators Multiset Finset
 -- Define the type for Macrostates (occupancy vectors summing to M)
 -- Needed for both MB and BE state space definitions
 def MBMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
-
+-- Define the type for multisets of size M over Fin N
+-- This uses the standard Mathlib definition `Sym α n := {s : Multiset α // card s = n}`
+@[reducible] def SymFin (N M : ℕ) := Sym (Fin N) M
+-- BE state space is mathematically equivalent to MB macrostates
+@[reducible] def OmegaBE (N M : ℕ) := MBMacrostate N M
 
 /-- `Multiset.count` distributes over a `Finset` sum of multisets. -/
 @[simp] lemma Multiset.count_finset_sum
@@ -34,8 +54,7 @@ def MBMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
     intro b s' hb_not_mem ih
     simp [Finset.sum_insert hb_not_mem, Multiset.count_add, ih]
 
--- BE state space is mathematically equivalent to MB macrostates
-@[reducible] def OmegaBE (N M : ℕ) := MBMacrostate N M
+
 
 -- Map a BE state (occupancy vector) to the corresponding multiset of occupied states
 -- Example: N=3, M=4, q = (i=0 ↦ 2, i=1 ↦ 1, i=2 ↦ 1) -> {0, 0, 1, 2}
@@ -69,9 +88,6 @@ lemma sum_count_eq_card {N : ℕ} (s : Multiset (Fin N)) :
   -- The goal is definitionally equal to the statement of Multiset.sum_count_eq_card
   exact (Multiset.sum_count_eq_card (s := (Finset.univ : Finset (Fin N))) (m := s) hms)
 
--- Define the type for multisets of size M over Fin N
--- This uses the standard Mathlib definition `Sym α n := {s : Multiset α // card s = n}`
-@[reducible] def SymFin (N M : ℕ) := Sym (Fin N) M
 
 
 /-!
@@ -145,4 +161,398 @@ lemma count_beStateToMultiset_eq_sum_count_replicate {N M : ℕ} (q : OmegaBE N 
   rw [Multiset.count_finset_sum]
   -- The goal should now be definitionally equal, so rfl or simp closes it.
 
-end PPNP.Entropy.Physics
+
+
+
+/-!
+Helper lemma for `right_inv_beState_multiset`.
+Shows that if element `i` is not in multiset `s`, replicating `i` by its count in `s` (which is 0)
+results in the empty multiset `0`.
+-/
+lemma replicate_count_zero_of_not_mem {α : Type*} [DecidableEq α] {s : Multiset α} {i : α} (hi_not_mem : i ∉ s) :
+    Multiset.replicate (Multiset.count i s) i = 0 := by
+  -- Use the property that `i ∉ s` is equivalent to `count i s = 0`
+  have h_count_eq_zero : Multiset.count i s = 0 := Multiset.count_eq_zero.mpr hi_not_mem
+  -- Rewrite the count in the goal using this fact
+  rw [h_count_eq_zero]
+  -- Apply the definition of replicate with count 0
+  rw [Multiset.replicate_zero]
+
+-- Define the map from a multiset known to have card M back to a BE state
+-- This bundles the function `multisetToBEState` with the proof that its components sum to M
+def multisetToBEStateSubtype {N M : ℕ} (s : SymFin N M) : OmegaBE N M :=
+  ⟨ multisetToBEState s.val , -- The function (Fin N → ℕ)
+    by
+      -- Proof that the sum is M:
+      have h_sum := sum_count_eq_card s.val -- ∑ (count i s.val) = card s.val
+      simp only [multisetToBEState] -- Unfold definition in the goal
+      -- Goal is now ∑ i, count i ↑s = M
+      rw [h_sum] -- Rewrite using the sum_count_eq_card lemma result
+      -- Goal is now card s.val = M
+      exact s.property -- The property bundled with s is card s.val = M
+  ⟩
+
+
+/-!
+Lemma: `beStateToMultiset` and `multisetToBEStateSubtype` are inverses (left inverse).
+This proof uses the previously defined micro-lemmas.
+-/
+lemma left_inv_beState_multiset {N M : ℕ} (q : OmegaBE N M) :
+    multisetToBEStateSubtype ⟨beStateToMultiset q, card_beStateToMultiset q⟩ = q := by
+  apply Subtype.ext
+  -- Instead of using `simp only [multisetToBEStateSubtype, Subtype.mk_val]`,
+  -- we use dsimp to reveal the underlying definition.
+  dsimp [multisetToBEStateSubtype]
+  -- Now the goal is: multisetToBEState (beStateToMultiset q) = q.val
+  funext i
+  simp only [multisetToBEState]
+  rw [count_beStateToMultiset_eq_sum_count_replicate]
+  rw [sum_count_replicate_eq_single_term]
+  -- Goal: q.val i = q.val i, which holds.
+
+
+/-!
+Helper lemma for `right_inv_beState_multiset`.
+Shows that summing the `replicate (count i s) i` terms over `univ`
+equals the sum over just the elements present in the multiset `s` (`s.toFinset`),
+because terms for elements not in `s` are the empty multiset (zero).
+Uses Finset.sum_subset focusing on the required zero condition.
+-/
+
+lemma sum_replicate_count_univ_eq_sum_toFinset {α : Type*} [DecidableEq α] (s : Multiset α) (univ : Finset α) (h_univ : ∀ x : α, x ∈ univ) :
+    ∑ i ∈ univ, Multiset.replicate (Multiset.count i s) i = ∑ i ∈ s.toFinset, Multiset.replicate (Multiset.count i s) i := by
+  -- Use symmetry to match the structure of Finset.sum_subset conclusion: ∑ s = ∑ t
+  apply Eq.symm
+  -- Goal: ∑ i in s.toFinset, replicate... = ∑ i in univ, replicate...
+
+  -- Apply Finset.sum_subset {s t} (h_sub : s ⊆ t) (h_zero : ∀ x ∈ t, x ∉ s → f x = 0) : ∑ x in s, f x = ∑ x in t, f x
+  apply Finset.sum_subset
+  · -- Goal 1: Prove s ⊆ t, i.e., s.toFinset ⊆ univ
+    intro x _hx_mem_toFinset -- Assume x ∈ s.toFinset
+    -- Prove x ∈ univ using the hypothesis h_univ
+    exact h_univ x
+  · -- Goal 2: Prove ∀ x ∈ t, x ∉ s → f x = 0
+    -- i.e., ∀ x ∈ univ, x ∉ s.toFinset → replicate (count x s) x = 0
+    intro x _hx_in_univ hx_not_in_s_toFinset -- Assume x ∈ univ and x ∉ s.toFinset
+
+    -- Derive `x ∉ s` from `x ∉ s.toFinset` explicitly
+    have hx_not_mem_s : x ∉ s := by
+      -- Multiset.mem_toFinset is an iff `a ∈ s.toFinset ↔ a ∈ s`
+      -- We can use its negation. `mt` (modus tollens) might work, or prove by contradiction.
+      contrapose! hx_not_in_s_toFinset -- Changes goal to proving `x ∈ s.toFinset` from `x ∈ s`
+      rwa [Multiset.mem_toFinset] -- Apply the iff lemma
+
+    -- Apply the lemma showing replicate count is zero when element is not present, using the derived `x ∉ s`
+    exact replicate_count_zero_of_not_mem hx_not_mem_s
+
+@[simp] lemma toFinset_cons
+    {α} [DecidableEq α] (a : α) (s : Multiset α) :
+  (a ::ₘ s).toFinset = insert a s.toFinset := by
+  -- `rw [Multiset.toFinset_cons]` is a simp lemma  :contentReference[oaicite:8]{index=8}
+  simp
+
+@[simp] lemma count_cons_self
+    {α} [DecidableEq α] (a : α) (s : Multiset α) :
+  Multiset.count a (a ::ₘ s) = Multiset.count a s + 1 := by
+  exact Multiset.count_cons_self a s
+
+lemma count_cons_ne
+    {α} [DecidableEq α] {a i : α} (h : i ≠ a) (s : Multiset α) :
+  Multiset.count i (a ::ₘ s) = Multiset.count i s := by
+  exact Multiset.count_cons_of_ne h s  -- Directly apply the lemma
+
+lemma replicate_split {α} (n : ℕ) (a : α) :
+    Multiset.replicate (n + 1) a =
+      Multiset.replicate 1 a + Multiset.replicate n a := by
+  rw [Nat.add_comm] -- Goal: replicate (1 + n) a = replicate 1 a + replicate n a
+  exact Multiset.replicate_add 1 n a -- Apply the standard lemma
+  -- `replicate_add`
+
+lemma sum_congr_count
+    {β} [AddCommMonoid β] {α} [DecidableEq α]
+    {s : Finset α} {f g : α → β}
+    (hfg : ∀ i ∈ s, f i = g i) :
+  (∑ i ∈ s, f i) = ∑ i ∈ s, g i :=
+by
+  -- zipper lemma  `Finset.sum_congr`  :contentReference[oaicite:13]{index=13}
+  simpa using Finset.sum_congr rfl hfg
+
+@[simp] lemma sum_replicate_count_nil
+    {α} [DecidableEq α] :
+  (∑ i ∈ (0 : Multiset α).toFinset, -- Corrected summation notation
+      Multiset.replicate (Multiset.count i (0 : Multiset α)) i) = (0 : Multiset α) :=
+by
+  rw [Multiset.toFinset_zero] -- (0 : Multiset α).toFinset = ∅
+  exact Finset.sum_empty      -- Sum over empty finset is 0
+/-! ## Micro–micro lemmas for the “`a ∈ s`” branch -/
+
+/-- 2.6 (a).  Split the sum over `insert a t` into the
+    part without `a` plus the `i = a` summand. -/
+lemma sum_insert_split
+    {α β} [DecidableEq α] [AddCommMonoid β]
+    {a : α} {t : Finset α} (f : α → β) (ha : a ∈ insert a t) :
+  (∑ i ∈ insert a t, f i)
+    = (∑ i ∈ (insert a t).erase a, f i) + f a :=
+by
+  -- Apply the lemma that splits the sum
+  rw [Finset.sum_eq_sum_diff_singleton_add ha f]
+  -- The goal might now be `∑ i in insert a t \ {a}, f i + f a = ∑ i in (insert a t).erase a, f i + f a`
+  -- We need to show `insert a t \ {a}` is the same as `(insert a t).erase a`
+  -- This should hold definitionally or via a simp lemma like Finset.sdiff_singleton_eq_erase
+  -- Let's try simp first, as it might handle this.
+  simp only [Finset.sdiff_singleton_eq_erase]
+  -- If simp worked, the goal is now trivial (α = α).
+
+/-- 2.6 (b).  `count` for every *other* element is unchanged
+    after consing `a`. -/
+lemma count_cons_ne'
+    {α} [DecidableEq α] {a i : α} (h : i ≠ a) {s : Multiset α} :
+  Multiset.count i (a ::ₘ s) = Multiset.count i s :=
+by
+  --simpa [h] using Multiset.count_cons_of_ne h _   -- already proven in § 2.3
+  exact count_cons_ne h s
+
+/-- 2.6 (c).  `replicate` respects (b). -/
+lemma replicate_cons_ne'
+    {α} [DecidableEq α] {a i : α} (h : i ≠ a) {s : Multiset α} :
+  Multiset.replicate (Multiset.count i (a ::ₘ s)) i =
+    Multiset.replicate (Multiset.count i s) i :=
+by
+  simp [count_cons_ne' h]
+
+/-- 2.6 (d).  Rewrite the *tail* of the split sum
+    using (c).  -/
+lemma tail_sum_cons
+    {α} [DecidableEq α] {a : α} {s : Multiset α} :
+  (∑ i ∈ (insert a s.toFinset).erase a,
+      Multiset.replicate (Multiset.count i (a ::ₘ s)) i)
+    =
+  (∑ i ∈ s.toFinset.erase a,
+      Multiset.replicate (Multiset.count i s) i) :=
+by
+  -- First, show the summation domains are equal
+  rw [Finset.erase_insert_eq_erase]
+  -- Now the goal is:
+  -- ∑ i in s.toFinset.erase a, Multiset.replicate (Multiset.count i (a ::ₘ s)) i =
+  --   ∑ i in s.toFinset.erase a, Multiset.replicate (Multiset.count i s) i
+  -- Apply the sum congruence lemma (using Finset.sum_congr directly is often clearer)
+  apply Finset.sum_congr rfl -- The domains now match (rfl), need to prove equality of terms
+  intro i hi
+  -- `i ∈ s.toFinset.erase a` implies `i ≠ a` and `i ∈ s.toFinset`
+  simp only [Finset.mem_erase] at hi
+  -- hi is now a pair: ⟨i ≠ a, i ∈ s.toFinset⟩
+  have hia : i ≠ a := hi.1 -- Corrected: Use hi.1 for the inequality
+  -- Use replicate_cons_ne' which requires i ≠ a
+  simp [replicate_cons_ne' hia]
+
+/-- 2.6 (e).  The *head* replicate for `a`. -/
+lemma head_replicate_cons
+    {α} [DecidableEq α] {a : α} {s : Multiset α} :
+  Multiset.replicate (Multiset.count a (a ::ₘ s)) a =
+    Multiset.replicate 1 a + Multiset.replicate (Multiset.count a s) a :=
+by
+  simp [count_cons_self, replicate_split]
+
+variable {α β : Type*} [DecidableEq α] [AddCommMonoid β]
+
+
+lemma sum_eq_add_sum_erase {s : Finset α} {a : α} (f : α → β) (h : a ∈ s) :
+  ∑ x ∈ s, f x = f a + ∑ x ∈ s.erase a, f x :=
+by
+   rw [←Finset.sum_insert (Finset.not_mem_erase a s)]
+   congr
+   exact Eq.symm (Finset.insert_erase h)
+
+
+/-- Final streamlined version of the “`a ∈ s`” inductive step. -/
+lemma step_mem
+    {α} [DecidableEq α] {a : α} {s : Multiset α}
+    (hmem : a ∈ s.toFinset)
+    (IH : ∑ i ∈ s.toFinset, Multiset.replicate (Multiset.count i s) i = s) :
+  ∑ i ∈ insert a s.toFinset, Multiset.replicate (Multiset.count i (a ::ₘ s)) i
+      = a ::ₘ s := by
+  -- 1.  Since `a ∈ s.toFinset`, `insert` does nothing.
+  have h_insert : insert a s.toFinset = s.toFinset :=
+    Finset.insert_eq_of_mem hmem
+  simp [h_insert] at IH ⊢                           -- rewrites the goal & IH
+
+-- 2.  Split the sum into the `i = a` part and the tail.
+  have h_split :
+      (∑ i ∈ s.toFinset, Multiset.replicate (Multiset.count i (a ::ₘ s)) i) =
+        Multiset.replicate (Multiset.count a (a ::ₘ s)) a +
+        ∑ i ∈ s.toFinset.erase a,
+            Multiset.replicate (Multiset.count i (a ::ₘ s)) i := by
+    -- Apply the lemma directly, providing the function first, then the membership proof
+    exact sum_eq_add_sum_erase
+            (fun i ↦ Multiset.replicate (Multiset.count i (a ::ₘ s)) i)
+            hmem
+
+  -- 3.  The tail counts are unchanged when `i ≠ a`.
+  have h_tail :
+      ∑ i ∈ s.toFinset.erase a,
+          Multiset.replicate (Multiset.count i (a ::ₘ s)) i =
+      ∑ i ∈ s.toFinset.erase a,
+          Multiset.replicate (Multiset.count i s) i := by
+    refine Finset.sum_congr rfl ?_
+    intro i hi
+    have hi_ne : i ≠ a := (Finset.mem_erase.1 hi).1
+    simp [Multiset.count_cons_of_ne hi_ne]          -- counts coincide
+
+  -- 4.  The head term adds exactly one copy of `a`.
+  have h_head :
+      Multiset.replicate (Multiset.count a (a ::ₘ s)) a =
+        {a} + Multiset.replicate (Multiset.count a s) a := by
+    simp [Multiset.count_cons_self, replicate_split]
+
+-- 5.  Assemble:  `lhs = {a} + (∑ over s)` and use the induction hypothesis.
+  calc
+    (∑ i ∈ s.toFinset, Multiset.replicate (Multiset.count i (a ::ₘ s)) i)
+        = {a} + ∑ i ∈ s.toFinset,
+            Multiset.replicate (Multiset.count i s) i := by
+          rw [h_split]
+          rw [h_head]
+          rw [h_tail]
+          rw [Multiset.add_assoc]
+          rw [←sum_eq_add_sum_erase (fun i ↦ Multiset.replicate (Multiset.count i s) i) hmem]
+    _ = {a} + s := by
+          simp only [IH] -- Changed simpa to simp only
+    _ = a ::ₘ s := by
+          simp only [Multiset.singleton_add] -- Changed simpa to simp only
+
+/-! ## Micro–micro lemmas for the “`a ∉ s`” branch -/
+
+/-- 2.6 (g).  When `a ∉ s`, its count in `s` is zero. -/
+lemma count_not_mem_zero
+    {α} [DecidableEq α] {a : α} {s : Multiset α} (h_not_mem : a ∉ s) :
+  Multiset.count a s = 0 :=
+by
+  -- Apply the relevant direction of the iff lemma `Multiset.count_eq_zero`
+  exact Multiset.count_eq_zero.mpr h_not_mem
+
+/-- 2.6 (h).  The head replicate collapses to `{a}` if `a ∉ s`. -/
+lemma head_replicate_not_mem
+    {α} [DecidableEq α] {a : α} {s : Multiset α} (h_not_mem : a ∉ s) :
+  Multiset.replicate (Multiset.count a (a ::ₘ s)) a = {a} :=
+by
+  -- Use count_cons_self: count a (a ::ₘ s) = count a s + 1
+  rw [Multiset.count_cons_self]
+  -- Use count_not_mem_zero: count a s = 0 since a ∉ s
+  rw [count_not_mem_zero h_not_mem]
+  -- Simplify the expression: replicate (0 + 1) a = replicate 1 a
+  simp only [Nat.zero_add]
+  -- Use replicate_one: replicate 1 a = {a}
+  rw [Multiset.replicate_one] -- Use the standard Mathlib lemma
+
+/-- 2.6 (i).  Tail sum unchanged when `a ∉ s`. -/
+lemma tail_sum_not_mem
+    {α} [DecidableEq α] {a : α} {s : Multiset α} (h_not_mem : a ∉ s) :
+  (∑ i ∈ s.toFinset,
+      Multiset.replicate (Multiset.count i (a ::ₘ s)) i) =
+  (∑ i ∈ s.toFinset,
+      Multiset.replicate (Multiset.count i s) i) :=
+by
+  -- Apply sum congruence: need to show terms are equal for i ∈ s.toFinset
+  apply Finset.sum_congr rfl -- Domains are the same (rfl)
+  intro i hi_mem_finset -- Assume i ∈ s.toFinset (renamed for clarity)
+  -- Need to show: replicate (count i (a ::ₘ s)) i = replicate (count i s) i
+  -- This holds if i ≠ a. We need to prove i ≠ a from i ∈ s.toFinset and a ∉ s.
+  have hi_ne_a : i ≠ a := by
+    intro h_eq -- Assume i = a for contradiction
+    subst h_eq -- Substitute a for i
+    -- Now hi_mem_finset is a hypothesis: a ∈ s.toFinset
+    -- We also have the main lemma hypothesis h_not_mem: a ∉ s
+    -- Use Multiset.mem_toFinset to show a ∈ s.toFinset implies a ∈ s
+    rw [Multiset.mem_toFinset] at hi_mem_finset -- Now hi_mem_finset is: a ∈ s
+    -- This contradicts the hypothesis h_not_mem (a ∉ s).
+    exact h_not_mem hi_mem_finset
+  -- Now apply replicate_cons_ne' which requires i ≠ a
+  rw [replicate_cons_ne' hi_ne_a] -- Uses lemma 2.6(c)
+
+
+/-- 2.6 (j).  Assemble the pieces for `a ∉ s`. -/
+lemma step_not_mem
+    {α} [DecidableEq α] {a : α} {s : Multiset α}
+    (h_not_mem_finset : a ∉ s.toFinset)
+    (IH : ∑ i ∈ s.toFinset, Multiset.replicate (Multiset.count i s) i = s) :
+  ∑ i ∈ insert a s.toFinset,
+      Multiset.replicate (Multiset.count i (a ::ₘ s)) i = a ::ₘ s :=
+by
+  -- 1. Derive `a ∉ s` from `a ∉ s.toFinset`
+  have h_not_mem : a ∉ s := by
+    -- `a ∈ s.toFinset ↔ a ∈ s`. We prove the contrapositive.
+    contrapose! h_not_mem_finset -- Goal: a ∈ s → a ∈ s.toFinset
+    rwa [Multiset.mem_toFinset] -- Apply the iff lemma
+
+  -- 2. Split the sum over `insert a s.toFinset` using `Finset.sum_insert`
+  --    Requires `a ∉ s.toFinset`, which is given by `h_not_mem_finset`.
+  rw [Finset.sum_insert h_not_mem_finset]
+  -- Goal: f a + ∑ i ∈ s.toFinset, f i = a ::ₘ s
+  -- where f i = Multiset.replicate (Multiset.count i (a ::ₘ s)) i
+
+  -- 3. Rewrite the head term `f a` using `head_replicate_not_mem`
+  --    Requires `a ∉ s`, which we proved as `h_not_mem`.
+  rw [head_replicate_not_mem h_not_mem]
+  -- Goal: {a} + ∑ i ∈ s.toFinset, f i = a ::ₘ s
+
+  -- 4. Rewrite the sum term `∑ i ∈ s.toFinset, f i` using `tail_sum_not_mem`
+  --    Requires `a ∉ s`, which we proved as `h_not_mem`.
+  rw [tail_sum_not_mem h_not_mem]
+  -- Goal: {a} + ∑ i ∈ s.toFinset, Multiset.replicate (Multiset.count i s) i = a ::ₘ s
+
+  -- 5. Apply the induction hypothesis (IH)
+  rw [IH]
+  -- Goal: {a} + s = a ::ₘ s
+
+  -- 6. Use the definition of cons `a ::ₘ s = {a} + s`
+  rw [Multiset.singleton_add]
+  -- Goal is now `a ::ₘ s = a ::ₘ s`, which is true by reflexivity.
+
+@[simp]
+theorem sum_replicate_count_toFinset_eq_self {α : Type*} [DecidableEq α] (s : Multiset α) :
+    ∑ i ∈ s.toFinset, Multiset.replicate (Multiset.count i s) i = s := by
+  -- Prove by induction on the multiset s
+  induction s using Multiset.induction
+  case empty =>
+    -- Base case: s = 0
+    simp -- Uses sum_replicate_count_nil or simplifies directly: toFinset 0 = ∅, sum over ∅ is 0. Goal 0 = 0.
+  case cons a s ih =>
+    -- Inductive step: Assume property holds for s, prove for a :: s
+    -- Goal: ∑ i in (a :: s).toFinset, replicate (count i (a :: s)) i = a :: s
+    rw [Multiset.toFinset_cons] -- (a :: s).toFinset = insert a s.toFinset
+    -- Goal: ∑ i in insert a s.toFinset, replicate (count i (a :: s)) i = a :: s
+
+    -- Split the proof based on whether 'a' was already in the finset 's.toFinset'
+    by_cases ha_mem_finset : a ∈ s.toFinset
+    · -- Case 1: a ∈ s.toFinset
+      exact step_mem ha_mem_finset ih
+    · -- Case 2: a ∉ s.toFinset
+      exact step_not_mem ha_mem_finset ih
+
+/-!
+Lemma: `beStateToMultiset` and `multisetToBEStateSubtype` are inverses (right inverse).
+Shows applying the conversion to multiset then back to state map yields the original multiset.
+-/
+lemma right_inv_beState_multiset {N M : ℕ} (s : SymFin N M) :
+    beStateToMultiset (multisetToBEStateSubtype s) = s.val := by
+  -- Unfold the definitions step-by-step
+  -- 1. Unfold beStateToMultiset
+  dsimp only [beStateToMultiset]
+  -- Goal: ∑ i ∈ Finset.univ, replicate ((multisetToBEStateSubtype s).val i) i = s.val
+
+  -- 2. Unfold the .val part of multisetToBEStateSubtype
+  --    (multisetToBEStateSubtype s).val = multisetToBEState s.val
+  simp only [multisetToBEStateSubtype] -- Use simp to handle the subtype projection
+  -- Goal: ∑ i ∈ Finset.univ, replicate (multisetToBEState s.val i) i = s.val
+
+  -- 3. Unfold multisetToBEState
+  simp only [multisetToBEState]
+  -- Goal: ∑ i ∈ Finset.univ, replicate (Multiset.count i s.val) i = s.val
+
+  -- 4. Use the lemma linking sum over univ to sum over toFinset
+  --    Need `Finset.univ` for Fin N and the proof `Finset.mem_univ`
+  rw [sum_replicate_count_univ_eq_sum_toFinset s.val Finset.univ (Finset.mem_univ)]
+  -- Goal: ∑ i ∈ s.val.toFinset, replicate (Multiset.count i s.val) i = s.val
+
+  -- 5. Apply the key identity proven by induction
+  rw [sum_replicate_count_toFinset_eq_self s.val]
+  -- Goal is now s.val = s.val, which is true by reflexivity.
