@@ -32,6 +32,24 @@ namespace PPNP.Entropy.Physics
 
 open BigOperators Multiset Finset
 
+/-! # Formalizing Physics Distributions Starting with Bose-Einstein Statistics
+
+## Three Disjoint Constraint Cases Describe All Physical Systems
+Let (N) boxes (states) and (M) balls (particles). A microstate is a way of allocating the (M) balls among the (N) boxes. There are exactly three—and only three—constraint families on how balls may occupy boxes. As further explained in accompanying documentation: Maxwell-Boltzmann (MB) is the distinguishable balls case with no limit to box capacity, Fermi-Dirac (FD) is indistinguishable balls with at most one ball per box, and Bose-Einstein (BE) is indistinguishable balls with no limit to the balls per box.
+
+This file aims to formally define the state space and probability distribution for Bose-Einstein (BE) statistics within the Lean 4 theorem prover, leveraging the Mathlib4 library. The ultimate goal is to apply the previously proven Rota's Entropy Theorem (RET) to this distribution.
+
+Formalizing concepts from statistical mechanics requires careful handling of combinatorial structures, type theory, and proof details. To manage this complexity effectively and ensure correctness, we employ a **four-phased approach**:
+
+1.  **Phase 1: Combinatorial Equivalence:** Establish the fundamental combinatorial structure. We define the BE state space (`OmegaBE`, based on occupancy numbers) and show it's mathematically equivalent (via a Lean `Equiv`) to a standard combinatorial object: multisets of a fixed size (`SymFin`). This grounds the specific physical concept in a well-understood mathematical structure within Mathlib.
+2.  **Phase 2: Cardinality and Iteration:** Determine the size of the BE state space using the equivalence established in Phase 1 and known results for multisets (the "stars and bars" formula, yielding binomial coefficients). We also formally declare `OmegaBE` as a `Fintype`, enabling iteration and summation over all possible BE states, which is crucial for defining probabilities.
+3.  **Phase 3: Probability Distribution:** Define the BE probability distribution (`p_BE`) assuming equiprobability of microstates (which corresponds to a uniform distribution over `OmegaBE`). Prove that this distribution is valid by showing the probabilities sum to 1 (normalization).
+4.  **Phase 4: RET Application:** Connect the formalized BE distribution to the framework of Rota's Entropy Theorem. This involves potentially adapting the type of our distribution (`p_BE_fin`) and then applying the main theorem (`H_BE_eq_C_shannon`) to conclude that any valid entropy function `H` applied to `p_BE` is proportional to the standard Shannon entropy.
+5. **Phase 5: Generalization:** Extend the results to other distributions (e.g., Maxwell-Boltzmann) and explore the implications of Rota's theorem in this context.
+
+-/
+
+
 -- Define the type for Macrostates (occupancy vectors summing to M)
 -- Needed for both MB and BE state space definitions
 def MBMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
