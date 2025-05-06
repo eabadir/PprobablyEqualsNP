@@ -22,10 +22,10 @@ import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
 
 import PPNP.Util.Basic
 
-namespace PPNP.Entropy
+namespace PPNP.Entropy.RET
 
 open BigOperators Fin Real Topology NNReal Filter Nat
-open PPNP.Util.Basic
+open PPNP.Util
 
 /-!
 # Formalizing Rota's Uniqueness of Entropy Theorem
@@ -330,9 +330,9 @@ theorem uniformEntropy_power_law
 
 /-- Lemma: `f₀ H b ≥ 0` for `b ≥ 1`. -/
 lemma f0_nonneg (hH : IsEntropyFunction H) {b : ℕ} (hb : b ≥ 1) : f₀ H b ≥ 0 := by
-  have h_mono_prop : Monotone (f₀ H) := PPNP.Entropy.f0_mono hH
+  have h_mono_prop : Monotone (f₀ H) := f0_mono hH
   have h_mono_ineq : f₀ H 1 ≤ f₀ H b := h_mono_prop hb
-  have h_f0_1_zero : f₀ H 1 = 0 := PPNP.Entropy.f0_1_eq_0 hH
+  have h_f0_1_zero : f₀ H 1 = 0 := f0_1_eq_0 hH
   rw [h_f0_1_zero] at h_mono_ineq
   exact h_mono_ineq
 
@@ -1205,4 +1205,4 @@ theorem RotaEntropyTheorem (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH :
     -- Step 6: Apply the lemma that combines the zero/non-zero cases
     exact f0_eq_C_log_cases H hH hn_ge_1
 
-end PPNP.Entropy
+end PPNP.Entropy.RET
