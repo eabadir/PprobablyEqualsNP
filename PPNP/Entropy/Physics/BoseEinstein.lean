@@ -4,33 +4,18 @@ import Mathlib.Data.Fin.Basic -- Basic Fin definitions and lemmas
 import Mathlib.Data.Fintype.Fin -- Instances for Fin n
 import Mathlib.Algebra.GroupWithZero.Units.Basic -- Provides mul_inv_cancel₀
 import Mathlib.Data.Nat.Basic -- Basic Nat properties
---import Mathlib.Data.NNReal.Basic -- For NNReal
---import Mathlib.Topology.Basic -- For ContinuousOn (placeholder)
---import Mathlib.Order.Monotone.Basic -- For Monotone
---import Mathlib.Algebra.Order.Field.Basic -- For inv_one etc.
---import Mathlib.Analysis.SpecialFunctions.Log.Base -- Real.logb
---import Mathlib.Analysis.SpecialFunctions.Pow.Real -- Real.rpow
---import Mathlib.Data.Complex.Basic -- For Complex.exp_re if needed
---import Mathlib.Analysis.SpecificLimits.Basic -- tendsto_one_div_atTop_zero
---import Mathlib.Data.Real.Basic -- Basic Real properties
---import Mathlib.Order.Filter.Basic -- Filter bases etc.
---import Mathlib.Topology.Order.Basic -- OrderTopology
---import Mathlib.Data.Nat.Log -- Nat.log
---import Mathlib.Algebra.Order.Floor.Defs -- Floor definitions
---import Mathlib.Tactic.Linarith -- Inequality solver
---import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
---import Mathlib.Logic.Equiv.Fin.Basic
---import Mathlib.Logic.Equiv.Defs
---import Mathlib.GroupTheory.Congruence.Basic
 
 import Mathlib.Data.Multiset.Bind
 import Mathlib.Data.Multiset.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import PPNP.Common.Basic
+import PPNP.Entropy.Physics.Common
 
-
-namespace PPNP.Entropy.Physics
+namespace PPNP.Entropy.Physics.BE
 
 open BigOperators Multiset Finset
+open PPNP.Common
+open PPNP.Entropy.Physics.Common
 
 /-! # Formalizing Physics Distributions Starting with Bose-Einstein Statistics
 
@@ -49,28 +34,10 @@ Formalizing concepts from statistical mechanics requires careful handling of com
 
 -/
 
-
--- Define the type for Macrostates (occupancy vectors summing to M)
--- Needed for both MB and BE state space definitions
-def MBMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
--- Define the type for multisets of size M over Fin N
--- This uses the standard Mathlib definition `Sym α n := {s : Multiset α // card s = n}`
-@[reducible] def SymFin (N M : ℕ) := Sym (Fin N) M
 -- BE state space is mathematically equivalent to MB macrostates
 @[reducible] def OmegaBE (N M : ℕ) := MBMacrostate N M
 
-/-- `Multiset.count` distributes over a `Finset` sum of multisets. -/
-@[simp] lemma Multiset.count_finset_sum
-    {α β : Type*} [DecidableEq α] {s : Finset β} (f : β → Multiset α) (a : α) :
-    Multiset.count a (∑ i in s, f i) = ∑ i in s, Multiset.count a (f i) := by
-  classical
-  -- We proceed by induction on the structure of `s`.
-  refine Finset.induction ?base ?step s
-  · -- base case: `s = ∅`
-    simp
-  · -- inductive step: `s = insert b s'` with `b ∉ s'`
-    intro b s' hb_not_mem ih
-    simp [Finset.sum_insert hb_not_mem, Multiset.count_add, ih]
+
 
 
 
@@ -97,14 +64,6 @@ lemma card_beStateToMultiset {N M : ℕ} (q : OmegaBE N M) :
 def multisetToBEState {N : ℕ} (s : Multiset (Fin N)) : Fin N → ℕ :=
   fun i => Multiset.count i s
 
-lemma sum_count_eq_card {N : ℕ} (s : Multiset (Fin N)) :
-    ∑ i : Fin N, Multiset.count i s = Multiset.card s := by
-  -- instantiate the library lemma with `s = Finset.univ`
-  have hms : ∀ a ∈ s, (a : Fin N) ∈ (Finset.univ : Finset (Fin N)) := by
-    intro a ha
-    exact Finset.mem_univ _
-  -- The goal is definitionally equal to the statement of Multiset.sum_count_eq_card
-  exact (Multiset.sum_count_eq_card (s := (Finset.univ : Finset (Fin N))) (m := s) hms)
 
 
 
@@ -182,19 +141,7 @@ lemma count_beStateToMultiset_eq_sum_count_replicate {N M : ℕ} (q : OmegaBE N 
 
 
 
-/-!
-Helper lemma for `right_inv_beState_multiset`.
-Shows that if element `i` is not in multiset `s`, replicating `i` by its count in `s` (which is 0)
-results in the empty multiset `0`.
--/
-lemma replicate_count_zero_of_not_mem {α : Type*} [DecidableEq α] {s : Multiset α} {i : α} (hi_not_mem : i ∉ s) :
-    Multiset.replicate (Multiset.count i s) i = 0 := by
-  -- Use the property that `i ∉ s` is equivalent to `count i s = 0`
-  have h_count_eq_zero : Multiset.count i s = 0 := Multiset.count_eq_zero.mpr hi_not_mem
-  -- Rewrite the count in the goal using this fact
-  rw [h_count_eq_zero]
-  -- Apply the definition of replicate with count 0
-  rw [Multiset.replicate_zero]
+
 
 -- Define the map from a multiset known to have card M back to a BE state
 -- This bundles the function `multisetToBEState` with the proof that its components sum to M
@@ -263,45 +210,6 @@ lemma sum_replicate_count_univ_eq_sum_toFinset {α : Type*} [DecidableEq α] (s 
     -- Apply the lemma showing replicate count is zero when element is not present, using the derived `x ∉ s`
     exact replicate_count_zero_of_not_mem hx_not_mem_s
 
-@[simp] lemma toFinset_cons
-    {α} [DecidableEq α] (a : α) (s : Multiset α) :
-  (a ::ₘ s).toFinset = insert a s.toFinset := by
-  -- `rw [Multiset.toFinset_cons]` is a simp lemma  :contentReference[oaicite:8]{index=8}
-  simp
-
-@[simp] lemma count_cons_self
-    {α} [DecidableEq α] (a : α) (s : Multiset α) :
-  Multiset.count a (a ::ₘ s) = Multiset.count a s + 1 := by
-  exact Multiset.count_cons_self a s
-
-lemma count_cons_ne
-    {α} [DecidableEq α] {a i : α} (h : i ≠ a) (s : Multiset α) :
-  Multiset.count i (a ::ₘ s) = Multiset.count i s := by
-  exact Multiset.count_cons_of_ne h s  -- Directly apply the lemma
-
-lemma replicate_split {α} (n : ℕ) (a : α) :
-    Multiset.replicate (n + 1) a =
-      Multiset.replicate 1 a + Multiset.replicate n a := by
-  rw [Nat.add_comm] -- Goal: replicate (1 + n) a = replicate 1 a + replicate n a
-  exact Multiset.replicate_add 1 n a -- Apply the standard lemma
-  -- `replicate_add`
-
-lemma sum_congr_count
-    {β} [AddCommMonoid β] {α} [DecidableEq α]
-    {s : Finset α} {f g : α → β}
-    (hfg : ∀ i ∈ s, f i = g i) :
-  (∑ i ∈ s, f i) = ∑ i ∈ s, g i :=
-by
-  -- zipper lemma  `Finset.sum_congr`  :contentReference[oaicite:13]{index=13}
-  simpa using Finset.sum_congr rfl hfg
-
-@[simp] lemma sum_replicate_count_nil
-    {α} [DecidableEq α] :
-  (∑ i ∈ (0 : Multiset α).toFinset, -- Corrected summation notation
-      Multiset.replicate (Multiset.count i (0 : Multiset α)) i) = (0 : Multiset α) :=
-by
-  rw [Multiset.toFinset_zero] -- (0 : Multiset α).toFinset = ∅
-  exact Finset.sum_empty      -- Sum over empty finset is 0
 /-! ## Micro–micro lemmas for the “`a ∈ s`” branch -/
 
 /-- 2.6 (a).  Split the sum over `insert a t` into the
@@ -369,7 +277,7 @@ lemma head_replicate_cons
   Multiset.replicate (Multiset.count a (a ::ₘ s)) a =
     Multiset.replicate 1 a + Multiset.replicate (Multiset.count a s) a :=
 by
-  simp [count_cons_self, replicate_split]
+  simp [Multiset.count_cons_self, replicate_split]
 
 variable {α β : Type*} [DecidableEq α] [AddCommMonoid β]
 

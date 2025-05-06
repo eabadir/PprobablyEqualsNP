@@ -6,6 +6,16 @@ import Mathlib.Data.List.Basic
 
 open Real List
 
+/-! # Playing with `decide` and `filter` as efficient ways to prove properties of lists.
+    This is a minimal working example (MWE) to demonstrate the use of `decide` and `filter`
+    in proving properties of lists, particularly in the context of uniform distributions.
+    The goal is to show that a certain list of reals is non-decreasing.
+
+    The main lemma `f_non_decreasing` is proven using helper lemmas that simplify the
+    filtering process on lists. The code also includes a simplified version of the
+    `uniformDist` function for demonstration purposes.
+-/
+
 -- Simplified uniformDist for MWE
 noncomputable def uniformDist (n : Nat) : List Real :=
   match n with

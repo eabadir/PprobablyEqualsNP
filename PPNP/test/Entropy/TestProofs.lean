@@ -1,10 +1,7 @@
-import PPNP.Entropy.Basic
-import PPNP.Entropy.PowerLaw
-import PPNP.Entropy.LogF
-import PPNP.Entropy.PartitionTheory
+import PPNP.Entropy.RET
 import Mathlib.Tactic.NormNum -- For evaluating numerals
 
-open PPNP.Entropy.Basic PPNP.Entropy.PowerLaw PPNP.Entropy.LogF Real Nat
+open PPNP.Entropy.RET Real Nat
 
 -- Assume the existence of an entropy function H satisfying the properties
 variable {H : ∀ {n : ℕ}, (Fin n → NNReal) → Real} (hH : IsEntropyFunction H)
@@ -25,11 +22,6 @@ example : f₀ H (2 ^ 3) = (3 : ℝ) * f₀ H 2 := by
   -- The goal directly matches the theorem statement after substituting values
   exact h_pow
 
--- Test lemma for the existence of k for log bounds from LogF.lean
-example : ∃ k : ℕ, (2 : ℝ) ^ k ≤ (10 : ℝ) ∧ (10 : ℝ) < (2 : ℝ) ^ (k + 1) := by
-  -- Corrected the proof term for hx to use Real 10
-  have h_exists := exists_k_log_bounds (b := 2) (x := 10) (by norm_num : 2 ≥ 2) (by norm_num : (10 : ℝ) ≥ 1)
-  exact h_exists
 
 -- Example showing f₀ is non-negative (from LogF.lean, originally in Chunk 3.1)
 example : f₀ H 5 ≥ 0 :=

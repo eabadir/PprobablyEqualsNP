@@ -26,16 +26,12 @@ import Mathlib.GroupTheory.Congruence.Basic
 -- Import previous definitions and theorems
 
 
-namespace PPNP.Util
+namespace PPNP.Common
 
 open BigOperators Fin Real Topology NNReal Filter Nat Set
 
 
 
-open BigOperators Fin Real Topology NNReal Filter Nat Set
--- Definition: f(n) = H(uniform distribution on n outcomes)
-noncomputable def uniformProb (n : ℕ) : NNReal :=
-  if _hn : n > 0 then (n⁻¹ : NNReal) else 0
 
 
 
@@ -82,14 +78,7 @@ lemma nnreal_inv_mul_inv_eq_inv_mul
   rw [one_mul] -- 1 = 1
   -- Goal is now `1 = 1`, which is true by reflexivity (handled implicitly)
 
--- Helper lemma: the uniform distribution sums to 1
-lemma sum_uniform_eq_one {n : ℕ} (hn : n > 0) :
-  ∑ _i : Fin n, uniformProb n = 1 := by
-  simp only [uniformProb, dif_pos hn]
-  rw [Finset.sum_const, Finset.card_fin, nsmul_eq_mul]
-  rw [mul_inv_cancel₀]
-  apply Nat.cast_ne_zero.mpr
-  exact Nat.pos_iff_ne_zero.mp hn
+
 
 /-- Cast a successor into a sum: `↑(m + 1) = ↑m + 1`. -/
 lemma cast_add_one_real (m : ℕ) : ↑(m + 1) = ↑m + 1 :=
@@ -254,19 +243,6 @@ lemma exists_nat_pow_bounds {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
   · exact pow_nat_floor_logb_le_x hb hx
   · exact x_lt_pow_succ_floor_logb hb hx
 
-
-lemma exists_k_log_bounds {b : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1) :
-  ∃ k : ℕ, (b : ℝ) ^ k ≤ x ∧ x < (b : ℝ) ^ (k + 1) := by
-  -- Define k as the floor of log base b of x
-  let k := Nat.floor (Real.logb b x)
-  -- Claim existence of this k
-  use k
-  -- Prove the two inequalities
-  constructor
-  · -- Prove (b : ℝ) ^ k ≤ x
-    exact pow_nat_floor_logb_le_x hb hx
-  · -- Prove x < (b : ℝ) ^ (k + 1)
-    exact x_lt_pow_succ_floor_logb hb hx
 
 
 /-- Helper: Prove 1 ≤ (b:ℝ)^k by induction for b ≥ 1. -/
@@ -632,3 +608,134 @@ lemma logb_eq_log {b x : ℝ} :
 
 lemma one_le_iff_pos {n : ℕ} : 1 ≤ n ↔ 0 < n := by
   simpa [Nat.pos_iff_ne_zero] using (Nat.one_le_iff_ne_zero (n:=n))  -- if you import `Nat.pos_iff_ne_zero`  [oai_citation:2‡Lean Community](https://leanprover-community.github.io/mathlib4_docs/Mathlib/Data/Fin/Basic.html?utm_source=chatgpt.com)
+
+
+lemma sum_count_eq_card {N : ℕ} (s : Multiset (Fin N)) :
+    ∑ i : Fin N, Multiset.count i s = Multiset.card s := by
+  -- instantiate the library lemma with `s = Finset.univ`
+  have hms : ∀ a ∈ s, (a : Fin N) ∈ (Finset.univ : Finset (Fin N)) := by
+    intro a ha
+    exact Finset.mem_univ _
+  -- The goal is definitionally equal to the statement of Multiset.sum_count_eq_card
+  exact (Multiset.sum_count_eq_card (s := (Finset.univ : Finset (Fin N))) (m := s) hms)
+
+/-!
+Helper lemma for `right_inv_beState_multiset`.
+Shows that if element `i` is not in multiset `s`, replicating `i` by its count in `s` (which is 0)
+results in the empty multiset `0`.
+-/
+lemma replicate_count_zero_of_not_mem {α : Type*} [DecidableEq α] {s : Multiset α} {i : α} (hi_not_mem : i ∉ s) :
+    Multiset.replicate (Multiset.count i s) i = 0 := by
+  -- Use the property that `i ∉ s` is equivalent to `count i s = 0`
+  have h_count_eq_zero : Multiset.count i s = 0 := Multiset.count_eq_zero.mpr hi_not_mem
+  -- Rewrite the count in the goal using this fact
+  rw [h_count_eq_zero]
+  -- Apply the definition of replicate with count 0
+  rw [Multiset.replicate_zero]
+
+
+@[simp] lemma toFinset_cons
+    {α} [DecidableEq α] (a : α) (s : Multiset α) :
+  (a ::ₘ s).toFinset = insert a s.toFinset := by
+  -- `rw [Multiset.toFinset_cons]` is a simp lemma  :contentReference[oaicite:8]{index=8}
+  simp
+
+-- @[simp] lemma count_cons_self
+--     {α} [DecidableEq α] (a : α) (s : Multiset α) :
+--   Multiset.count a (a ::ₘ s) = Multiset.count a s + 1 := by
+--   exact Multiset.count_cons_self a s
+
+lemma count_cons_ne
+    {α} [DecidableEq α] {a i : α} (h : i ≠ a) (s : Multiset α) :
+  Multiset.count i (a ::ₘ s) = Multiset.count i s := by
+  exact Multiset.count_cons_of_ne h s  -- Directly apply the lemma
+
+lemma replicate_split {α} (n : ℕ) (a : α) :
+    Multiset.replicate (n + 1) a =
+      Multiset.replicate 1 a + Multiset.replicate n a := by
+  rw [Nat.add_comm] -- Goal: replicate (1 + n) a = replicate 1 a + replicate n a
+  exact Multiset.replicate_add 1 n a -- Apply the standard lemma
+  -- `replicate_add`
+
+lemma sum_congr_count
+    {β} [AddCommMonoid β] {α} [DecidableEq α]
+    {s : Finset α} {f g : α → β}
+    (hfg : ∀ i ∈ s, f i = g i) :
+  (∑ i ∈ s, f i) = ∑ i ∈ s, g i :=
+by
+  -- zipper lemma  `Finset.sum_congr`  :contentReference[oaicite:13]{index=13}
+  simpa using Finset.sum_congr rfl hfg
+
+@[simp] lemma sum_replicate_count_nil
+    {α} [DecidableEq α] :
+  (∑ i ∈ (0 : Multiset α).toFinset, -- Corrected summation notation
+      Multiset.replicate (Multiset.count i (0 : Multiset α)) i) = (0 : Multiset α) :=
+by
+  rw [Multiset.toFinset_zero] -- (0 : Multiset α).toFinset = ∅
+  exact Finset.sum_empty      -- Sum over empty finset is 0
+
+/--
+Lemma (Core Limit Argument): If the absolute difference between two real numbers `x` and `y`
+is bounded by `1/m` for all natural numbers `m ≥ 1`, then `x` must equal `y`.
+-/
+lemma eq_of_abs_sub_le_inv_ge_one_nat {x y : ℝ} (h_bound : ∀ m : ℕ, m ≥ 1 → |x - y| ≤ 1 / (m : ℝ)) :
+    x = y := by
+  -- Use the metric space lemma eq_of_forall_dist_le
+  -- The goal becomes: ∀ ε > 0, dist x y ≤ ε
+  apply eq_of_forall_dist_le
+  -- Introduce arbitrary ε > 0
+  intro ε hε
+  -- Show dist x y ≤ ε
+  -- For Real numbers, dist x y = |x - y|
+  simp_rw [dist_eq_norm_sub, Real.norm_eq_abs] -- Goal: |x - y| ≤ ε
+  -- Use the Archimedean helper to find m ≥ 1 such that 1 / m ≤ ε
+  rcases exists_one_le_nat_one_div_le hε with ⟨m, hm_ge_1, h_inv_m_le_ε⟩
+  -- Use the hypothesis h_bound for this specific m
+  have h_abs_le_inv_m : |x - y| ≤ 1 / (m : ℝ) := h_bound m hm_ge_1
+  -- Combine the two inequalities using transitivity
+  exact le_trans h_abs_le_inv_m h_inv_m_le_ε -- |x - y| ≤ 1 / m and 1 / m ≤ ε implies |x - y| ≤ ε
+
+-- Re-include the custom exists_pow_ge lemma and its use in exists_pow2_bound
+lemma exists_pow_ge {a n : ℕ} (ha : 1 < a) : ∃ k : ℕ, n ≤ a ^ k :=
+by
+  cases n with
+  | zero =>
+      use 0
+      exact Nat.zero_le (a ^ 0)
+  | succ m =>
+      use (m + 1)
+      have h_lt : m + 1 < a ^ (m + 1) := Nat.lt_pow_self ha
+      exact Nat.le_of_lt h_lt
+
+
+lemma nat_bounds_from_cast_pow_bounds {b k n m : ℕ}
+    (h_le_cast : (b : ℝ) ^ k ≤ (n : ℝ) ^ m)
+    (h_lt_cast : (n : ℝ) ^ m < (b : ℝ) ^ (k + 1)) :
+    b ^ k ≤ n ^ m ∧ n ^ m < b ^ (k + 1) := by
+
+  -- Rewrite the hypotheses using Nat.cast_pow forwards to get the form ↑(...) required by mp
+  rw [← Nat.cast_pow b k] at h_le_cast      -- Goal: Transform (↑b)^k into ↑(b^k)
+  rw [← Nat.cast_pow n m] at h_le_cast      -- Goal: Transform (↑n)^m into ↑(n^m)
+                                            -- h_le_cast is now ↑(b^k) ≤ ↑(n^m)
+
+  rw [← Nat.cast_pow n m] at h_lt_cast      -- Goal: Transform (↑n)^m into ↑(n^m)
+  rw [← Nat.cast_pow b (k + 1)] at h_lt_cast -- Goal: Transform (↑b)^(k+1) into ↑(b^(k+1))
+                                             -- h_lt_cast is now ↑(n^m) < ↑(b^(k+1))
+
+  -- Convert the inequalities involving casts back to Nat inequalities using mp
+  constructor
+  · -- Prove b^k ≤ n^m
+    exact Nat.cast_le.mp h_le_cast
+  · -- Prove n^m < b^(k+1)
+    exact Nat.cast_lt.mp h_lt_cast
+
+lemma div_bounds_from_mul_bounds {A B C D E : ℝ} (hC : C > 0) (hD : D > 0)
+    (h_le1 : A * C ≤ B * D) (h_le2 : B * D ≤ E * C) :
+    A / D ≤ B / C ∧ B / C ≤ E / D := by
+  constructor
+  · -- Prove A / D ≤ B / C
+    -- Use div_le_div_iff which states (a / d ≤ b / c ↔ a * c ≤ b * d) given d > 0, c > 0
+    rwa [div_le_div_iff₀ hD hC] -- Rewrites goal A / D ≤ B / C to A * C ≤ B * D and uses h_le1
+  · -- Prove B / C ≤ E / D
+    -- Use div_le_div_iff which states (b / c ≤ e / d ↔ b * d ≤ e * c) given c > 0, d > 0
+    rwa [div_le_div_iff₀ hC hD] -- Rewrites goal B / C ≤ E / D to B * D ≤ E * C and uses h_le2

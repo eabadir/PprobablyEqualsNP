@@ -20,12 +20,15 @@ import Mathlib.Algebra.Order.Floor.Defs -- Floor definitions
 import Mathlib.Tactic.Linarith -- Inequality solver
 import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
 
-import PPNP.Util.Basic
+import PPNP.Common.Basic
+import PPNP.Entropy.Common
+import PPNP.Entropy.Physics.BoseEinstein
 
 namespace PPNP.Entropy.RET
 
 open BigOperators Fin Real Topology NNReal Filter Nat
-open PPNP.Util
+open PPNP.Common
+open PPNP.Entropy.Common
 
 /-!
 # Formalizing Rota's Uniqueness of Entropy Theorem
@@ -58,57 +61,6 @@ noncomputable def C_constant (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) : �
     f₀ H 2 / Real.log 2
   else
     0
-
-/-- Standard Shannon entropy of a probability distribution given as a function `Fin n → NNReal`.
-    Uses natural logarithm (base e). -/
-noncomputable def stdShannonEntropyLn {n : ℕ} (p : Fin n → NNReal) : Real :=
-  ∑ i : Fin n, negMulLog (p i : Real)
-
-def probabilitySimplex {n : ℕ} : Set (Fin n → NNReal) :=
-  { p | ∑ i, p i = 1 }
-
-
-noncomputable def product_dist {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) : Fin (n * m) → NNReal :=
-  fun k =>
-    -- Assuming finProdFinEquiv : Fin m × Fin n ≃ Fin (m * n)
-    -- Use its inverse finProdFinEquiv.symm : Fin (m * n) ≃ Fin m × Fin n
-    -- Cast k : Fin (n * m) to k' : Fin (m * n) using Nat.mul_comm
-    let k' : Fin (m * n) := Equiv.cast (congrArg Fin (Nat.mul_comm n m)) k
-    -- Apply inverse to get pair of type Fin m × Fin n
-    let ji := finProdFinEquiv.symm k'
-    -- ji.1 has type Fin m
-    -- ji.2 has type Fin n
-    -- Match types: p needs Fin n (ji.2), q needs Fin m (ji.1)
-    p ji.2 * q ji.1
-
-
-
-
-/-- Product of two uniform distributions is uniform on the product space. -/
-lemma uniformProb_product_uniformProb_is_uniformProb
-    {n m : ℕ} (hn : n > 0) (hm : m > 0) :
-    product_dist
-        (fun _ : Fin n     => uniformProb n)
-        (fun _ : Fin m     => uniformProb m)
-      = (fun _ : Fin (n*m) => uniformProb (n * m)) := by
-  -- point‑wise equality of functions on `Fin (n*m)`
-  funext k
-  /- 1 ▸ reduce to an identity in `ℝ≥0` -/
-  simp [product_dist, uniformProb, mul_pos hn hm]  -- goal: ↑n⁻¹ * ↑m⁻¹ = ↑(n*m)⁻¹
-
-  /- 2 ▸ build the `≠ 0` hypotheses in `ℝ≥0` via `exact_mod_cast` -/
-  have hn_ne_zero : n ≠ 0 := (Nat.pos_iff_ne_zero).1 hn
-  have hm_ne_zero : m ≠ 0 := (Nat.pos_iff_ne_zero).1 hm
-  have h_n : (n : ℝ≥0) ≠ 0 := by exact_mod_cast hn_ne_zero  -- `norm_cast` trick :contentReference[oaicite:0]{index=0}
-  have h_m : (m : ℝ≥0) ≠ 0 := by exact_mod_cast hm_ne_zero
-
-  /- 3 ▸ convert the product of inverses to the inverse of a product -/
-  -- The left factor is `↑m⁻¹ * ↑n⁻¹`, so we use the lemma with arguments in that order.
-  rw [nnreal_inv_mul_inv_eq_inv_mul h_m h_n]
-
-  /- 4 ▸ finish by rewriting inside the inverse and using commutativity -/
-  rw [mul_comm] --`mul_comm` is a lemma that rewrites `a * b = b * a`
-  simp [hn, hm, mul_comm, nnreal_coe_nat_mul n m]  -- evaluates the `if`s and rewrites `↑n * ↑m`
 
 -- Structure: Axiomatic Entropy Function H
 structure IsEntropyFunction (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) where
@@ -347,9 +299,6 @@ Derive `(k/m) * f₀ H b ≤ f₀ H n ≤ ((k+1)/m) * f₀ H b` (or similar, bei
 This is the core step relating `f₀ H n` and `f₀ H b` via the integer bounds.
 -/
 
-/-- Lemma: If `a ≤ b`, then `↑a ≤ ↑b` for `a, b : ℕ`. -/
-lemma cast_le_cast {a b : ℕ} (h : a ≤ b) : (a : ℝ) ≤ (b : ℝ) := Nat.cast_le.mpr h
-
 
 /- Lemma: `f₀ H b > 0` if `H` is not identically zero and `b ≥ 2`.
 ### Chunk 3.3a: Breaking down uniformEntropy_pos_of_nontrivial
@@ -397,17 +346,7 @@ lemma f0_pow2_eq_zero_of_f0_2_eq_zero {k : ℕ} (hH : IsEntropyFunction H) (hf0_
 ### Chunk 3.3d: Breaking down uniformEntropy_pos_of_nontrivial
 -/
 
--- Re-include the custom exists_pow_ge lemma and its use in exists_pow2_bound
-lemma exists_pow_ge {a n : ℕ} (ha : 1 < a) : ∃ k : ℕ, n ≤ a ^ k :=
-by
-  cases n with
-  | zero =>
-      use 0
-      exact Nat.zero_le (a ^ 0)
-  | succ m =>
-      use (m + 1)
-      have h_lt : m + 1 < a ^ (m + 1) := Nat.lt_pow_self ha
-      exact Nat.le_of_lt h_lt
+
 
 lemma exists_pow2_bound {n : ℕ} (_hn : n ≥ 1) : ∃ k ≥ 1, n ≤ 2 ^ k := by
   have h2_gt_1 : 1 < 2 := by norm_num
@@ -497,26 +436,6 @@ lemma uniformEntropy_pos_of_nontrivial (hH : IsEntropyFunction H) (hH_nonzero : 
   -- This contradicts the hypothesis that f₀ H n_nz ≠ 0
   exact h_f0_n_nz_neq_0 h_f0_n_nz_eq_0
 
-lemma nat_bounds_from_cast_pow_bounds {b k n m : ℕ}
-    (h_le_cast : (b : ℝ) ^ k ≤ (n : ℝ) ^ m)
-    (h_lt_cast : (n : ℝ) ^ m < (b : ℝ) ^ (k + 1)) :
-    b ^ k ≤ n ^ m ∧ n ^ m < b ^ (k + 1) := by
-
-  -- Rewrite the hypotheses using Nat.cast_pow forwards to get the form ↑(...) required by mp
-  rw [← Nat.cast_pow b k] at h_le_cast      -- Goal: Transform (↑b)^k into ↑(b^k)
-  rw [← Nat.cast_pow n m] at h_le_cast      -- Goal: Transform (↑n)^m into ↑(n^m)
-                                            -- h_le_cast is now ↑(b^k) ≤ ↑(n^m)
-
-  rw [← Nat.cast_pow n m] at h_lt_cast      -- Goal: Transform (↑n)^m into ↑(n^m)
-  rw [← Nat.cast_pow b (k + 1)] at h_lt_cast -- Goal: Transform (↑b)^(k+1) into ↑(b^(k+1))
-                                             -- h_lt_cast is now ↑(n^m) < ↑(b^(k+1))
-
-  -- Convert the inequalities involving casts back to Nat inequalities using mp
-  constructor
-  · -- Prove b^k ≤ n^m
-    exact Nat.cast_le.mp h_le_cast
-  · -- Prove n^m < b^(k+1)
-    exact Nat.cast_lt.mp h_lt_cast
 
 /--
 Lemma: Convert Nat bounds `Bk ≤ Nm < Bkp1` to Real bounds on `f₀ H`.
@@ -643,16 +562,6 @@ lemma f0_bounds_apply_power_law (hH : IsEntropyFunction H)
     -- Use the k ≥ 1 helper lemma with the original bounds
     exact apply_power_law_k_ge_1 hH hn hm hb hk_ge1 h_f0_le1_orig h_f0_le2_orig
 
-lemma div_bounds_from_mul_bounds {A B C D E : ℝ} (hC : C > 0) (hD : D > 0)
-    (h_le1 : A * C ≤ B * D) (h_le2 : B * D ≤ E * C) :
-    A / D ≤ B / C ∧ B / C ≤ E / D := by
-  constructor
-  · -- Prove A / D ≤ B / C
-    -- Use div_le_div_iff which states (a / d ≤ b / c ↔ a * c ≤ b * d) given d > 0, c > 0
-    rwa [div_le_div_iff₀ hD hC] -- Rewrites goal A / D ≤ B / C to A * C ≤ B * D and uses h_le1
-  · -- Prove B / C ≤ E / D
-    -- Use div_le_div_iff which states (b / c ≤ e / d ↔ b * d ≤ e * c) given c > 0, d > 0
-    rwa [div_le_div_iff₀ hC hD] -- Rewrites goal B / C ≤ E / D to B * D ≤ E * C and uses h_le2
 /-! ### Chunk 3.4 - Breakdown Step 3 -/
 
 
@@ -918,26 +827,7 @@ theorem logarithmic_trapping (hH : IsEntropyFunction H) (hH_nonzero : ∃ n' ≥
     exact h_diff_upper
 
 
-/--
-Lemma (Core Limit Argument): If the absolute difference between two real numbers `x` and `y`
-is bounded by `1/m` for all natural numbers `m ≥ 1`, then `x` must equal `y`.
--/
-lemma eq_of_abs_sub_le_inv_ge_one_nat {x y : ℝ} (h_bound : ∀ m : ℕ, m ≥ 1 → |x - y| ≤ 1 / (m : ℝ)) :
-    x = y := by
-  -- Use the metric space lemma eq_of_forall_dist_le
-  -- The goal becomes: ∀ ε > 0, dist x y ≤ ε
-  apply eq_of_forall_dist_le
-  -- Introduce arbitrary ε > 0
-  intro ε hε
-  -- Show dist x y ≤ ε
-  -- For Real numbers, dist x y = |x - y|
-  simp_rw [dist_eq_norm_sub, Real.norm_eq_abs] -- Goal: |x - y| ≤ ε
-  -- Use the Archimedean helper to find m ≥ 1 such that 1 / m ≤ ε
-  rcases exists_one_le_nat_one_div_le hε with ⟨m, hm_ge_1, h_inv_m_le_ε⟩
-  -- Use the hypothesis h_bound for this specific m
-  have h_abs_le_inv_m : |x - y| ≤ 1 / (m : ℝ) := h_bound m hm_ge_1
-  -- Combine the two inequalities using transitivity
-  exact le_trans h_abs_le_inv_m h_inv_m_le_ε -- |x - y| ≤ 1 / m and 1 / m ≤ ε implies |x - y| ≤ ε
+
 
 
 /--
@@ -1204,5 +1094,3 @@ theorem RotaEntropyTheorem (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH :
 
     -- Step 6: Apply the lemma that combines the zero/non-zero cases
     exact f0_eq_C_log_cases H hH hn_ge_1
-
-end PPNP.Entropy.RET

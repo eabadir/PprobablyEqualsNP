@@ -4,7 +4,7 @@ import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Set.Defs
 import PPNP.Complexity.Basic -- Assuming this file exists in the right place
-import PPNP.Entropy.Physics
+import PPNP.Entropy.Physics.BoseEinstein
 import PPNP.Entropy.RET
 
 open PPNP.Entropy.Physics PPNP.Entropy.RET -- If needed for direct access to BE_Entropy_Calculation_Problem etc.
