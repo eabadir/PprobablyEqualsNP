@@ -6,9 +6,10 @@ import Mathlib.Data.Set.Defs
 import PPNP.Complexity.Basic -- Assuming this file exists in the right place
 import PPNP.Entropy.Physics.BoseEinstein
 import PPNP.Entropy.RET
+import PPNP.Entropy.Physics.Common
 
 open PPNP.Entropy.Physics PPNP.Entropy.RET -- If needed for direct access to BE_Entropy_Calculation_Problem etc.
-open PPNP.Complexity.Basic
+open PPNP.Complexity.Basic PPNP.Entropy.Physics.Common
 /- PPNPlean -/
 namespace PPNP
 /-!
@@ -24,19 +25,39 @@ open Classical
 Section 1: Modeling Physics and Its Properties
 =================================================================
 -/
-/-- Physical Realization of SAT in a Physical System. -/
+/-- Physical Realization of SAT in a Physical System.
+This is a placeholder until the full formalization of the physical systems as combinatorics is complete (see Entropy/Physics/README.MD). As combinatoric problems they are decision problems, as decision problems which display Shannon Entropy (By RET) they are computable. As decision problems they can also be represented in CNF form (i.e. SAT). For now, we rely on the physical motivation of the real world SAT problems which Physics is able to solve "somehow" (usually assumed magic of superposition, irrelevant here) .
+-/
 axiom Electrons_On_Circuits_Is_Physical_SAT :
   SAT_problem <=p PhysicalSystemEntropyProblem
 
-/-- Rota's Entropy Theorem Reduction: Physical system entropy reduces to Shannon Entropy. -/
-axiom RET_Reduction_PhysicsEntropy_to_ShannonEntropy :
+/- Apply The fully Lean derived Rota's Entropy Theorem to A Physical System
+The the porting into Lean of standard statiscal mechanics physics distributions is in process  (and likewise Rota's formalization of a physical system's as combinatoric problems - see the README in Entropy/Physics). For now, we assume that the entropy function is computable.
+-/
+private lemma RotaTheoremAppliesToPhysicalSystems :
+    ∃ C ≥ 0, ∀ n (hn : n > 0), f H_physical_system hn = C * Real.log n := by
+  apply RotaEntropyTheorem
+  exact H_physical_system_is_IsEntropyFunction
+
+/-
+NOTE - this next axiom only states that RET (fully derived separately) implies computable physics (Not necessarily in P).
+
+Rota's Entropy Theorem (RET) provides the mathematical foundation for this reduction.
+We have axiomatized that the entropy function for physical systems, `H_physical_system`,
+satisfies the `IsEntropyFunction` criteria (see `H_physical_system_is_IsEntropyFunction`).
+By `RotaTheoremAppliesToPhysicalSystems` (which applies the fully derived `PPNP.Entropy.RET.RotaEntropyTheorem`),
+we know that `f H_physical_system n = C * Real.log n`.
+This demonstrates that `H_physical_system` is fundamentally "Shannon-like" and that the bedrock of Information Theory is that Shannon Entropy is computable. This Shannon-like structure is what justifies the following axiom: the general problem of
+computing or deciding properties of `H_physical_system` for arbitrary physical distributions
+(`PhysicalSystemEntropyProblem`) is polynomial-time reducible to the problem of computing
+standard Shannon entropy (`ShannonEntropyProblem`).
+-/
+axiom PhysicsEntropy_Computable_By_RET_ShannonEntropy_Implication :
   PhysicalSystemEntropyProblem <=p ShannonEntropyProblem
 
-
-
-/-- Physics problem is in P via reduction to Shannon Entropy (which is in P). -/
+/-- Physics problem is in P via Shannon Coding of Shannon Entropy (which is in P). -/
 lemma PhysicsProblemIsInP : PhysicalSystemEntropyProblem ∈ P := by
-  exact reduction_in_P RET_Reduction_PhysicsEntropy_to_ShannonEntropy ShannonCodingTheorem
+  exact reduction_in_P PhysicsEntropy_Computable_By_RET_ShannonEntropy_Implication ShannonCodingTheorem
 
 /-!
 =================================================================
@@ -45,11 +66,9 @@ Establishing Reductions and Membership
 =================================================================
 -/
 
-
-
 /-- Physics reduces to SAT (via Shannon -> Program -> Circuit -> SAT chain). -/
 lemma Physics_to_SAT_Reduction : PhysicalSystemEntropyProblem <=p SAT_problem := by
-  have r1 := RET_Reduction_PhysicsEntropy_to_ShannonEntropy
+  have r1 := PhysicsEntropy_Computable_By_RET_ShannonEntropy_Implication
   have r2 := ShannonEntropyProblemToProgram
   have r3 := ProgramToCircuitProblem
   have r4 := CircuitProblemToSAT

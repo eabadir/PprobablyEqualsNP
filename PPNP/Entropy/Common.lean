@@ -24,6 +24,7 @@ import Mathlib.Logic.Equiv.Defs
 import Mathlib.GroupTheory.Congruence.Basic
 
 import PPNP.Common.Basic
+
 namespace PPNP.Entropy.Common
 
 open BigOperators Fin Real Topology NNReal Filter Nat
@@ -33,16 +34,6 @@ open PPNP.Common
 noncomputable def uniformProb (n : ℕ) : NNReal :=
   if _hn : n > 0 then (n⁻¹ : NNReal) else 0
 
--- Helper lemma: the uniform distribution sums to 1
-lemma sum_uniform_eq_one {n : ℕ} (hn : n > 0) :
-  ∑ _i : Fin n, uniformProb n = 1 := by
-  simp only [uniformProb, dif_pos hn]
-  rw [Finset.sum_const, Finset.card_fin, nsmul_eq_mul]
-  rw [mul_inv_cancel₀]
-  apply Nat.cast_ne_zero.mpr
-  exact Nat.pos_iff_ne_zero.mp hn
-
-
 /-- Standard Shannon entropy of a probability distribution given as a function `Fin n → NNReal`.
     Uses natural logarithm (base e). -/
 noncomputable def stdShannonEntropyLn {n : ℕ} (p : Fin n → NNReal) : Real :=
@@ -50,7 +41,6 @@ noncomputable def stdShannonEntropyLn {n : ℕ} (p : Fin n → NNReal) : Real :=
 
 def probabilitySimplex {n : ℕ} : Set (Fin n → NNReal) :=
   { p | ∑ i, p i = 1 }
-
 
 noncomputable def product_dist {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) : Fin (n * m) → NNReal :=
   fun k =>
@@ -64,6 +54,31 @@ noncomputable def product_dist {n m : ℕ} (p : Fin n → NNReal) (q : Fin m →
     -- ji.2 has type Fin n
     -- Match types: p needs Fin n (ji.2), q needs Fin m (ji.1)
     p ji.2 * q ji.1
+
+
+
+-- Structure: Axiomatic Entropy Function H
+structure IsEntropyFunction (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) where
+  (prop0_H1_eq_0 : H (λ _ : Fin 1 => 1) = 0)
+  (prop2_zero_inv : ∀ {n : ℕ} (p : Fin n → NNReal) (_ : ∑ i : Fin n, p i = 1),
+      let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
+      H p_ext = H p)
+  (prop3_continuity : ∀ n : ℕ, ContinuousOn H (probabilitySimplex (n := n)))
+  (prop4_additivity_product : ∀ {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) (_hp : ∑ i, p i = 1) (_hq : ∑ j, q j = 1),
+    H (product_dist p q) = H p + H q)
+  (prop5_max_uniform : ∀ {n : ℕ} (_hn_pos : n > 0) (p : Fin n → NNReal) (_hp_sum : ∑ i : Fin n, p i = 1),
+      H p ≤ H (λ _ : Fin n => if _hn' : n > 0 then (n⁻¹ : NNReal) else 0)) -- NOTE: hn' check is redundant due to hn_pos
+
+
+-- Helper lemma: the uniform distribution sums to 1
+lemma sum_uniform_eq_one {n : ℕ} (hn : n > 0) :
+  ∑ _i : Fin n, uniformProb n = 1 := by
+  simp only [uniformProb, dif_pos hn]
+  rw [Finset.sum_const, Finset.card_fin, nsmul_eq_mul]
+  rw [mul_inv_cancel₀]
+  apply Nat.cast_ne_zero.mpr
+  exact Nat.pos_iff_ne_zero.mp hn
+
 
 
 

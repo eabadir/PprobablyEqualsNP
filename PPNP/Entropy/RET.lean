@@ -22,7 +22,7 @@ import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
 
 import PPNP.Common.Basic
 import PPNP.Entropy.Common
-import PPNP.Entropy.Physics.BoseEinstein
+
 
 namespace PPNP.Entropy.RET
 
@@ -61,18 +61,6 @@ noncomputable def C_constant (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) : �
     f₀ H 2 / Real.log 2
   else
     0
-
--- Structure: Axiomatic Entropy Function H
-structure IsEntropyFunction (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) where
-  (prop0_H1_eq_0 : H (λ _ : Fin 1 => 1) = 0)
-  (prop2_zero_inv : ∀ {n : ℕ} (p : Fin n → NNReal) (_ : ∑ i : Fin n, p i = 1),
-      let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
-      H p_ext = H p)
-  (prop3_continuity : ∀ n : ℕ, ContinuousOn H (probabilitySimplex (n := n)))
-  (prop4_additivity_product : ∀ {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) (_hp : ∑ i, p i = 1) (_hq : ∑ j, q j = 1),
-    H (product_dist p q) = H p + H q)
-  (prop5_max_uniform : ∀ {n : ℕ} (_hn_pos : n > 0) (p : Fin n → NNReal) (_hp_sum : ∑ i : Fin n, p i = 1),
-      H p ≤ H (λ _ : Fin n => if _hn' : n > 0 then (n⁻¹ : NNReal) else 0)) -- NOTE: hn' check is redundant due to hn_pos
 
 
 
@@ -912,29 +900,6 @@ lemma log_2_ne_zero : Real.log 2 ≠ 0 := by
   have h_pos : Real.log 2 > 0 := log_b_pos hb2
   exact ne_of_gt h_pos
 
-/--
-Helper: Rearranges the equality `a / b = c / d` to `a = (b / d) * c`,
-given denominators are non-zero.
--/
-lemma rearrange_ratio_equality {a b c d : ℝ} (hb : b ≠ 0) (_hd : d ≠ 0)
-    (h_ratio : a / b = c / d) :
-    a = (b / d) * c := by
-  -- Start from a / b = c / d
-  -- Multiply both sides by b
-  rw [div_eq_iff hb] at h_ratio
-  -- h_ratio: a = (c / d) * b
-  -- Rearrange RHS: (c / d) * b = (c * b) / d
-  rw [div_mul_eq_mul_div] at h_ratio
-  -- h_ratio: a = (c * b) / d
-  -- Commute multiplication in numerator: (c * b) / d = (b * c) / d
-  rw [mul_comm c b] at h_ratio
-  -- h_ratio: a = (b * c) / d
-  -- Associate division differently: (b * c) / d = (b / d) * c using div_mul_eq_mul_div
-  -- This step implicitly uses hd ≠ 0
-  rw [← div_mul_eq_mul_div] at h_ratio
-  -- h_ratio: a = (b / d) * c
-  exact h_ratio
-
 
 /--
 Helper Lemma: Explicitly proves that C_constant H equals the 'then' branch
@@ -1094,3 +1059,23 @@ theorem RotaEntropyTheorem (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH :
 
     -- Step 6: Apply the lemma that combines the zero/non-zero cases
     exact f0_eq_C_log_cases H hH hn_ge_1
+
+/--
+This is just an alternate form RotaEntropyTheorem directly states the conclusion of Rota's Entropy Theorem
+using the specific constant `C_constant H`. The proof of `RotaEntropyTheorem`
+constructs its existential witness `C` as `C_constant H`.
+-/
+theorem RotaEntropyTheorem_formula_with_C_constant
+    (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH_axioms : IsEntropyFunction H) :
+    (C_constant H) ≥ 0 ∧ ∀ (n : ℕ) (hn : n > 0), f H hn = (C_constant H) * Real.log n := by
+  -- The proof of RotaEntropyTheorem is `use (C_constant H)`.
+  -- We reconstruct that here to get the properties specifically for `C_constant H`.
+  constructor
+  · -- Property 1: C_constant H ≥ 0
+    exact C_constant_nonneg H hH_axioms
+  · -- Property 2: ∀ n (hn > 0), f H hn = (C_constant H) * Real.log n
+    intro n hn_pos
+    -- This relies on f0_eq_C_log_cases, which is used in the proof of RotaEntropyTheorem
+    -- and f_eq_f0_for_positive_n to switch from f to f₀.
+    rw [f_eq_f0_for_positive_n H hn_pos]
+    exact f0_eq_C_log_cases H hH_axioms (Nat.one_le_of_lt hn_pos)

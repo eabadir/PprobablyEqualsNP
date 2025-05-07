@@ -26,9 +26,11 @@ import Mathlib.Data.Nat.Basic -- Basic Nat properties
 import Mathlib.Data.Multiset.Bind
 import Mathlib.Data.Multiset.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-
+import PPNP.Entropy.Common
 
 namespace PPNP.Entropy.Physics.Common
+
+open PPNP.Entropy.Common
 
 -- Define the type for Macrostates (occupancy vectors summing to M)
 -- Needed for both MB and BE state space definitions
@@ -37,6 +39,11 @@ def MBMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
 -- This uses the standard Mathlib definition `Sym α n := {s : Multiset α // card s = n}`
 @[reducible] def SymFin (N M : ℕ) := Sym (Fin N) M
 
+-- This is the actual function that calculates entropy for a physical system's distribution.
+axiom H_physical_system : ∀ {n : ℕ}, (Fin n → NNReal) → Real
+
+-- This axiom states that the true entropy of physical systems behaves according to Rota's postulates.
+axiom H_physical_system_is_IsEntropyFunction : IsEntropyFunction H_physical_system
 
 /-- `Multiset.count` distributes over a `Finset` sum of multisets. -/
 @[simp] lemma Multiset.count_finset_sum

@@ -19,6 +19,8 @@ instance : Inhabited Word := ⟨sorry⟩
 axiom Machine : Type
 instance : Inhabited Machine := ⟨sorry⟩
 
+
+
 axiom wordLength (w : Word) : Nat
 axiom combineInput (input cert : Word) : Word
 axiom successWord : Word

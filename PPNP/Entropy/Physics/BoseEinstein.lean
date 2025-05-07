@@ -1,20 +1,26 @@
-import Mathlib.Analysis.SpecialFunctions.Log.NegMulLog -- For negMulLog, Real.log
-import Mathlib.Algebra.BigOperators.Fin -- For sum over Fin n
-import Mathlib.Data.Fin.Basic -- Basic Fin definitions and lemmas
-import Mathlib.Data.Fintype.Fin -- Instances for Fin n
-import Mathlib.Algebra.GroupWithZero.Units.Basic -- Provides mul_inv_cancel₀
-import Mathlib.Data.Nat.Basic -- Basic Nat properties
+--import Mathlib.Analysis.SpecialFunctions.Log.NegMulLog -- For negMulLog, Real.log
+--import Mathlib.Algebra.BigOperators.Fin -- For sum over Fin n
+--import Mathlib.Data.Fin.Basic -- Basic Fin definitions and lemmas
+--import Mathlib.Data.Fintype.Fin -- Instances for Fin n
+--import Mathlib.Algebra.GroupWithZero.Units.Basic -- Provides mul_inv_cancel₀
+--import Mathlib.Data.Nat.Basic -- Basic Nat properties
+import Mathlib.Data.Sym.Card
 
-import Mathlib.Data.Multiset.Bind
-import Mathlib.Data.Multiset.Basic
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+--import Mathlib.Data.Multiset.Bind
+--import Mathlib.Data.Multiset.Basic
+--import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import PPNP.Common.Basic
+import PPNP.Entropy.Common
 import PPNP.Entropy.Physics.Common
+import PPNP.Entropy.RET
 
 namespace PPNP.Entropy.Physics.BE
 
-open BigOperators Multiset Finset
+open PPNP.Entropy.RET
+
+open Multiset NNReal
 open PPNP.Common
+open PPNP.Entropy.Common
 open PPNP.Entropy.Physics.Common
 
 /-! # Formalizing Physics Distributions Starting with Bose-Einstein Statistics
@@ -140,9 +146,6 @@ lemma count_beStateToMultiset_eq_sum_count_replicate {N M : ℕ} (q : OmegaBE N 
 
 
 
-
-
-
 -- Define the map from a multiset known to have card M back to a BE state
 -- This bundles the function `multisetToBEState` with the proof that its components sum to M
 def multisetToBEStateSubtype {N M : ℕ} (s : SymFin N M) : OmegaBE N M :=
@@ -156,7 +159,6 @@ def multisetToBEStateSubtype {N M : ℕ} (s : SymFin N M) : OmegaBE N M :=
       -- Goal is now card s.val = M
       exact s.property -- The property bundled with s is card s.val = M
   ⟩
-
 
 /-!
 Lemma: `beStateToMultiset` and `multisetToBEStateSubtype` are inverses (left inverse).
@@ -482,3 +484,308 @@ lemma right_inv_beState_multiset {N M : ℕ} (s : SymFin N M) :
   -- 5. Apply the key identity proven by induction
   rw [sum_replicate_count_toFinset_eq_self s.val]
   -- Goal is now s.val = s.val, which is true by reflexivity.
+
+/-!
+## Phase 1: Combinatorial Equivalence (Completed)
+We have established the maps and proven they are inverses. Now we bundle them into a formal `Equiv`.
+-/
+
+/--
+Formal `Equiv` (bijection) between the `OmegaBE` representation (occupancy vectors)
+and the `SymFin` representation (multisets of a fixed size).
+This equivalence is crucial for transferring properties (like cardinality and `Fintype` instances)
+from the well-understood `SymFin` type to `OmegaBE`.
+-/
+def beStateEquivMultiset (N M : ℕ) : OmegaBE N M ≃ SymFin N M where
+  toFun q := ⟨beStateToMultiset q, card_beStateToMultiset q⟩
+  invFun s := multisetToBEStateSubtype s
+  left_inv q := left_inv_beState_multiset q
+  right_inv s := by
+    -- The goal is: toFun (invFun s) = s
+    -- which expands to:
+    -- ⟨beStateToMultiset (multisetToBEStateSubtype s), card_beStateToMultiset (multisetToBEStateSubtype s)⟩ = s
+    -- For subtypes, equality `⟨v₁, p₁⟩ = ⟨v₂, p₂⟩` is equivalent to `v₁ = v₂` due to proof irrelevance for the property `p`.
+    -- Here, `s.val` is the multiset part of `s : SymFin N M`, and `s.property` is the proof `card s.val = M`.
+    -- The first component of `toFun (invFun s)` is `beStateToMultiset (multisetToBEStateSubtype s)`.
+    -- So, we need to show `beStateToMultiset (multisetToBEStateSubtype s) = s.val`.
+    -- This is precisely what `right_inv_beState_multiset s` states.
+    apply Subtype.eq
+    exact right_inv_beState_multiset s
+
+
+/-!
+## Phase 2: Cardinality and Iteration
+With the equivalence established, we can now define a `Fintype` instance for `OmegaBE`.
+-/
+
+/--
+`Fintype` instance for `OmegaBE N M`.
+This instance is derived from the `Fintype` instance of `SymFin N M`
+(which is `Sym (Fin N) M`) via the equivalence `beStateEquivMultiset`.
+This allows us to treat `OmegaBE N M` as a finite type, enabling enumeration
+and summation over all Bose-Einstein states, which is crucial for defining
+probabilities and calculating entropy.
+Mathlib provides `Sym.fintype` for `Sym α n` when `α` is a `Fintype` with `DecidableEq`.
+`Fin N` meets these criteria.
+-/
+instance fintypeOmegaBE (N M : ℕ) : Fintype (OmegaBE N M) :=
+  Fintype.ofEquiv (SymFin N M) (beStateEquivMultiset N M).symm
+
+/--
+Calculates the cardinality of the Bose-Einstein state space `OmegaBE N M`.
+This is the number of ways to distribute `M` indistinguishable particles into `N`
+distinguishable energy states, which is given by the multichoose function `Nat.multichoose N M`.
+This corresponds to the "stars and bars" formula `(N + M - 1) choose M`.
+The proof relies on the equivalence `beStateEquivMultiset` between `OmegaBE N M`
+and `SymFin N M` (multisets of size `M` over `Fin N`), and the known cardinality
+of `SymFin N M` from Mathlib (`Sym.card_fintype`).
+-/
+lemma card_omega_be (N M : ℕ) :
+    Fintype.card (OmegaBE N M) = Nat.multichoose N M := by
+  rw [Fintype.card_congr (beStateEquivMultiset N M)]
+  -- Goal is now: Fintype.card (SymFin N M) = Nat.multichoose N M
+  -- SymFin N M is defined as Sym (Fin N) M.
+  -- Sym.card_fintype states: Fintype.card (Sym α k) = Nat.multichoose (Fintype.card α) k
+  rw [Sym.card_sym_eq_multichoose (Fin N) M]
+  -- Goal is now: Nat.multichoose (Fintype.card (Fin N)) M = Nat.multichoose N M
+  rw [Fintype.card_fin N]
+  -- Goal is now: Nat.multichoose N M = Nat.multichoose N M, which is true by reflexivity.
+
+open BigOperators
+
+/-- `Nat.multichoose` is positive exactly when we can really place
+    `k` indistinguishable balls into `n` labelled boxes – i.e.
+    either we have at least one box (`n ≠ 0`) or there is nothing
+    to place (`k = 0`). -/
+lemma multichoose_pos_iff (n k : ℕ) :
+    0 < Nat.multichoose n k ↔ (n ≠ 0 ∨ k = 0) := by
+  -- split on the trivial `k = 0` case
+  by_cases hk : k = 0
+  · subst hk
+    simp [Nat.multichoose_zero_right]  -- `1 > 0`
+  · have hkpos : 0 < k := Nat.pos_of_ne_zero hk
+    -- now analyse `n`
+    cases n with
+    | zero =>
+        -- `n = 0`, `k > 0`  ⇒  multichoose vanishes
+        have h0 : Nat.multichoose 0 k = 0 := by
+          -- stars‑&‑bars gives a too‑large binomial coefficient
+          have hlt : k - 1 < k := Nat.pred_lt (Nat.ne_of_gt hkpos)
+          rw [Nat.multichoose_eq]
+          rw [Nat.zero_add]
+          exact (Nat.choose_eq_zero_of_lt hlt)
+        simp [h0, hk]
+    | succ n' =>
+        -- `n = n'.succ`, `k > 0`  ⇒  multichoose positive
+        have hle : k ≤ n' + k := by
+          simpa [add_comm] using Nat.le_add_left k n'
+        have : 0 < (n' + k).choose k := Nat.choose_pos hle
+        simpa [Nat.multichoose_eq, Nat.succ_eq_add_one,
+               add_comm, add_left_comm, add_assoc, hk] using this
+
+/-- Proves that the cardinality of the Bose-Einstein state space OmegaBE N M is positive
+under the condition that either the number of states N is non-zero or the number of
+particles M is zero. This condition is necessary and sufficient for Nat.multichoose N M
+to be positive. This lemma is important for defining probabilities, as it ensures the
+denominator (total number of states) is not zero. -/
+lemma card_omega_be_pos (N M : ℕ) (h : N ≠ 0 ∨ M = 0) :
+    0 < Fintype.card (OmegaBE N M) := by
+  -- the heavy lifting is `multichoose_pos_iff`
+  simpa [card_omega_be, multichoose_pos_iff] using h
+
+/-!
+## Phase 3: Probability Distribution
+With cardinality established, we can define the Bose-Einstein probability distribution.
+We assume equiprobability of all microstates (configurations).
+-/
+
+/--
+Defines the Bose-Einstein probability distribution `p_BE` over the state space `OmegaBE N M`.
+This is a uniform distribution, where each state `q : OmegaBE N M` has probability
+`1 / Fintype.card (OmegaBE N M)`.
+The probability is given as an `NNReal` (non-negative real number).
+This definition relies on `uniformProb` from `PPNP.Entropy.Common`, which handles
+the case where the number of outcomes might be zero (though `card_omega_be_pos`
+ensures the cardinality is positive under typical physical conditions `N ≠ 0 ∨ M = 0`).
+-/
+noncomputable def p_BE (N M : ℕ) : OmegaBE N M → NNReal :=
+  fun _q => uniformProb (Fintype.card (OmegaBE N M))
+
+
+/--
+Proves that the Bose-Einstein probability distribution `p_BE N M` sums to 1 over
+all possible states in `OmegaBE N M`, provided the domain is valid
+(i.e., `N ≠ 0 ∨ M = 0`, ensuring the cardinality of the state space is positive).
+This confirms that `p_BE N M` is a valid (normalized) probability distribution.
+-/
+lemma p_BE_sums_to_one (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    ∑ q : OmegaBE N M, (p_BE N M q) = 1 := by
+  let card_val := Fintype.card (OmegaBE N M)
+  have h_card_pos : card_val > 0 := card_omega_be_pos N M h_domain_valid
+
+  -- Substitute the definition of p_BE and simplify using h_card_pos
+  -- p_BE N M q simplifies to uniformProb card_val,
+  -- which simplifies to (card_val : ℝ≥0)⁻¹ because card_val > 0.
+  -- Step 1: Substitute the definition of p_BE
+  simp_rw [p_BE]
+  -- After this, p_BE N M q becomes uniformProb card_val q
+
+  -- Step 2: Substitute the definition of uniformProb
+  -- This will introduce an if-then-else expression:
+  -- (if card_val > 0 then fun _ => (card_val : ℝ≥0)⁻¹ else fun _ => 0) q
+  -- which simplifies to: if card_val > 0 then (card_val : ℝ≥0)⁻¹ else 0
+  simp_rw [uniformProb]
+
+  -- Step 3: Simplify the if-then-else expression using h_card_pos (which states card_val > 0)
+  -- This should rewrite (if card_val > 0 then (card_val : ℝ≥0)⁻¹ else 0) to (card_val : ℝ≥0)⁻¹
+  rw [dif_pos h_card_pos]
+
+  -- The sum is now of a constant term (card_val : ℝ≥0)⁻¹ over all elements in OmegaBE N M.
+  -- Finset.sum_const: ∑ _x ∈ s, c = Finset.card s • c
+  -- Finset.card_univ for a Fintype is Fintype.card
+  rw [Finset.sum_const, Finset.card_univ]
+  -- The sum is now (Fintype.card (OmegaBE N M)) • (card_val : ℝ≥0)⁻¹
+  -- which is card_val • (card_val : ℝ≥0)⁻¹
+
+  -- Convert nsmul (ℕ • ℝ≥0) to multiplication (ℝ≥0 * ℝ≥0)
+  rw [nsmul_eq_mul]
+  -- The sum is now (↑card_val : ℝ≥0) * (↑card_val : ℝ≥0)⁻¹
+
+  -- To use mul_inv_cancel₀, we need to show (card_val : ℝ≥0) ≠ 0.
+  have h_card_nnreal_ne_zero : (card_val : ℝ≥0) ≠ 0 := by
+    -- For a natural number n, (n : ℝ≥0) = 0 if and only if n = 0.
+    -- So, (n : ℝ≥0) ≠ 0 if and only if n ≠ 0.
+    -- We have h_card_pos : card_val > 0, which implies card_val ≠ 0.
+
+    -- Step 1: Use `norm_cast` to simplify the coercion.
+    -- This tactic applies `@[norm_cast]` lemmas like `NNReal.coe_ne_zero {n : ℕ}`.
+    -- It should change the goal from `(↑card_val : ℝ≥0) ≠ 0` to `card_val ≠ 0`.
+    norm_cast
+    -- The previous `simp only [NNReal.coe_ne_zero]` might have issues if the
+    -- wrong `coe_ne_zero` lemma was being considered or if matching failed.
+
+    -- Step 2: Prove `card_val ≠ 0` using `h_card_pos`.
+    -- `h_card_pos` states `card_val > 0` (which is `0 < card_val`).
+    -- `Nat.pos_iff_ne_zero.mp` is the implication `(0 < n) → (n ≠ 0)`.
+    -- Thus, `Nat.pos_iff_ne_zero.mp h_card_pos` is a proof of `card_val ≠ 0`.
+    exact Nat.pos_iff_ne_zero.mp h_card_pos
+    -- This replaces the previous two steps:
+    -- rw [←Nat.pos_iff_ne_zero]
+    -- assumption
+
+  -- Apply mul_inv_cancel₀
+  rw [mul_inv_cancel₀ h_card_nnreal_ne_zero]
+  -- The goal is now 1 = 1, which is true by reflexivity.
+
+noncomputable def p_BE_fin (N M : ℕ) : Fin (Fintype.card (OmegaBE N M)) → NNReal :=
+  fun _i => uniformProb (Fintype.card (OmegaBE N M))
+
+/--
+Proves that the adapted Bose-Einstein probability distribution `p_BE_fin N M`
+(which is uniform over `Fin (Fintype.card (OmegaBE N M))`) sums to 1.
+This confirms it's a valid probability distribution.
+Requires the domain to be valid (`N ≠ 0 ∨ M = 0`) to ensure positive cardinality.
+-/
+lemma p_BE_fin_sums_to_one (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    ∑ i : Fin (Fintype.card (OmegaBE N M)), (p_BE_fin N M i) = 1 := by
+  let k := Fintype.card (OmegaBE N M)
+  have hk_pos : k > 0 := card_omega_be_pos N M h_domain_valid
+
+  -- By definition, p_BE_fin N M i is uniformProb k.
+  -- So the sum becomes ∑ (i : Fin k), uniformProb k.
+  -- This can be simplified by rewriting the summand using the definition of p_BE_fin.
+  simp_rw [p_BE_fin]
+
+  -- The goal is now ∑ (_ : Fin k), uniformProb k = 1.
+  -- This is exactly the statement of `sum_uniform_eq_one` with k and hk_pos.
+  exact sum_uniform_eq_one hk_pos
+
+
+-- This lemma should be placed before H_BE_eq_C_shannon,
+-- ideally in PPNP.Entropy.Common.lean or locally in PPNP.Entropy.RET if very specific.
+-- For now, assuming it's defined within the PPNP.Entropy.RET namespace.
+lemma stdShannonEntropyLn_uniform_eq_log_card {k : ℕ} (hk_pos : k > 0) :
+    stdShannonEntropyLn (fun _ : Fin k => uniformProb k) = Real.log k := by
+  simp_rw [stdShannonEntropyLn, uniformProb, dif_pos hk_pos]
+  -- The term (uniformProb k : ℝ) simplifies to ((k : ℝ≥0)⁻¹ : ℝ) which is (k : ℝ)⁻¹
+  -- when hk_pos is used.
+  -- Goal is: ∑ (_x : Fin k), negMulLog ((k : ℝ)⁻¹) = Real.log k
+
+  have hk_real_pos : (k : ℝ) > 0 := Nat.cast_pos.mpr hk_pos
+  have hk_inv_real_pos : (k : ℝ)⁻¹ > 0 := inv_pos.mpr hk_real_pos
+
+  simp [Real.negMulLog, hk_inv_real_pos] -- Use Real.negMulLog definition and positivity hypothesis
+  -- The previous simp tactic has already simplified the sum and several subsequent steps.
+  -- The goal is now approximately: (k : ℝ) * ((k : ℝ)⁻¹ * Real.log k) = Real.log k
+
+  -- The proof continues from the state after the main simp:
+  -- Goal: (k : ℝ) * ((k : ℝ)⁻¹ * Real.log k) = Real.log k
+  rw [←mul_assoc] -- Changed from mul_assoc to ←mul_assoc
+  -- Goal: ((k : ℝ) * (k : ℝ)⁻¹) * Real.log k = Real.log k
+  have hk_real_ne_zero : (k : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr (Nat.pos_iff_ne_zero.mp hk_pos)
+  rw [mul_inv_cancel₀ hk_real_ne_zero]
+  -- Goal: 1 * Real.log k = Real.log k
+  rw [one_mul]
+  -- Goal: Real.log k = Real.log k (reflexivity)
+
+
+/--
+Helper lemma to show that applying an entropy function `H` to `p_BE_fin N M`
+is equivalent to evaluating `f H k hk_pos` where `k` is the cardinality of the state space.
+-/
+lemma H_p_BE_fin_eq_f_H_card (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) (N M : ℕ)
+    (k : ℕ) (hk_is_card : k = Fintype.card (OmegaBE N M)) (hk_pos : k > 0) :
+    H (p_BE_fin N M) = f H hk_pos := by
+  -- Unfold p_BE_fin on the LHS and f on the RHS.
+  unfold p_BE_fin f
+  -- After unfolding, the goal is approximately:
+  -- H (fun _ => uniformProb (Fintype.card (OmegaBE N M))) = H (fun _ => uniformProb k)
+  -- Now use the hypothesis hk_is_card to equate the arguments to H.
+  -- This rewrites `k` in `Fin k` and `uniformProb k` on the RHS.
+  rw [hk_is_card]
+  -- The arguments to H on both sides should now be identical, so rfl closes the goal.
+  -- H (fun _ => uniformProb (Fintype.card (OmegaBE N M))) = H (fun _ => uniformProb (Fintype.card (OmegaBE N M)))
+
+
+
+/--
+Applies Rota's Entropy Theorem to the (adapted) Bose-Einstein probability distribution `p_BE_fin`.
+It shows that for any entropy function `H` satisfying `IsEntropyFunction`,
+`H(p_BE_fin)` is equal to the Rota constant `C_constant H` multiplied by
+the standard Shannon entropy `stdShannonEntropyLn(p_BE_fin)`.
+
+This hinges on the fact that `p_BE_fin` is a uniform distribution, and for such distributions,
+`f H k = C * log k` (by RET) and `stdShannonEntropyLn (uniform k) = log k`.
+-/
+theorem H_BE_eq_C_shannon (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) (hH_axioms : IsEntropyFunction H)
+    (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    H (p_BE_fin N M) = (C_constant H) * stdShannonEntropyLn (p_BE_fin N M) := by
+  let k := Fintype.card (OmegaBE N M)
+  have hk_pos : k > 0 := card_omega_be_pos N M h_domain_valid
+
+  -- LHS: H (p_BE_fin N M)
+  -- Use the helper lemma to equate H (p_BE_fin N M) with f H k hk_pos
+  have h_lhs_eq_f : H (p_BE_fin N M) = f H hk_pos :=
+    H_p_BE_fin_eq_f_H_card H N M k rfl hk_pos
+
+  -- Obtain the formula from RotaEntropyTheorem directly in terms of C_constant H
+  obtain ⟨_hC_nonneg, h_f_eq_C_log_direct⟩ :
+    (C_constant H) ≥ 0 ∧ ∀ (n : ℕ) (hn : n > 0), f H hn = (C_constant H) * Real.log n :=
+      RotaEntropyTheorem_formula_with_C_constant H hH_axioms
+
+  -- Specialize this formula to our k:
+  have h_f_k_eq_C_constant_H_log_k : f H hk_pos = (C_constant H) * Real.log k :=
+    h_f_eq_C_log_direct k hk_pos
+
+  -- Substitute into LHS:
+  rw [h_lhs_eq_f, h_f_k_eq_C_constant_H_log_k]
+  -- LHS is now (C_constant H) * Real.log k
+
+  -- RHS: (C_constant H) * stdShannonEntropyLn (p_BE_fin N M)
+  -- By definition of p_BE_fin, this is (C_constant H) * stdShannonEntropyLn (fun _ : Fin k => uniformProb k)
+  -- Using stdShannonEntropyLn_uniform_eq_log_card:
+  have h_stdShannon_eq_log_k : stdShannonEntropyLn (p_BE_fin N M) = Real.log k := by
+    unfold p_BE_fin -- Show that p_BE_fin N M is indeed (fun _ => uniformProb k)
+    exact stdShannonEntropyLn_uniform_eq_log_card hk_pos
+
+  rw [h_stdShannon_eq_log_k]

@@ -739,3 +739,26 @@ lemma div_bounds_from_mul_bounds {A B C D E : ℝ} (hC : C > 0) (hD : D > 0)
   · -- Prove B / C ≤ E / D
     -- Use div_le_div_iff which states (b / c ≤ e / d ↔ b * d ≤ e * c) given c > 0, d > 0
     rwa [div_le_div_iff₀ hC hD] -- Rewrites goal B / C ≤ E / D to B * D ≤ E * C and uses h_le2
+
+/--
+Helper: Rearranges the equality `a / b = c / d` to `a = (b / d) * c`,
+given denominators are non-zero.
+-/
+lemma rearrange_ratio_equality {a b c d : ℝ} (hb : b ≠ 0) (_hd : d ≠ 0)
+    (h_ratio : a / b = c / d) :
+    a = (b / d) * c := by
+  -- Start from a / b = c / d
+  -- Multiply both sides by b
+  rw [div_eq_iff hb] at h_ratio
+  -- h_ratio: a = (c / d) * b
+  -- Rearrange RHS: (c / d) * b = (c * b) / d
+  rw [div_mul_eq_mul_div] at h_ratio
+  -- h_ratio: a = (c * b) / d
+  -- Commute multiplication in numerator: (c * b) / d = (b * c) / d
+  rw [mul_comm c b] at h_ratio
+  -- h_ratio: a = (b * c) / d
+  -- Associate division differently: (b * c) / d = (b / d) * c using div_mul_eq_mul_div
+  -- This step implicitly uses hd ≠ 0
+  rw [← div_mul_eq_mul_div] at h_ratio
+  -- h_ratio: a = (b / d) * c
+  exact h_ratio
