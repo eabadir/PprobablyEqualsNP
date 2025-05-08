@@ -21,6 +21,8 @@ noncomputable def uniformDist (n : Nat) : List Real :=
   | 0 => []
   | k+1 => replicate (k+1) (1 / (k+1 : Real))
 
+
+
 lemma uniformDist_IsProbDist (n : Nat) (hn : 0 < n) : IsProbDist (uniformDist n) := by
   cases n with
   | zero => contradiction -- 0 < 0 is false

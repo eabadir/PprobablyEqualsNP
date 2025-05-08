@@ -1,2 +1,7 @@
 /.lake
 temp/
+*.gz
+*.out
+*.fls
+*.aux
+*.log

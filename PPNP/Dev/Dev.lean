@@ -41,10 +41,80 @@ namespace PPNP.Entropy
 open BigOperators Fin Real Topology NNReal Filter Nat Set Multiset
 
 
-open PPNP.Common
-open PPNP.Entropy.Common
-open PPNP.Entropy.RET
-open PPNP.Entropy.Physics.BE
+-- open PPNP.Common
+-- open PPNP.Entropy.Common
+-- open PPNP.Entropy.RET
+-- open PPNP.Entropy.Physics.BE
 
 
-  -- RHS is now (C_constant H) * Real.log k
+/- PPNP.Entropy.Common - Phase 0 Revised/New Objects -/
+
+open BigOperators Fin Real Topology NNReal Filter Nat
+open PPNP.Common -- Assuming PPNP.Common contains finProdFinEquiv
+
+
+/--
+Defines the joint probability distribution for a two-stage experiment.
+Given `p` as the distribution for the first stage (over `N` outcomes),
+and `q_cond i` as the conditional distribution for the second stage (over `M` outcomes)
+given the `i`-th outcome of the first stage.
+The resulting distribution is over the `N*M` combined outcomes.
+P(i,j) = p(i) * q_cond(i,j)
+-/
+def DependentPairDist
+  {N M : ℕ} (prior : Fin N → NNReal)
+          (P     : Fin N → Fin M → NNReal) :
+  Fin (N * M) → NNReal :=
+  fun k =>
+    let (i, j) := (finProdFinEquiv.symm k : Fin N × Fin M)
+    prior i * P i j
+
+-- 1) Declare the coercion instance
+instance {N M : ℕ} : Coe
+  ((Fin N → NNReal) × (Fin N → Fin M → NNReal))
+  (Fin (N * M) → NNReal) where
+  coe := fun (⟨pr, P⟩ : (Fin N → NNReal) × (Fin N → Fin M → NNReal)) =>
+    DependentPairDist pr P
+
+-- 2) Revised one‐field structure
+structure IsEntropyCondAdd
+  (H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0)
+: Prop where
+  cond_add :
+    ∀ {N M : ℕ} [NeZero N] [NeZero M]
+      (prior   : Fin N → NNReal)
+      (P       : Fin N → Fin M → NNReal)
+      (_hP      : ∀ i, ∑ j, P i j = 1)
+      (_hprior  : ∑ i, prior i = 1),
+    H (DependentPairDist prior P) = H prior + ∑ i, prior i * H (fun j => P i j)
+
+structure IsEntropyNormalized
+  (H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0)
+: Prop where
+  normalized : ∀ (p : Fin 1 → ℝ≥0), (∑ i, p i = 1) → H p = 0
+
+structure IsEntropySymmetric
+  (H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0)
+: Prop where
+  symmetry   : ∀ {n} (p : Fin n → ℝ≥0) (_hp : ∑ i, p i = 1)
+                  (σ : Equiv.Perm (Fin n)), H (p ∘ σ) = H p
+
+structure IsEntropyContinuous
+  (H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0)
+: Prop where
+  continuity : ∀ {n} (p : Fin n → ℝ≥0) (_hp : ∑ i, p i = 1)
+                  (ε : ℝ), ε > 0 →
+                ∃ δ > 0, ∀ (q : Fin n → ℝ≥0), (∑ i, q i = 1) →
+                (∀ i, |(q i : ℝ) - (p i : ℝ)| < δ) → |(H q : ℝ) - (H p : ℝ)| < ε
+
+/-- **Axiomatic Entropy Function.**
+`IsEntropyFunction_New H` means `H` assigns an entropy value (ℝ≥0) to any finite probability distribution
+such that the usual Shannon entropy axioms hold: normalization, symmetry, continuity,
+and conditional additivity (chain rule). -/
+structure IsEntropyFunction
+  (H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0)
+  : Prop                                -- ① result type comes *before* `extends`
+  extends IsEntropyNormalized H,
+          IsEntropySymmetric H,
+          IsEntropyContinuous H,
+          IsEntropyCondAdd H
