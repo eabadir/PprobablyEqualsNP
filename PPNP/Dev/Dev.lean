@@ -652,6 +652,16 @@ theorem uniformEntropy_power_law_new
   simpa [P] using this
 
 
+/-- Property: `f0 H n ≥ 0` for `n ≥ 1`. (Actually, f0 outputs ℝ≥0, so this is trivial).
+    This lemma serves to highlight the non-negativity derived from the output type. -/
+lemma f0_nonneg_new {H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0}
+    (hH_axioms : IsEntropyFunction H) {n : ℕ} (_hn_ge1 : n ≥ 1) :
+    f0 hH_axioms n ≥ 0 :=
+  -- This is true by definition as f0 outputs NNReal.
+  -- We can make it more explicit if needed, but as an NNReal, it's already ≥ 0.
+  show (f0 hH_axioms n : ℝ) ≥ 0 by
+    simp only [coe_nonneg] -- NNReal.coe_nonneg
+
 /-- If `f0 H b = 0` for some `b ≥ 2`, then `f0 H 2 = 0`. (Output `ℝ≥0`) -/
 lemma f0_2_eq_zero_of_f0_b_eq_zero_new {H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0}
     (hH_axioms : IsEntropyFunction H) {b : ℕ} (hb_ge2 : b ≥ 2) (hf0b_eq_0 : f0 hH_axioms b = 0) :
@@ -721,6 +731,18 @@ lemma uniformEntropy_pos_of_nontrivial_new {H : ∀ {α : Type} [Fintype α], (�
   have h_f0_n'_eq_0 : f0 hH_axioms n' = 0 :=
     f0_n_eq_zero_of_f0_pow2_zero_new hH_axioms h_all_f0_pow2_zero hn'_ge1
   exact h_f0_n'_neq_0 h_f0_n'_eq_0
+
+/--
+Helper lemma: If `f0 H n ≠ 0` for some `n > 0`, then `H` is non-trivial.
+Used to simplify a `by_contra` argument.
+-/
+lemma hf0n_ne_0_implies_nontrivial
+    {H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0}
+    (_hH_axioms : IsEntropyFunction H) -- hH_axioms is implicitly used by f0
+    {n : ℕ} (hf0n_ne_0 : f0 hH_axioms n ≠ 0) (hn_pos : n > 0) :
+    ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0 := by
+  use n
+  exact ⟨Nat.one_le_of_lt hn_pos, hf0n_ne_0⟩
 
 
 /-- `f0 H b > 0` (as NNReal) if `H` is non-trivial and `b ≥ 2`.
@@ -873,3 +895,258 @@ lemma k_from_f0_trap_satisfies_pow_bounds_real {H : ∀ {α : Type} [Fintype α]
       rw [NNReal.coe_le_coe]
       -- Goal: (m:ℝ≥0)*f0n_nnreal ≤ ((k+1):ℝ≥0)*f0b_nnreal
       exact h_f0_mono2
+
+
+
+/--
+Lemma: Given `b > 1`, `X > 0`, and `b^k ≤ X`, proves `k ≤ logb b X`.
+This is because `k = logb b (b^k)` and `logb b` is monotone for `b > 1`.
+So, `b^k ≤ X` implies `logb b (b^k) ≤ logb b X`.
+-/
+lemma le_logb_rpow_self_of_le {b k X : ℝ} (hb_gt_1 : b > 1) (hX_pos : 0 < X) (hkX : b^k ≤ X) :
+    k ≤ Real.logb b X := by
+  have b_pos : 0 < b := lt_trans zero_lt_one hb_gt_1
+  have b_ne_one : b ≠ 1 := ne_of_gt hb_gt_1
+  -- Rewrite k as logb b (b^k)
+  rw [← Real.logb_rpow b_pos b_ne_one (x := k)] -- Goal is now: logb b (b^k) ≤ logb b X
+  -- To prove logb b x₁ ≤ logb b x₂, given 1 < b, 0 < x₁, 0 < x₂, it suffices to prove x₁ ≤ x₂.
+  -- Here x₁ is b^k and x₂ is X.
+  -- We need to provide proofs for 0 < b^k and 0 < X.
+  have h_bk_pos : 0 < b^k := Real.rpow_pos_of_pos b_pos k
+  -- Apply the .mpr part of the iff rule from Real.logb_le_logb
+  apply (Real.logb_le_logb hb_gt_1 h_bk_pos hX_pos).mpr
+  -- The remaining goal is b^k ≤ X, which is our hypothesis hkX.
+  exact hkX
+
+
+/--
+Lemma: Given `b > 1`, `X > 0`, and `X < b^(k_plus_1)`, proves `logb b X < k_plus_1`.
+This is because `k_plus_1 = logb b (b^(k_plus_1))` and `logb b` is strictly monotone for `b > 1`.
+So, `X < b^(k_plus_1)` implies `logb b X < logb b (b^(k_plus_1))`.
+-/
+lemma logb_rpow_self_lt_of_lt {b X k_plus_1 : ℝ} (hb_gt_1 : b > 1) (hX_pos : 0 < X) (hXlt : X < b^k_plus_1) :
+    Real.logb b X < k_plus_1 := by
+  have b_pos : 0 < b := lt_trans zero_lt_one hb_gt_1
+  have b_ne_one : b ≠ 1 := ne_of_gt hb_gt_1
+  -- Rewrite k_plus_1 as logb b (b^k_plus_1)
+  rw [← Real.logb_rpow b_pos b_ne_one (x := k_plus_1)] -- Goal: Real.logb b X < Real.logb b (b ^ k_plus_1)
+  -- To prove logb b x₁ < logb b x₂, given 1 < b, 0 < x₁, and x₁ < x₂, apply Real.logb_lt_logb.
+  -- Here x₁ is X and x₂ is b^k_plus_1.
+  -- The hypotheses for Real.logb_lt_logb are:
+  -- 1. hb : 1 < b         (hb_gt_1)
+  -- 2. hx : 0 < x         (hX_pos, where x is X)
+  -- 3. hxy : x < y        (hXlt, where x is X and y is b^k_plus_1)
+  apply Real.logb_lt_logb hb_gt_1 hX_pos hXlt
+
+/-!  Helper for `abs_sub_le_iff`  -/
+structure AbsPair (a b r : ℝ) : Prop where
+  left  : a - b ≤ r       -- 1ˢᵗ inequality
+  right : b - a ≤ r       -- 2ⁿᵈ inequality
+
+instance {a b r : ℝ} : Coe (AbsPair a b r)
+    (a - b ≤ r ∧ b - a ≤ r) where
+  coe := fun h => ⟨h.left, h.right⟩
+
+
+
+/--
+Logarithmic trapping: `| (f0 H n : ℝ) / (f0 H b : ℝ) - logb b n | ≤ 1 / (m : ℝ)`.
+This uses the Real‐valued bounds from `k_from_f0_trap_satisfies_pow_bounds_real`.
+-/
+theorem logarithmic_trapping_new
+  {H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0}
+  (hH_axioms     : IsEntropyFunction H)
+  (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+  {n m b : ℕ} (hn_pos  : n > 0) (hm_pos  : m > 0) (hb_ge2 : b ≥ 2) :
+  |(f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ) - Real.logb b n| ≤ 1 / (m : ℝ) :=
+by
+  -- Unpack the “k from f0” bounds:
+  rcases k_from_f0_trap_satisfies_pow_bounds_real
+    hH_axioms hH_nontrivial hn_pos hm_pos hb_ge2
+    with ⟨k, ⟨h_pow_le_nm,   h_nm_lt_pow_kp1⟩,
+              ⟨h_f0_ratio_lower_bound, h_f0_ratio_upper_bound⟩⟩
+
+  let f0_ratio  := (f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ)
+  let logb_n_val := Real.logb b n
+  let k_real    := (k : ℝ)
+  let m_real    := (m : ℝ)
+
+  -- Basic casts and positivity facts
+  have hb_real_gt_1 : (b : ℝ) > 1 := Nat.one_lt_cast.mpr (by linarith : b > 1)
+  have hn_real_pos : (n : ℝ) > 0 := Nat.cast_pos.mpr hn_pos
+  have hm_real_pos : m_real > 0   := Nat.cast_pos.mpr hm_pos
+
+  -- Derive     k_real ≤ m_real * logb_n_val   <   k_real + 1
+  have h_k_le_m_logbn : k_real ≤ m_real * logb_n_val := by
+    -- rewrite m * logb b n as logb b ((n^m : ℝ))
+    rw [← Real.logb_rpow_eq_mul_logb_of_pos hn_real_pos (y := m_real)]
+    -- reduce to proving (b^k : ℝ) ≤ (n^m : ℝ)
+    have : (b : ℝ)^k_real ≤ (n : ℝ)^m_real := by
+      simp_rw [k_real, m_real]
+      rw [Real.rpow_natCast, Real.rpow_natCast]
+      exact h_pow_le_nm
+    apply le_logb_rpow_self_of_le hb_real_gt_1 (Real.rpow_pos_of_pos hn_real_pos m_real) this
+
+  have h_m_logbn_lt_kp1 : m_real * logb_n_val < k_real + 1 := by
+    rw [← Real.logb_rpow_eq_mul_logb_of_pos hn_real_pos (y := m_real)]
+    have : (n : ℝ)^m_real < (b : ℝ)^(k_real + 1) := by
+      simp_rw [m_real, k_real]
+      rw [Real.rpow_natCast, ← Nat.cast_add_one, Real.rpow_natCast] -- Corrected order
+      exact h_nm_lt_pow_kp1
+    apply logb_rpow_self_lt_of_lt hb_real_gt_1 (Real.rpow_pos_of_pos hn_real_pos m_real) this
+
+  -- Convert to the two sided‐inequalities on logb_n_val
+  have h_logb_lt_kp1_m : logb_n_val < (k_real + 1) / m_real := by
+    rw [lt_div_iff₀ hm_real_pos, mul_comm]
+    exact h_m_logbn_lt_kp1
+
+  have h_km_le_logb : k_real / m_real ≤ logb_n_val := by
+    rw [div_le_iff₀ hm_real_pos, mul_comm]
+    exact h_k_le_m_logbn
+
+  have h_logb_minus_1m_lt_km : logb_n_val - 1 / m_real < k_real / m_real := by
+    rw [sub_lt_iff_lt_add, div_add_div_same]
+    exact h_logb_lt_kp1_m
+
+  ----------------------------------------------------------------
+  --  NEW: prove the two sides in the correct orientations:
+  ----------------------------------------------------------------
+  -- (1) logb_n_val - f0_ratio ≤ 1 / m_real
+  have h_right : logb_n_val - f0_ratio ≤ 1 / m_real := by
+    have : logb_n_val - f0_ratio < 1 / m_real := by
+      -- f0_ratio ≥ k/m and logb_n_val - 1/m < k/m
+      linarith [h_logb_minus_1m_lt_km, h_f0_ratio_lower_bound]
+    exact le_of_lt this
+
+  -- (2)  –(1/m_real) ≤  logb_n_val - f0_ratio
+  --     ↔  f0_ratio - logb_n_val ≤ 1/m_real
+  have h_left : f0_ratio - logb_n_val ≤ 1 / m_real := by
+    -- first prove  f0_ratio ≤ logb_n_val + 1/m_real
+    have h_aux : f0_ratio ≤ logb_n_val + 1 / m_real := by
+      have h2 : f0_ratio ≤ (k_real + 1) / m_real := h_f0_ratio_upper_bound
+      have h3 : (k_real + 1) / m_real ≤ logb_n_val + 1 / m_real := by
+        have h_base : k_real + 1 ≤ m_real * logb_n_val + 1 := by
+          exact add_le_add_right h_k_le_m_logbn 1
+        -- rewrite logb_n_val + 1/m_real as (m_real * logb_n_val + 1)/m_real
+        rw [show logb_n_val + 1 / m_real = (m_real * logb_n_val + 1) / m_real by
+              field_simp [mul_comm, ne_of_gt hm_real_pos]]
+        exact (div_le_div_iff_of_pos_right hm_real_pos).mpr h_base
+      exact h2.trans h3
+    -- now sub_le_iff_le_add turns `f0_ratio ≤ logb_n_val + 1/m` into the goal
+    -- The simplified goal becomes `f0_ratio ≤ 1 / m_real + logb_n_val` (due to simpa's canonicalization).
+    -- h_aux is `f0_ratio ≤ logb_n_val + 1 / m_real`.
+    -- Adding `add_comm` allows simpa to match these.
+    simpa [sub_le_iff_le_add, add_comm] using h_aux
+
+  -- Assemble and finish
+  rw [abs_sub_comm f0_ratio logb_n_val]
+  have h_bounds : AbsPair logb_n_val f0_ratio (1 / m_real) := ⟨h_right, h_left⟩
+  exact abs_sub_le_iff.mpr h_bounds
+
+
+/--
+The ratio `(f0 H n : ℝ) / (f0 H b : ℝ)` is exactly `logb b n`.
+Requires `H` to be non-trivial.
+-/
+theorem uniformEntropy_ratio_eq_logb_new {H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0}
+    (hH_axioms : IsEntropyFunction H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+    {n b : ℕ} (hn_pos : n > 0) (hb_ge2 : b ≥ 2) :
+    (f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ) = Real.logb b n := by
+  apply eq_of_abs_sub_le_inv_ge_one_nat
+  intro m hm_ge1
+  exact logarithmic_trapping_new hH_axioms hH_nontrivial hn_pos (pos_of_one_le hm_ge1) hb_ge2
+
+/--
+The constant `C_H` relating `f0 H n` to `Real.log n`.
+Defined as `(f0 H 2 : ℝ) / Real.log 2` if H is non-trivial, else 0.
+This constant is `Real`-valued.
+-/
+noncomputable def C_constant_real {H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0}
+    (hH_axioms : IsEntropyFunction H) : Real :=
+  by classical -- Use classical logic to ensure the condition is decidable
+  exact if h_nontrivial : (∃ n' ≥ 1, f0 hH_axioms n' ≠ 0) then
+    (f0 hH_axioms 2 : ℝ) / Real.log 2
+  else
+    0
+
+/-- `C_constant_real` is non-negative. -/
+lemma C_constant_real_nonneg {H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0}
+    (hH_axioms : IsEntropyFunction H) : C_constant_real hH_axioms ≥ 0 := by
+  rw [C_constant_real]
+  split_ifs with h_nontrivial
+  · -- Case: H non-trivial
+    have hf02_real_nonneg : (f0 hH_axioms 2 : ℝ) ≥ 0 := NNReal.coe_nonneg _
+    have hlog2_pos : Real.log 2 > 0 := Real.log_pos (by norm_num : (2:ℝ) > 1)
+    exact div_nonneg hf02_real_nonneg (le_of_lt hlog2_pos)
+  · -- Case: H trivial
+    exact le_refl 0
+
+
+/--
+Rota's Uniform Theorem (final part of Phase 2):
+`f0 H n` (coerced to Real) is `C * Real.log n`.
+-/
+theorem RotaUniformTheorem_formula_with_C_constant_new {H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0}
+    (hH_axioms : IsEntropyFunction H) :
+    let C_val := C_constant_real hH_axioms
+    (C_val ≥ 0 ∧
+     ∀ (n : ℕ) (_hn_pos : n > 0), (f0 hH_axioms n : ℝ) = C_val * Real.log n) := by
+  let C_val := C_constant_real hH_axioms
+  constructor
+  · exact C_constant_real_nonneg hH_axioms
+  · intro n hn_pos
+    -- Goal: (f0 hH_axioms n : ℝ) = C_val * Real.log n
+    simp_rw [C_constant_real] -- Unfold C_val definition in the goal
+    split_ifs with h_nontrivial
+    · -- Case: H non-trivial. C_val_expanded = (f0 hH_axioms 2 : ℝ) / Real.log 2
+      -- Goal: (f0 hH_axioms n : ℝ) = ((f0 hH_axioms 2 : ℝ) / Real.log 2) * Real.log n
+      let F0N := (f0 hH_axioms n : ℝ)
+      let F02 := (f0 hH_axioms 2 : ℝ)
+      let LOGN := Real.log n
+      let LOG2 := Real.log 2
+      change F0N = (F02 / LOG2) * LOGN -- Makes the goal structure explicit with local names
+
+      have h_ratio_eq_logb : F0N / F02 = Real.logb 2 n :=
+        uniformEntropy_ratio_eq_logb_new hH_axioms h_nontrivial hn_pos (by norm_num : 2 ≥ 2)
+
+      have hf02_ne_zero : F02 ≠ 0 := by
+        exact coe_ne_zero.mpr (uniformEntropy_pos_of_nontrivial_new hH_axioms h_nontrivial (by norm_num))
+      have hlog2_ne_zero : LOG2 ≠ 0 := ne_of_gt (Real.log_pos (by norm_num : (2:ℝ) > 1))
+      have hn_real_pos : (n:ℝ) > 0 := Nat.cast_pos.mpr hn_pos
+      have h2_real_pos : (2:ℝ) > 0 := by norm_num
+
+      -- Rewrite logb using log: F0N / F02 = LOGN / LOG2
+      rw [Real.logb] at h_ratio_eq_logb
+      -- Note: Real.logb_def is logb b x = log x / log b.
+      -- This changes h_ratio_eq_logb to: F0N / F02 = LOGN / LOG2
+
+      -- Now we have F0N / F02 = LOGN / LOG2
+      -- Goal is F0N = (F02 / LOG2) * LOGN
+      rw [div_eq_iff hf02_ne_zero] at h_ratio_eq_logb
+      -- h_ratio_eq_logb is now: F0N = (LOGN / LOG2) * F02
+      -- Goal is:                F0N = (F02 / LOG2) * LOGN
+      rw [h_ratio_eq_logb]
+      -- Goal: (LOGN / LOG2) * F02 = (F02 / LOG2) * LOGN
+      -- This can be rearranged using field properties
+      -- field_simp [hlog2_ne_zero] -- Should simplify both sides to (LOGN * F02) / LOG2
+      -- The goal is (Real.log ↑n / Real.log 2) * F02 = F02 / Real.log 2 * Real.log ↑n
+      -- which simplifies to (Real.log n * F02) / Real.log 2 = (F02 * Real.log n) / Real.log 2.
+      -- This is true by commutativity of multiplication. `ring` handles this.
+      ring
+
+    · -- Case: H trivial (¬h_nontrivial). C_val_expanded = 0
+      -- Goal: (f0 hH_axioms n : ℝ) = 0 * Real.log n
+      have hf0n_eq_0_nnreal : f0 hH_axioms n = 0 := by
+        by_contra hf0n_ne_0_hyp
+        -- Use the externalized lemma:
+        -- hf0n_ne_0_implies_nontrivial takes (f0 H n ≠ 0) and (n > 0)
+        -- and returns (∃ n' ≥ 1, f0 H n' ≠ 0)
+        -- This contradicts h_nontrivial (which is ¬(∃ n' ≥ 1, f0 H n' ≠ 0))
+        exact h_nontrivial (hf0n_ne_0_implies_nontrivial hH_axioms hf0n_ne_0_hyp hn_pos)
+      simp only [hf0n_eq_0_nnreal, NNReal.coe_zero, zero_mul]
+
+theorem RotaUniformTheorem_new {H : ∀ {α : Type} [Fintype α], (α → ℝ≥0) → ℝ≥0}
+    (hH_axioms : IsEntropyFunction H) :
+    ∃ C ≥ 0, ∀ (n : ℕ) (_hn_pos : n > 0), (f0 hH_axioms n : ℝ) = C * Real.log n := by
+  use C_constant_real hH_axioms
+  exact RotaUniformTheorem_formula_with_C_constant_new hH_axioms

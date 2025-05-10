@@ -22,6 +22,7 @@ import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
 import Mathlib.Logic.Equiv.Fin.Basic
 import Mathlib.Logic.Equiv.Defs
 import Mathlib.GroupTheory.Congruence.Basic
+import Init.Prelude
 
 import Mathlib.Data.Sym.Card
 
@@ -40,17 +41,4 @@ import PPNP.Dev.Dev
 namespace PPNP.Dev
 
 open BigOperators Fin Real Topology NNReal Filter Nat Set Multiset
-
-
--- open PPNP.Common
--- open PPNP.Entropy.Common
--- open PPNP.Entropy.RET
--- open PPNP.Entropy.Physics.BE
-
-
-/- PPNP.Entropy.Common - Phase 0 Revised/New Objects -/
-
-open BigOperators Fin Real Topology NNReal Filter Nat
 open PPNP.Common -- Assuming PPNP.Common contains finProdFinEquiv
-open PPNP.Entropy.Common
-open PPNP.Entropy.RET
