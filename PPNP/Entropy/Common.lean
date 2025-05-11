@@ -34,77 +34,158 @@ open PPNP.Common
 noncomputable def uniformProb (n : ℕ) : NNReal :=
   if _hn : n > 0 then (n⁻¹ : NNReal) else 0
 
-/-- Standard Shannon entropy of a probability distribution given as a function `Fin n → NNReal`.
-    Uses natural logarithm (base e). -/
-noncomputable def stdShannonEntropyLn {n : ℕ} (p : Fin n → NNReal) : Real :=
-  ∑ i : Fin n, negMulLog (p i : Real)
+/-- *Uniform distribution on a finite non-empty type.*
+    The proof `h_card_pos` guarantees the denominator is non-zero. -/
+noncomputable def uniformDist {α : Type*} [Fintype α]
+    (_h_card_pos : 0 < Fintype.card α) : α → NNReal :=
+λ _ ↦ (Fintype.card α : NNReal)⁻¹
 
+
+/-- The uniform distribution sums to 1. -/
+lemma sum_uniformDist {α : Type*} [Fintype α]
+    (h_card_pos : 0 < Fintype.card α) : (∑ x, uniformDist h_card_pos x) = 1 := by
+  have h_card_nnreal_ne_zero : (Fintype.card α : NNReal) ≠ 0 := by
+      have h_card_nat_ne_zero : (Fintype.card α : ℕ) ≠ 0 := Nat.ne_of_gt h_card_pos
+      simpa using h_card_nat_ne_zero
+  simp only [uniformDist, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+  rw [mul_inv_cancel₀ h_card_nnreal_ne_zero]
+
+/--
+Helper lemma: If `k > 0`, then `0 < Fintype.card (Fin k)`.
+This provides a clean proof term for the positivity argument required by `uniformDist`.
+-/
+lemma Fintype_card_fin_pos {k : ℕ} (hk_pos : k > 0) : 0 < Fintype.card (Fin k) := by
+  simp only [Fintype.card_fin] -- Fintype.card (Fin k) is definitionally k
+  exact hk_pos
+
+/-- Standard Shannon entropy of `p : α → NNReal`. Uses natural logarithm. -/
+noncomputable def stdShannonEntropyLn {α : Type*} [Fintype α] (p : α → NNReal) : Real :=
+  ∑ i : α, negMulLog (p i : Real)
+
+
+
+/-- The set of valid probability distributions over `Fin n`. -/
 def probabilitySimplex {n : ℕ} : Set (Fin n → NNReal) :=
   { p | ∑ i, p i = 1 }
 
+/-- Product distribution `P((i,j)) = p(i)q(j)` for independent `p` and `q`. -/
 noncomputable def product_dist {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) : Fin (n * m) → NNReal :=
   fun k =>
-    -- Assuming finProdFinEquiv : Fin m × Fin n ≃ Fin (m * n)
-    -- Use its inverse finProdFinEquiv.symm : Fin (m * n) ≃ Fin m × Fin n
-    -- Cast k : Fin (n * m) to k' : Fin (m * n) using Nat.mul_comm
     let k' : Fin (m * n) := Equiv.cast (congrArg Fin (Nat.mul_comm n m)) k
-    -- Apply inverse to get pair of type Fin m × Fin n
     let ji := finProdFinEquiv.symm k'
-    -- ji.1 has type Fin m
-    -- ji.2 has type Fin n
-    -- Match types: p needs Fin n (ji.2), q needs Fin m (ji.1)
     p ji.2 * q ji.1
 
 
+/-- Joint distribution `P(k) = prior(i) * P(j|i)` where `k` maps to `(i,j)`. -/
+noncomputable def DependentPairDist
+  {N M : ℕ} [NeZero N] [NeZero M]
+  (prior : Fin N → NNReal)
+  (P     : Fin N → Fin M → NNReal) :
+  Fin (N * M) → NNReal :=
+  fun k =>
+    let k_equiv := Equiv.cast (congrArg Fin (Nat.mul_comm N M)) k
+    let (i, j) := (finProdFinEquiv.symm k_equiv : Fin N × Fin M)
+    prior i * P i j
 
--- Structure: Axiomatic Entropy Function H
-structure IsEntropyFunction (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) where
-  (prop0_H1_eq_0 : H (λ _ : Fin 1 => 1) = 0)
-  (prop2_zero_inv : ∀ {n : ℕ} (p : Fin n → NNReal) (_ : ∑ i : Fin n, p i = 1),
-      let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
-      H p_ext = H p)
-  (prop3_continuity : ∀ n : ℕ, ContinuousOn H (probabilitySimplex (n := n)))
-  (prop4_additivity_product : ∀ {n m : ℕ} (p : Fin n → NNReal) (q : Fin m → NNReal) (_hp : ∑ i, p i = 1) (_hq : ∑ j, q j = 1),
-    H (product_dist p q) = H p + H q)
-  (prop5_max_uniform : ∀ {n : ℕ} (_hn_pos : n > 0) (p : Fin n → NNReal) (_hp_sum : ∑ i : Fin n, p i = 1),
-      H p ≤ H (λ _ : Fin n => if _hn' : n > 0 then (n⁻¹ : NNReal) else 0)) -- NOTE: hn' check is redundant due to hn_pos
-
-
--- Helper lemma: the uniform distribution sums to 1
-lemma sum_uniform_eq_one {n : ℕ} (hn : n > 0) :
-  ∑ _i : Fin n, uniformProb n = 1 := by
-  simp only [uniformProb, dif_pos hn]
-  rw [Finset.sum_const, Finset.card_fin, nsmul_eq_mul]
-  rw [mul_inv_cancel₀]
-  apply Nat.cast_ne_zero.mpr
-  exact Nat.pos_iff_ne_zero.mp hn
+/-- Coercion for `DependentPairDist`. -/
+noncomputable instance {N M : ℕ} [NeZero N] [NeZero M] : Coe
+  ((Fin N → NNReal) × (Fin N → Fin M → NNReal))
+  (Fin (N * M) → NNReal) where
+  coe := fun (⟨pr, P_cond⟩ : (Fin N → NNReal) × (Fin N → Fin M → NNReal)) => -- Renamed P to P_cond
+    DependentPairDist pr P_cond
 
 
+-- Component Structures for IsEntropyFunction
+-- H maps (α → NNReal) to NNReal.
+
+structure IsEntropyNormalized
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
+: Prop where
+  normalized : ∀ (p : Fin 1 → NNReal), (∑ i, p i = 1) → H_func p = 0
+
+structure IsEntropySymmetric
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
+: Prop where
+  symmetry   : ∀ {α : Type} [Fintype α] (p : α → NNReal) (_hp : ∑ i, p i = 1)
+                  (σ : Equiv.Perm α), H_func (p ∘ σ) = H_func p
+                  -- Note: p ∘ σ is p(σ(i)) for new_p(i). Or p ∘ σ.invFun for p_old(σ(i_new)) = p_new(i_new)
+                  -- The provided Phase 2 code had `p ∘ σ`. This means if `p'` is the permuted distribution,
+                  -- `p'(i) = p(σ(i))`.
+
+structure IsEntropyContinuous
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
+: Prop where
+  continuity : ∀ {α : Type} [Fintype α] (p_center : α → NNReal) (_hp_sum_1 : ∑ i, p_center i = 1)
+                  (ε : ℝ), ε > 0 →
+                ∃ δ > 0, ∀ (q : α → NNReal) (_hq_sum_1 : ∑ i, q i = 1),
+                (∀ i, |(q i : ℝ) - (p_center i : ℝ)| < δ) → |((H_func q) : ℝ) - ((H_func p_center) : ℝ)| < ε
+                -- Assuming H_func output is NNReal, so coercion to ℝ is needed for absolute difference.
+
+structure IsEntropyCondAdd
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
+: Prop where
+  cond_add :
+    ∀ {N M : ℕ} [NeZero N] [NeZero M]
+      (prior   : Fin N → NNReal)
+      (P_cond  : Fin N → Fin M → NNReal) -- Renamed P to P_cond
+      (_hP_sum_1 : ∀ i, ∑ j, P_cond i j = 1)
+      (_hprior_sum_1 : ∑ i, prior i = 1),
+    H_func (DependentPairDist prior P_cond) = H_func prior + ∑ i, prior i * H_func (fun j => P_cond i j)
+    -- Sum term: prior i is NNReal, H_func output is NNReal. Product is NNReal. Sum is NNReal.
+    -- H_func prior is NNReal. So RHS is NNReal. LHS H_func output is NNReal. Consistent.
+
+structure IsEntropyZeroInvariance
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
+: Prop where
+  zero_invariance :
+    ∀ {n : ℕ} (p_orig : Fin n → NNReal) (_hp_sum_1 : ∑ i, p_orig i = 1),
+      let p_ext := (fun (i : Fin (n + 1)) =>
+                     if h_lt : i.val < n then p_orig (Fin.castLT i h_lt)
+                     else 0)
+    H_func p_ext = H_func p_orig
+
+structure IsEntropyMaxUniform
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) : Prop where -- Renamed H to H_func
+  max_uniform :
+    ∀ {α : Type} [Fintype α] (h_card_pos : 0 < Fintype.card α)
+      (p : α → NNReal) (_hp_sum_1 : (∑ x, p x) = 1),
+      H_func p ≤ H_func (uniformDist h_card_pos)
+
+/--
+**Axiomatic Entropy Function.**
+`IsEntropyFunction H_func` means `H_func` assigns `NNReal` to finite probability distributions,
+satisfying normalization, symmetry, continuity, conditional additivity, zero invariance, and maximality at uniform.
+-/
+structure IsEntropyFunction -- This is the new definition
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
+  : Prop
+  extends IsEntropyZeroInvariance H_func,
+          IsEntropyNormalized H_func,
+          IsEntropySymmetric H_func,
+          IsEntropyContinuous H_func,
+          IsEntropyCondAdd H_func,
+          IsEntropyMaxUniform H_func
 
 
 
-/-- Product of two uniform distributions is uniform on the product space. -/
-lemma uniformProb_product_uniformProb_is_uniformProb
-    {n m : ℕ} (hn : n > 0) (hm : m > 0) :
-    product_dist
-        (fun _ : Fin n     => uniformProb n)
-        (fun _ : Fin m     => uniformProb m)
-      = (fun _ : Fin (n*m) => uniformProb (n * m)) := by
-  -- point‑wise equality of functions on `Fin (n*m)`
-  funext k
-  /- 1 ▸ reduce to an identity in `ℝ≥0` -/
-  simp [product_dist, uniformProb, mul_pos hn hm]  -- goal: ↑n⁻¹ * ↑m⁻¹ = ↑(n*m)⁻¹
+lemma product_coe_inv_coe_mul_log_eq_log {k : ℕ} (hk_pos_nat : k > 0) :
+    ((k : ℝ) * (k : ℝ)⁻¹) * Real.log k = Real.log k := by
+  have hk_real_ne_zero : (k : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr (Nat.pos_iff_ne_zero.mp hk_pos_nat)
+  rw [mul_inv_cancel₀ hk_real_ne_zero, one_mul]
 
-  /- 2 ▸ build the `≠ 0` hypotheses in `ℝ≥0` via `exact_mod_cast` -/
-  have hn_ne_zero : n ≠ 0 := (Nat.pos_iff_ne_zero).1 hn
-  have hm_ne_zero : m ≠ 0 := (Nat.pos_iff_ne_zero).1 hm
-  have h_n : (n : ℝ≥0) ≠ 0 := by exact_mod_cast hn_ne_zero  -- `norm_cast` trick :contentReference[oaicite:0]{index=0}
-  have h_m : (m : ℝ≥0) ≠ 0 := by exact_mod_cast hm_ne_zero
+theorem stdShannonEntropyLn_uniform_eq_log_card {α : Type*} [Fintype α]
+    (h_card_pos : 0 < Fintype.card α) :
+  stdShannonEntropyLn (uniformDist h_card_pos) = Real.log (Fintype.card α) := by
+  let k := Fintype.card α
+  have hk_pos_nat : k > 0 := h_card_pos
 
-  /- 3 ▸ convert the product of inverses to the inverse of a product -/
-  -- The left factor is `↑m⁻¹ * ↑n⁻¹`, so we use the lemma with arguments in that order.
-  rw [nnreal_inv_mul_inv_eq_inv_mul h_m h_n]
+  -- Unfold the definition of Shannon entropy, uniformDist, negMulLog, and the
+  -- real/Nnreal coercions all at once:
+  simp [stdShannonEntropyLn, uniformDist, negMulLog_def, NNReal.coe_inv, NNReal.coe_natCast]
 
-  /- 4 ▸ finish by rewriting inside the inverse and using commutativity -/
-  rw [mul_comm] --`mul_comm` is a lemma that rewrites `a * b = b * a`
-  simp [hn, hm, mul_comm, nnreal_coe_nat_mul n m]  -- evaluates the `if`s and rewrites `↑n * ↑m`
+  -- Now the goal is
+  --   (k : ℝ) * ((k : ℝ)⁻¹ * Real.log k) = Real.log k
+
+  -- Rearrange and finish
+  rw [← mul_assoc]
+  exact product_coe_inv_coe_mul_log_eq_log hk_pos_nat

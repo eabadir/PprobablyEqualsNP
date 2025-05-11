@@ -132,3 +132,32 @@ The conceptual phases described above map directly to specific definitions, lemm
 | 4     | `entropy_BE` (Planned)                     | Calculates the specific value `stdShannonEntropyLn(p_BE_fin) = log |Ω_BE|`.                     | Pending     |
 
 This structure demonstrates how the foundational combinatorial work in Phase 1 directly enables the cardinality calculations in Phase 2, which are essential for defining the normalized probability distribution in Phase 3, ultimately allowing the application of Rota's Entropy Theorem in Phase 4. The micro-lemmas developed, particularly for the inverse proofs, exemplify the robust proof strategy employed.
+
+
+-----
+
+We are now at point where Phase 2 has been tested and integrated into RET.lean such that the new functions have replaced their intended older counterparts. Before we move to phase 3, similar to how we started, we should review where we are at to make sure that we sticking to the original intent: NOTE: Our objective is replicate the approach of the paper which a) tests a particular distribution for certain properties; b) apply the uniqueness proof based on those properties. 
+
+Importantly we have made the following decisions and note the following:
+- The goal is NOT to come up with some new generalized formula relative to every / any distribution.
+-  in the code below are the replacements for continuity (we didn't want the complexity and unpredictability of Leans simplex and metric space machinery, we also felt this approach reflected Rota's original proof best in spirit) and conditional entropy additivity.
+- We updated R>=0 to NNReal
+- we note again that the RET derivation in the paper works by breaking down the property tested distribution into small partitions displaying the uniform distribution and then doing its work on those and summing them up. It does this by recursive partitioning till a probability 1 event occurs and then using additivity on all the smallest partitions.
+
+Now provide the following:
+1) RET.lean might have extraneous lemmas that are no longer in use, make a table of any that should be removed or helpers that should be moved to Entropy.Common.
+2) Should anything in RET.lean be reconfigured to better prepare for Phase 3.
+3) BoseEinstein.lean compiles except for: 
+a) H_p_BE_fin_eq_f_H_card has error:
+type mismatch
+  H
+has type
+  (Fin ?m.18331 → ℝ≥0) → ℝ : Type
+but is expected to have type
+  (α✝ → ℝ≥0) → ℝ≥0 : Type
+the following variables have been introduced by the implicit lambda feature
+  α✝ : Type
+  inst✝ : Fintype α✝
+b) H_BE_eq_C_shannon
+ℝ≥0)
+2) Let's brainstorm the simplest way to perform the same approcah. Does the lean code also allow for the "two part" application of identifying entropy via the properties and then verifying uniqueness? Summarize the approach of the lean code vs the paper and then do a detailed identification of congruence and gaps.

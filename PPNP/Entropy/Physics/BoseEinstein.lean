@@ -45,8 +45,6 @@ Formalizing concepts from statistical mechanics requires careful handling of com
 
 
 
-
-
 -- Map a BE state (occupancy vector) to the corresponding multiset of occupied states
 -- Example: N=3, M=4, q = (i=0 ↦ 2, i=1 ↦ 1, i=2 ↦ 1) -> {0, 0, 1, 2}
 def beStateToMultiset {N M : ℕ} (q : OmegaBE N M) : Multiset (Fin N) :=
@@ -625,41 +623,41 @@ lemma p_BE_sums_to_one (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
 
   -- Substitute the definition of p_BE and simplify using h_card_pos
   -- p_BE N M q simplifies to uniformProb card_val,
-  -- which simplifies to (card_val : ℝ≥0)⁻¹ because card_val > 0.
+  -- which simplifies to (card_val : NNReal)⁻¹ because card_val > 0.
   -- Step 1: Substitute the definition of p_BE
   simp_rw [p_BE]
   -- After this, p_BE N M q becomes uniformProb card_val q
 
   -- Step 2: Substitute the definition of uniformProb
   -- This will introduce an if-then-else expression:
-  -- (if card_val > 0 then fun _ => (card_val : ℝ≥0)⁻¹ else fun _ => 0) q
-  -- which simplifies to: if card_val > 0 then (card_val : ℝ≥0)⁻¹ else 0
+  -- (if card_val > 0 then fun _ => (card_val : NNReal)⁻¹ else fun _ => 0) q
+  -- which simplifies to: if card_val > 0 then (card_val : NNReal)⁻¹ else 0
   simp_rw [uniformProb]
 
   -- Step 3: Simplify the if-then-else expression using h_card_pos (which states card_val > 0)
-  -- This should rewrite (if card_val > 0 then (card_val : ℝ≥0)⁻¹ else 0) to (card_val : ℝ≥0)⁻¹
+  -- This should rewrite (if card_val > 0 then (card_val : NNReal)⁻¹ else 0) to (card_val : NNReal)⁻¹
   rw [dif_pos h_card_pos]
 
-  -- The sum is now of a constant term (card_val : ℝ≥0)⁻¹ over all elements in OmegaBE N M.
+  -- The sum is now of a constant term (card_val : NNReal)⁻¹ over all elements in OmegaBE N M.
   -- Finset.sum_const: ∑ _x ∈ s, c = Finset.card s • c
   -- Finset.card_univ for a Fintype is Fintype.card
   rw [Finset.sum_const, Finset.card_univ]
-  -- The sum is now (Fintype.card (OmegaBE N M)) • (card_val : ℝ≥0)⁻¹
-  -- which is card_val • (card_val : ℝ≥0)⁻¹
+  -- The sum is now (Fintype.card (OmegaBE N M)) • (card_val : NNReal)⁻¹
+  -- which is card_val • (card_val : NNReal)⁻¹
 
-  -- Convert nsmul (ℕ • ℝ≥0) to multiplication (ℝ≥0 * ℝ≥0)
+  -- Convert nsmul (ℕ • NNReal) to multiplication (NNReal * NNReal)
   rw [nsmul_eq_mul]
-  -- The sum is now (↑card_val : ℝ≥0) * (↑card_val : ℝ≥0)⁻¹
+  -- The sum is now (↑card_val : NNReal) * (↑card_val : NNReal)⁻¹
 
-  -- To use mul_inv_cancel₀, we need to show (card_val : ℝ≥0) ≠ 0.
-  have h_card_nnreal_ne_zero : (card_val : ℝ≥0) ≠ 0 := by
-    -- For a natural number n, (n : ℝ≥0) = 0 if and only if n = 0.
-    -- So, (n : ℝ≥0) ≠ 0 if and only if n ≠ 0.
+  -- To use mul_inv_cancel₀, we need to show (card_val : NNReal) ≠ 0.
+  have h_card_nnreal_ne_zero : (card_val : NNReal) ≠ 0 := by
+    -- For a natural number n, (n : NNReal) = 0 if and only if n = 0.
+    -- So, (n : NNReal) ≠ 0 if and only if n ≠ 0.
     -- We have h_card_pos : card_val > 0, which implies card_val ≠ 0.
 
     -- Step 1: Use `norm_cast` to simplify the coercion.
     -- This tactic applies `@[norm_cast]` lemmas like `NNReal.coe_ne_zero {n : ℕ}`.
-    -- It should change the goal from `(↑card_val : ℝ≥0) ≠ 0` to `card_val ≠ 0`.
+    -- It should change the goal from `(↑card_val : NNReal) ≠ 0` to `card_val ≠ 0`.
     norm_cast
     -- The previous `simp only [NNReal.coe_ne_zero]` might have issues if the
     -- wrong `coe_ne_zero` lemma was being considered or if matching failed.
@@ -679,6 +677,46 @@ lemma p_BE_sums_to_one (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
 
 noncomputable def p_BE_fin (N M : ℕ) : Fin (Fintype.card (OmegaBE N M)) → NNReal :=
   fun _i => uniformProb (Fintype.card (OmegaBE N M))
+
+
+-- Helper lemma: the uniform distribution sums to 1
+lemma sum_uniform_eq_one {n : ℕ} (hn : n > 0) :
+  ∑ _i : Fin n, uniformProb n = 1 := by
+  simp only [uniformProb, dif_pos hn]
+  rw [Finset.sum_const, Finset.card_fin, nsmul_eq_mul]
+  rw [mul_inv_cancel₀]
+  apply Nat.cast_ne_zero.mpr
+  exact Nat.pos_iff_ne_zero.mp hn
+
+
+
+
+
+-- /-- Product of two uniform distributions is uniform on the product space. -/
+-- lemma uniformProb_product_uniformProb_is_uniformProb
+--     {n m : ℕ} (hn : n > 0) (hm : m > 0) :
+--     product_dist
+--         (fun _ : Fin n     => uniformProb n)
+--         (fun _ : Fin m     => uniformProb m)
+--       = (fun _ : Fin (n*m) => uniformProb (n * m)) := by
+--   -- point‑wise equality of functions on `Fin (n*m)`
+--   funext k
+--   /- 1 ▸ reduce to an identity in `NNReal` -/
+--   simp [product_dist, uniformProb, mul_pos hn hm]  -- goal: ↑n⁻¹ * ↑m⁻¹ = ↑(n*m)⁻¹
+
+--   /- 2 ▸ build the `≠ 0` hypotheses in `NNReal` via `exact_mod_cast` -/
+--   have hn_ne_zero : n ≠ 0 := (Nat.pos_iff_ne_zero).1 hn
+--   have hm_ne_zero : m ≠ 0 := (Nat.pos_iff_ne_zero).1 hm
+--   have h_n : (n : NNReal) ≠ 0 := by exact_mod_cast hn_ne_zero  -- `norm_cast` trick :contentReference[oaicite:0]{index=0}
+--   have h_m : (m : NNReal) ≠ 0 := by exact_mod_cast hm_ne_zero
+
+--   /- 3 ▸ convert the product of inverses to the inverse of a product -/
+--   -- The left factor is `↑m⁻¹ * ↑n⁻¹`, so we use the lemma with arguments in that order.
+--   rw [nnreal_inv_mul_inv_eq_inv_mul h_m h_n]
+
+--   /- 4 ▸ finish by rewriting inside the inverse and using commutativity -/
+--   rw [mul_comm] --`mul_comm` is a lemma that rewrites `a * b = b * a`
+--   simp [hn, hm, mul_comm, nnreal_coe_nat_mul n m]  -- evaluates the `if`s and rewrites `↑n * ↑m`
 
 /--
 Proves that the adapted Bose-Einstein probability distribution `p_BE_fin N M`
@@ -701,91 +739,136 @@ lemma p_BE_fin_sums_to_one (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
   exact sum_uniform_eq_one hk_pos
 
 
--- This lemma should be placed before H_BE_eq_C_shannon,
--- ideally in PPNP.Entropy.Common.lean or locally in PPNP.Entropy.RET if very specific.
--- For now, assuming it's defined within the PPNP.Entropy.RET namespace.
-lemma stdShannonEntropyLn_uniform_eq_log_card {k : ℕ} (hk_pos : k > 0) :
-    stdShannonEntropyLn (fun _ : Fin k => uniformProb k) = Real.log k := by
-  simp_rw [stdShannonEntropyLn, uniformProb, dif_pos hk_pos]
-  -- The term (uniformProb k : ℝ) simplifies to ((k : ℝ≥0)⁻¹ : ℝ) which is (k : ℝ)⁻¹
-  -- when hk_pos is used.
-  -- Goal is: ∑ (_x : Fin k), negMulLog ((k : ℝ)⁻¹) = Real.log k
-
-  have hk_real_pos : (k : ℝ) > 0 := Nat.cast_pos.mpr hk_pos
-  have hk_inv_real_pos : (k : ℝ)⁻¹ > 0 := inv_pos.mpr hk_real_pos
-
-  simp [Real.negMulLog, hk_inv_real_pos] -- Use Real.negMulLog definition and positivity hypothesis
-  -- The previous simp tactic has already simplified the sum and several subsequent steps.
-  -- The goal is now approximately: (k : ℝ) * ((k : ℝ)⁻¹ * Real.log k) = Real.log k
-
-  -- The proof continues from the state after the main simp:
-  -- Goal: (k : ℝ) * ((k : ℝ)⁻¹ * Real.log k) = Real.log k
-  rw [←mul_assoc] -- Changed from mul_assoc to ←mul_assoc
-  -- Goal: ((k : ℝ) * (k : ℝ)⁻¹) * Real.log k = Real.log k
-  have hk_real_ne_zero : (k : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr (Nat.pos_iff_ne_zero.mp hk_pos)
-  rw [mul_inv_cancel₀ hk_real_ne_zero]
-  -- Goal: 1 * Real.log k = Real.log k
-  rw [one_mul]
-  -- Goal: Real.log k = Real.log k (reflexivity)
-
 
 /--
-Helper lemma to show that applying an entropy function `H` to `p_BE_fin N M`
-is equivalent to evaluating `f H k hk_pos` where `k` is the cardinality of the state space.
+Helper lemma to show that `p_BE_fin N M` (which is `uniformProb k_card` for each entry)
+is pointwise equal to `uniformDist` on `Fin k_card`.
+This version uses a micro-lemma `Fintype_card_fin_pos` for clarity in the positivity argument.
 -/
-lemma H_p_BE_fin_eq_f_H_card (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) (N M : ℕ)
-    (k : ℕ) (hk_is_card : k = Fintype.card (OmegaBE N M)) (hk_pos : k > 0) :
-    H (p_BE_fin N M) = f H hk_pos := by
-  -- Unfold p_BE_fin on the LHS and f on the RHS.
-  unfold p_BE_fin f
-  -- After unfolding, the goal is approximately:
-  -- H (fun _ => uniformProb (Fintype.card (OmegaBE N M))) = H (fun _ => uniformProb k)
-  -- Now use the hypothesis hk_is_card to equate the arguments to H.
-  -- This rewrites `k` in `Fin k` and `uniformProb k` on the RHS.
-  rw [hk_is_card]
-  -- The arguments to H on both sides should now be identical, so rfl closes the goal.
-  -- H (fun _ => uniformProb (Fintype.card (OmegaBE N M))) = H (fun _ => uniformProb (Fintype.card (OmegaBE N M)))
+lemma p_BE_fin_is_uniformDist (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    let k_card := Fintype.card (OmegaBE N M)
+    have hk_card_pos : k_card > 0 := card_omega_be_pos N M h_domain_valid
+    -- The RHS now uses the clean Fintype_card_fin_pos lemma for its argument
+    p_BE_fin N M = uniformDist (Fintype_card_fin_pos hk_card_pos) := by
+  let k_card := Fintype.card (OmegaBE N M)
+  have hk_card_pos : k_card > 0 := card_omega_be_pos N M h_domain_valid
 
+  -- Prove by functional extensionality: show they are equal for any input `i`.
+  funext i
 
+  -- LHS processing:
+  -- Unfold p_BE_fin. The definition of p_BE_fin is:
+  --   noncomputable def p_BE_fin (N M : ℕ) : Fin (Fintype.card (OmegaBE N M)) → NNReal :=
+  --     fun _i => uniformProb (Fintype.card (OmegaBE N M))
+  -- So, (p_BE_fin N M i) becomes (uniformProb k_card).
+  -- Unfold uniformProb. The definition is:
+  --   noncomputable def uniformProb (n : ℕ) : NNReal :=
+  --     if _hn : n > 0 then (n⁻¹ : NNReal) else 0
+  -- So, (uniformProb k_card) becomes (if _hn : k_card > 0 then (k_card⁻¹ : NNReal) else 0).
+  -- Since we have `hk_card_pos : k_card > 0`, this simplifies to (k_card⁻¹ : NNReal).
+
+  -- RHS processing:
+  -- Unfold uniformDist. The definition is:
+  --   noncomputable def uniformDist {α : Type*} [Fintype α]
+  --       (_h_card_pos : 0 < Fintype.card α) : α → NNReal :=
+  --   λ _ ↦ (Fintype.card α : NNReal)⁻¹
+  -- Here, α is `Fin k_card`.
+  -- The argument `_h_card_pos` is `Fintype_card_fin_pos hk_card_pos`.
+  -- So, (uniformDist (Fintype_card_fin_pos hk_card_pos) i) becomes
+  --   (Fintype.card (Fin k_card) : NNReal)⁻¹.
+  -- Since `Fintype.card (Fin k_card)` is `k_card` (from `Fintype.card_fin`),
+  -- this becomes `(k_card : NNReal)⁻¹`.
+
+  -- The simp tactic should handle these unfoldings.
+  -- The crucial part is that the `if` on the LHS (from uniformProb) needs to be resolved.
+  simp only [p_BE_fin, uniformProb, uniformDist, Fintype.card_fin]
+  -- After this, the goal becomes:
+  -- `(if hk_card_pos' : k_card > 0 then (k_card : NNReal)⁻¹ else 0) = (k_card : NNReal)⁻¹`
+  -- where `hk_card_pos'` is the `_hn` from `uniformProb`.
+  -- We have `hk_card_pos : k_card > 0` in the context.
+  -- We need to tell Lean that `hk_card_pos'` is true because of `hk_card_pos`.
+  rw [dif_pos hk_card_pos]
 
 /--
-Applies Rota's Entropy Theorem to the (adapted) Bose-Einstein probability distribution `p_BE_fin`.
-It shows that for any entropy function `H` satisfying `IsEntropyFunction`,
-`H(p_BE_fin)` is equal to the Rota constant `C_constant H` multiplied by
-the standard Shannon entropy `stdShannonEntropyLn(p_BE_fin)`.
-
-This hinges on the fact that `p_BE_fin` is a uniform distribution, and for such distributions,
-`f H k = C * log k` (by RET) and `stdShannonEntropyLn (uniform k) = log k`.
+Helper lemma to show that applying an entropy function `H_func` to `p_BE_fin N M`
+(coerced to `Real`) is equivalent to evaluating `f0 H_func k_card` (coerced to `Real`),
+where `k_card` is the cardinality of the state space.
 -/
-theorem H_BE_eq_C_shannon (H : ∀ {n : ℕ}, (Fin n → NNReal) → Real) (hH_axioms : IsEntropyFunction H)
-    (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
-    H (p_BE_fin N M) = (C_constant H) * stdShannonEntropyLn (p_BE_fin N M) := by
-  let k := Fintype.card (OmegaBE N M)
-  have hk_pos : k > 0 := card_omega_be_pos N M h_domain_valid
+lemma H_p_BE_fin_eq_f_H_card (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0)
+    (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal)
+    (hH_axioms : IsEntropyFunction H_func) :
+    (H_func (p_BE_fin N M) : ℝ) = (f0 hH_axioms (Fintype.card (OmegaBE N M)) : ℝ) := by
+  let k_card := Fintype.card (OmegaBE N M)
+  have hk_card_pos : k_card > 0 := card_omega_be_pos N M h_domain_valid
 
-  -- LHS: H (p_BE_fin N M)
-  -- Use the helper lemma to equate H (p_BE_fin N M) with f H k hk_pos
-  have h_lhs_eq_f : H (p_BE_fin N M) = f H hk_pos :=
-    H_p_BE_fin_eq_f_H_card H N M k rfl hk_pos
+  -- Step 1: Rewrite LHS using p_BE_fin_is_uniformDist
+  -- This changes H_func(p_BE_fin N M) to H_func(uniformDist (Fintype_card_fin_pos hk_card_pos))
+  rw [p_BE_fin_is_uniformDist N M h_domain_valid]
 
-  -- Obtain the formula from RotaEntropyTheorem directly in terms of C_constant H
-  obtain ⟨_hC_nonneg, h_f_eq_C_log_direct⟩ :
-    (C_constant H) ≥ 0 ∧ ∀ (n : ℕ) (hn : n > 0), f H hn = (C_constant H) * Real.log n :=
-      RotaEntropyTheorem_formula_with_C_constant H hH_axioms
+  -- Step 2: Simplify the RHS.
+  -- We want to show: (f0 hH_axioms k_card : ℝ) = (H_func (uniformDist (Fintype_card_fin_pos hk_card_pos)) : ℝ)
+  -- First, unfold f0.
+  simp only [f0]
+  -- The RHS's NNReal part is now `if _hn : k_card > 0 then f hH_axioms _hn else 0`.
+  -- The coercion to Real distributes over the if: `if _hn : k_card > 0 then ↑(f hH_axioms _hn) else ↑0`.
+  -- Now, simplify the if using hk_card_pos.
+  rw [dif_pos hk_card_pos]
+  -- Now RHS is `↑(f hH_axioms hk_card_pos)`.
 
-  -- Specialize this formula to our k:
-  have h_f_k_eq_C_constant_H_log_k : f H hk_pos = (C_constant H) * Real.log k :=
-    h_f_eq_C_log_direct k hk_pos
+  -- Step 3: Unfold f on the RHS.
+  -- The term `f hH_axioms hk_card_pos` is defined as:
+  -- `let α_k_card := Fin k_card;
+  --  have h_card_pos_f_def : 0 < Fintype.card α_k_card := Fintype_card_fin_pos hk_card_pos;
+  --  H_func (uniformDist h_card_pos_f_def)`
+  -- This `uniformDist` uses `h_card_pos_f_def`, which is `Fintype_card_fin_pos hk_card_pos`.
+  -- The `uniformDist` on the LHS also uses `Fintype_card_fin_pos hk_card_pos`.
+  -- So, the arguments to H_func should be identical.
+  simp only [f]
+  -- After this, both sides should be `(H_func (uniformDist (Fintype_card_fin_pos hk_card_pos)) : ℝ)`.
+  -- Therefore, reflexivity should close the goal.
 
-  -- Substitute into LHS:
-  rw [h_lhs_eq_f, h_f_k_eq_C_constant_H_log_k]
-  -- LHS is now (C_constant H) * Real.log k
 
-  -- RHS: (C_constant H) * stdShannonEntropyLn (p_BE_fin N M)
-  -- By definition of p_BE_fin, this is (C_constant H) * stdShannonEntropyLn (fun _ : Fin k => uniformProb k)
-  -- Using stdShannonEntropyLn_uniform_eq_log_card:
-  have h_stdShannon_eq_log_k : stdShannonEntropyLn (p_BE_fin N M) = Real.log k := by
-    unfold p_BE_fin -- Show that p_BE_fin N M is indeed (fun _ => uniformProb k)
-    exact stdShannonEntropyLn_uniform_eq_log_card hk_pos
+theorem H_BE_eq_C_shannon (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    eval_H_phys_system_on_fin_dist_to_real (p_BE_fin N M) =
+      C_constant_real PPNP.Entropy.Physics.Common.H_physical_system_is_IsEntropyFunction *
+      stdShannonEntropyLn (p_BE_fin N M) := by
+  let k_card := Fintype.card (OmegaBE N M)
+  have hk_card_pos : k_card > 0 := card_omega_be_pos N M h_domain_valid
 
-  rw [h_stdShannon_eq_log_k]
+  let H_is_entropy_proof_fq := PPNP.Entropy.Physics.Common.H_physical_system_is_IsEntropyFunction
+
+  have h1 : eval_H_phys_system_on_fin_dist_to_real (p_BE_fin N M) =
+              (f0 H_is_entropy_proof_fq k_card : ℝ) := by
+    simp only [eval_H_phys_system_on_fin_dist_to_real]
+    exact H_p_BE_fin_eq_f_H_card N M h_domain_valid PPNP.Entropy.Physics.Common.H_physical_system H_is_entropy_proof_fq
+  rw [h1]
+
+  have h2_full := RotaUniformTheorem_formula_with_C_constant H_is_entropy_proof_fq
+  have h2_transform_f0 : (f0 H_is_entropy_proof_fq k_card : ℝ) =
+              C_constant_real H_is_entropy_proof_fq * Real.log k_card :=
+    h2_full.right k_card hk_card_pos
+  rw [h2_transform_f0]
+
+  have h_p_BE_fin_is_unif : p_BE_fin N M =
+      uniformDist (Fintype_card_fin_pos hk_card_pos) :=
+    p_BE_fin_is_uniformDist N M h_domain_valid
+
+  have h3_shannon_eq_log_k : stdShannonEntropyLn (p_BE_fin N M) = Real.log k_card := by
+    rw [h_p_BE_fin_is_unif]
+    -- LHS becomes: stdShannonEntropyLn (uniformDist (Fintype_card_fin_pos hk_card_pos))
+    -- We know from stdShannonEntropyLn_uniform_eq_log_card:
+    --   stdShannonEntropyLn (uniformDist (Fintype_card_fin_pos hk_card_pos)) = Real.log (Fintype.card (Fin k_card))
+    -- Goal is: Real.log k_card
+    -- So we need to show: Real.log (Fintype.card (Fin k_card)) = Real.log k_card
+    -- This follows if Fintype.card (Fin k_card) = k_card.
+
+    -- Apply stdShannonEntropyLn_uniform_eq_log_card first
+    rw [stdShannonEntropyLn_uniform_eq_log_card (Fintype_card_fin_pos hk_card_pos)]
+    -- Goal is now: Real.log (Fintype.card (Fin k_card)) = Real.log k_card
+
+    -- Now use the helper to change the argument of Real.log
+    rw [card_fin_eq_self k_card]
+    -- Goal is now: Real.log k_card = Real.log k_card
+
+
+  rw [h3_shannon_eq_log_k]

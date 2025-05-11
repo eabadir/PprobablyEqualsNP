@@ -35,9 +35,9 @@ open BigOperators Fin Real Topology NNReal Filter Nat Set
 
 
 
-/-- Coercing `ℕ` to `ℝ≥0` with `↑` is enough in Lean 4. -/
+/-- Coercing `ℕ` to `NNReal` with `↑` is enough in Lean 4. -/
 lemma nnreal_coe_nat_mul (n m : ℕ) :
-    ((n : ℝ≥0) * m) = (n * m : ℝ≥0) := by
+    ((n : NNReal) * m) = (n * m : NNReal) := by
   -- Step 1: reduce the goal to a statement about `ℝ`
   apply NNReal.eq          -- turns it into a goal about `Nat.cast`
   -- Step 2: rewrite with the coercion lemmas that ship with mathlib4
@@ -56,14 +56,14 @@ lemma nnreal_prod_inv_self_eq_one_prod {a b : NNReal} (ha : a ≠ 0) (hb : b ≠
 
 
 /-- Rearranges `(a * b) * (a⁻¹ * b⁻¹)` so that matching factors are adjacent. -/
-lemma nnreal_mul_prod_inv_prod_rearrange (a b : ℝ≥0) :
+lemma nnreal_mul_prod_inv_prod_rearrange (a b : NNReal) :
     (a * b) * (a⁻¹ * b⁻¹) = (a * a⁻¹) * (b * b⁻¹) := by
-  -- `ring` works in commutative semirings like `ℝ≥0`:
+  -- `ring` works in commutative semirings like `NNReal`:
   ring
 
-/-- Inverse of a product equals the product of inverses in `ℝ≥0`. -/
+/-- Inverse of a product equals the product of inverses in `NNReal`. -/
 lemma nnreal_inv_mul_inv_eq_inv_mul
-    {a b : ℝ≥0} (ha : a ≠ 0) (hb : b ≠ 0) :
+    {a b : NNReal} (ha : a ≠ 0) (hb : b ≠ 0) :
     a⁻¹ * b⁻¹ = (a * b)⁻¹ := by
   -- Reduce to proving `(a⁻¹ * b⁻¹) * (a * b) = 1`.
   apply eq_inv_of_mul_eq_one_left

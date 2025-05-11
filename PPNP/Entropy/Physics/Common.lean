@@ -40,7 +40,8 @@ def MBMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
 @[reducible] def SymFin (N M : ℕ) := Sym (Fin N) M
 
 -- This is the actual function that calculates entropy for a physical system's distribution.
-axiom H_physical_system : ∀ {n : ℕ}, (Fin n → NNReal) → Real
+-- It now has the type expected by IsEntropyFunction: (distribution over α) → NNReal
+axiom H_physical_system : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal
 
 -- This axiom states that the true entropy of physical systems behaves according to Rota's postulates.
 axiom H_physical_system_is_IsEntropyFunction : IsEntropyFunction H_physical_system
@@ -57,3 +58,12 @@ axiom H_physical_system_is_IsEntropyFunction : IsEntropyFunction H_physical_syst
   · -- inductive step: `s = insert b s'` with `b ∉ s'`
     intro b s' hb_not_mem ih
     simp [Finset.sum_insert hb_not_mem, Multiset.count_add, ih]
+
+noncomputable def eval_H_phys_system_on_fin_dist_to_real
+    {k : ℕ} (p_dist : Fin k → NNReal) : ℝ :=
+  (PPNP.Entropy.Physics.Common.H_physical_system (α := Fin k) p_dist : ℝ)
+
+
+-- Helper lemma from previous step (or ensure it's available)
+lemma card_fin_eq_self (k : ℕ) : Fintype.card (Fin k) = k := by
+  simp only [Fintype.card_fin]

@@ -30,1052 +30,890 @@ open BigOperators Fin Real Topology NNReal Filter Nat
 open PPNP.Common
 open PPNP.Entropy.Common
 
-/-!
-# Formalizing Rota's Uniqueness of Entropy Theorem
-**Goal:** Define `IsEntropyFunction` structure correctly, define `f n = H(uniform n)`,
-prove `f 1 = 0`, and prove `f` is monotone.
 
-**Correction:** Fixed all previous issues and added proof for `f0_mono`.
+/-! ### Phase 2: Properties of `f(n) = H(uniform_n)` -/
+
+-- Replaced: old `f` definition
+/--
+Defines `f H n = H(uniform distribution on n outcomes)`.
+`H` is an entropy function satisfying `IsEntropyFunction`.
+Requires `n > 0`. Output is `NNReal`.
 -/
+noncomputable def f {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func for clarity
+    (_hH_axioms : IsEntropyFunction H_func) {n : ℕ} (hn_pos : n > 0) : NNReal :=
+  let α_n := Fin n
+  have h_card_pos : 0 < Fintype.card α_n := by
+    rw [Fintype.card_fin]
+    exact hn_pos
+  H_func (uniformDist h_card_pos)
 
+-- Replaced: old `f0` definition
+/--
+Defines `f0 H n` which extends `f H n` to include `n=0` by setting `f0 H 0 = 0`.
+Output is `NNReal`.
+-/
+noncomputable def f0 {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
+    (hH_axioms : IsEntropyFunction H_func) (n : ℕ) : NNReal :=
+  if hn_pos : n > 0 then f hH_axioms hn_pos else 0
 
-/-- Define f(n) as the entropy H of the uniform distribution on n outcomes. Needs n > 0. -/
-noncomputable def f {n : ℕ} (H : ∀ {m : ℕ}, (Fin m → NNReal) → Real) (_hn : n > 0) : Real :=
-  H (λ _ : Fin n => uniformProb n)
+-- New helper
+/--
+Helper lemma: The uniform distribution on `Fin 1` is `λ _ => 1`.
+-/
+lemma uniformDist_fin_one_eq_dist_one :
+    uniformDist (by {rw [Fintype.card_fin]; exact Nat.one_pos} : 0 < Fintype.card (Fin 1)) =
+    (fun (_ : Fin 1) => 1) := by
+  funext x
+  simp only [uniformDist, Fintype.card_fin, Nat.cast_one, inv_one]
 
-/-- Define f₀(n) extending f to n=0. -/
-noncomputable def f₀ (H : ∀ {m : ℕ}, (Fin m → NNReal) → Real) (n : ℕ) : Real :=
-  if hn : n > 0 then f H hn else 0
+-- New helper
+/--
+Helper lemma: The distribution `λ (_ : Fin 1) => 1` sums to 1.
+-/
+lemma sum_dist_one_fin_one_eq_1 :
+    (∑ (_ : Fin 1), (1 : NNReal)) = 1 := by
+  simp [Finset.sum_const, Finset.card_fin, nsmul_one]
+
 
 
 /--
-Definition: The constant `C` relating `f₀` to `log`.
-It is defined as `f₀ H 2 / log 2` if the entropy function `H` is non-trivial
-(meaning `f₀` is not identically zero for `n ≥ 1`), and `0` otherwise.
-We use base `b=2` for the definition.
--/
-noncomputable def C_constant (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) : ℝ :=
-  -- Explicitly use Classical.propDecidable for the condition so we don't have to Open Classical
-  let _inst : Decidable (∃ n' ≥ 1, f₀ H n' ≠ 0) := Classical.propDecidable _
-  if _h : ∃ n' ≥ 1, f₀ H n' ≠ 0 then
-    f₀ H 2 / Real.log 2
-  else
-    0
+If `p_orig` sums to `1` on `Fin n`, the extension that appends a zero at
+index `n` still sums to `1`.  This Lean 4 version uses
+`Fin.sum_univ_castSucc` directly. -/
+lemma sum_p_ext_eq_one_of_sum_p_orig_eq_one
+    {n : ℕ} (p_orig : Fin n → NNReal) (hp : ∑ i, p_orig i = 1) :
+    (∑ i : Fin (n + 1),
+        (if h : (i : ℕ) < n then p_orig (Fin.castLT i h) else 0)) = 1 := by
+  -- Define the extended vector once so we can name it.
+  set p_ext : Fin (n + 1) → NNReal :=
+      fun i => if h : (i : ℕ) < n then p_orig (Fin.castLT i h) else 0
 
+  -- Canonical split of the sum over `Fin (n+1)`.
+  have h_split :
+      (∑ i, p_ext i) =
+        (∑ i : Fin n, p_ext i.castSucc) + p_ext (Fin.last n) := by
+        rw [Fin.sum_univ_castSucc]
 
+  -- The new last entry is zero.
+  have h_last : p_ext (Fin.last n) = 0 := by
+    simp [p_ext]
 
-/-- Core additivity property: `f₀(nm) = f₀(n) + f₀(m)`. -/
-theorem f0_mul_eq_add_f0 (hH : IsEntropyFunction H) {n m : ℕ} (hn : n ≥ 1) (hm : m ≥ 1) :
-    f₀ H (n * m) = f₀ H n + f₀ H m := by
-  -- 1. Derive positivity from hypotheses n ≥ 1, m ≥ 1
-  have hn_pos : n > 0 := one_le_iff_pos.mp hn
-  have hm_pos : m > 0 := one_le_iff_pos.mp hm
-  have hnm_pos : n * m > 0 := Nat.mul_pos hn_pos hm_pos
-
-  -- 2. Define the uniform distributions involved
-  let unif_n := fun (_ : Fin n) => uniformProb n
-  let unif_m := fun (_ : Fin m) => uniformProb m
-  let unif_nm := fun (_ : Fin (n * m)) => uniformProb (n * m)
-
-  -- 3. Verify the sum = 1 hypotheses for the component distributions
-  have h_sum_n : ∑ i, unif_n i = 1 := sum_uniform_eq_one hn_pos
-  have h_sum_m : ∑ i, unif_m i = 1 := sum_uniform_eq_one hm_pos
-
-  -- 4. Apply Axiom 4 (prop4_additivity_product)
-  have H_prod_eq_sum_H : H (product_dist unif_n unif_m) = H unif_n + H unif_m :=
-    hH.prop4_additivity_product unif_n unif_m h_sum_n h_sum_m
-
-  -- 5. Substitute the result that the product of uniforms is uniform
-  have prod_is_uniform : product_dist unif_n unif_m = unif_nm :=
-    uniformProb_product_uniformProb_is_uniformProb hn_pos hm_pos
-  rw [prod_is_uniform] at H_prod_eq_sum_H
-  -- Equation is now: H unif_nm = H unif_n + H unif_m
-
-  -- 6. Translate from H(uniform) to f₀ using definitions of f₀ and f
-  -- Goal: f₀ H (n * m) = f₀ H n + f₀ H m
-  -- LHS: f₀ H (n * m) = f H hnm_pos = H unif_nm (using dif_pos hnm_pos, and def of f)
-  -- RHS: f₀ H n + f₀ H m = f H hn_pos + f H hm_pos = H unif_n + H unif_m
-  -- So the goal becomes H unif_nm = H unif_n + H unif_m
-  -- We use simp_rw to apply these definitions and positivity proofs
-  simp_rw [f₀, dif_pos hn_pos, dif_pos hm_pos, dif_pos hnm_pos, f]
-  -- The goal now directly matches the derived equation H_prod_eq_sum_H
-  exact H_prod_eq_sum_H
-
--- Helper: Show the extended distribution for prop2 sums to 1 - Reuse from previous
-lemma sum_p_ext_eq_one {n : ℕ} {p : Fin n → NNReal} (hp_sum : ∑ i : Fin n, p i = 1) :
-    let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
-    (∑ i : Fin (n + 1), p_ext i) = 1 := by
-  intro p_ext
-  rw [Fin.sum_univ_castSucc]
-  have last_term_is_zero : p_ext (Fin.last n) = 0 := by
-    simp only [p_ext, Fin.val_last, lt_self_iff_false, dif_neg, not_false_iff]
-  rw [last_term_is_zero, add_zero]
-  have sum_eq : ∑ (i : Fin n), p_ext (Fin.castSucc i) = ∑ (i : Fin n), p i := by
+  -- The first summand coincides with the original sum.
+  have h_cast :
+      (∑ i : Fin n, p_ext i.castSucc) = ∑ i : Fin n, p_orig i := by
     apply Finset.sum_congr rfl
     intro i _
-    simp only [p_ext]
-    have h_lt : (Fin.castSucc i).val < n := by exact i.is_lt
-    rw [dif_pos h_lt, Fin.castLT_castSucc i h_lt]
-  rw [sum_eq]
-  exact hp_sum
+    have : ((i.castSucc : Fin (n + 1)) : ℕ) < n := by
+      rw [Fin.castSucc] -- Goal becomes i.val < n
+      exact i.is_lt         -- Proof of i.val < n
+    simp [p_ext, this, Fin.castLT_castSucc]
 
--- stdShannonEntropyLn lemma for extended distribution (used if we prove relation for stdShannonEntropyLn)
-lemma stdShannonEntropyLn_p_ext_eq_stdShannonEntropyLn {n : ℕ} (p : Fin n → NNReal) :
-    let p_ext := (λ i : Fin (n + 1) => if h : i.val < n then p (Fin.castLT i h) else 0)
-    stdShannonEntropyLn p_ext = stdShannonEntropyLn p := by
-  intro p_ext
-  simp_rw [stdShannonEntropyLn]
-  rw [Fin.sum_univ_castSucc]
-  have last_term_val_is_zero : p_ext (Fin.last n) = 0 := by
-    simp only [p_ext, Fin.val_last, lt_self_iff_false, dif_neg, not_false_iff]
-  rw [last_term_val_is_zero, NNReal.coe_zero, negMulLog_zero, add_zero]
-  apply Finset.sum_congr rfl
-  intro i _
-  apply congr_arg negMulLog
-  apply NNReal.coe_inj.mpr
-  simp only [p_ext]
-  have h_lt : (Fin.castSucc i).val < n := by exact i.is_lt
-  rw [dif_pos h_lt, Fin.castLT_castSucc i h_lt]
+  -- Put the pieces together.
+  simp [h_split, h_last, h_cast, hp, p_ext]
 
 
+/--
+Property: `f0 H 1 = 0`.
+This follows from the `normalized` axiom of `IsEntropyFunction`.
+-/
+theorem f0_1_eq_0 {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) : f0 hH_axioms 1 = 0 := by
+  have h1_pos : 1 > 0 := Nat.one_pos
+  -- Unfold f0 using h1_pos
+  simp only [f0, dif_pos h1_pos]
+  -- Unfold f
+  simp only [f]
+  -- Rewrite the uniform distribution on Fin 1
+  rw [uniformDist_fin_one_eq_dist_one]
+  -- Apply the normalization axiom
+  exact hH_axioms.normalized (fun (_ : Fin 1) => 1) sum_dist_one_fin_one_eq_1
 
-
--- ##################################################
--- Basic Properties of f₀(n)
--- ##################################################
-
-/-- Property: f₀(1) = 0 -/
-theorem f0_1_eq_0 (hH : IsEntropyFunction H) : f₀ H 1 = 0 := by
-  have h1 : 1 > 0 := Nat.one_pos
-  simp only [f₀, dif_pos h1, f]
-  have h_unif1_func : (λ _ : Fin 1 => uniformProb 1) = (λ _ : Fin 1 => 1) := by
-    funext i
-    simp only [uniformProb, dif_pos h1, Nat.cast_one, inv_one]
-  rw [h_unif1_func]
-  exact hH.prop0_H1_eq_0
-
-/-- Property: f₀ is monotone non-decreasing -/
-theorem f0_mono (hH : IsEntropyFunction H) : Monotone (f₀ H) := by
-  -- Use monotone_nat_of_le_succ: prove f₀ n ≤ f₀ (n + 1) for all n
+/--
+Property: `f0 H n` is monotone non-decreasing.
+Uses `zero_invariance` and `max_uniform` axioms.
+-/
+theorem f0_mono {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) : Monotone (f0 hH_axioms) := by
   apply monotone_nat_of_le_succ
   intro n
-  -- Case split on n
-  if hn_zero : n = 0 then
-    -- Case n = 0: Need f₀ 0 ≤ f₀ 1
-    rw [hn_zero]
-    rw [f0_1_eq_0 hH] -- f₀ 1 = 0
-    simp only [f₀, dif_neg (Nat.not_lt_zero 0)]
-    exact le_refl 0 -- 0 ≤ 0
+  -- Case n = 0
+  if hn_is_zero : n = 0 then
+    rw [hn_is_zero] -- Goal: f0 hH_axioms 0 ≤ f0 hH_axioms (0 + 1)
+    simp [Nat.add_zero] -- Goal: f0 hH_axioms 0 ≤ f0 hH_axioms 1
+
+    -- Simplify RHS using f0_1_eq_0
+    have h0_1_eq_0 : f0 hH_axioms 1 = 0 := f0_1_eq_0 hH_axioms
+    rw [h0_1_eq_0] -- Goal: f0 hH_axioms 0 ≤ 0
+
+    -- Simplify LHS: f0 hH_axioms 0 is 0 by definition of f0
+    simp [f0, Nat.not_lt_zero] -- Goal: 0 ≤ 0
   else
-    -- Case n ≥ 1: Need f₀ n ≤ f₀ (n + 1)
-    -- Get proofs that n > 0 and n + 1 > 0
-    have hn_pos : n > 0 := Nat.pos_of_ne_zero hn_zero
+    -- Case n > 0
+    have hn_pos : n > 0 := Nat.pos_of_ne_zero hn_is_zero
     have hn1_pos : n + 1 > 0 := Nat.succ_pos n
 
-    -- Unfold f₀ for n and n + 1
-    have f0_n_def : f₀ H n = f H hn_pos := dif_pos hn_pos
-    have f0_n1_def : f₀ H (n + 1) = f H hn1_pos := dif_pos hn1_pos
-    rw [f0_n_def, f0_n1_def] -- Now goal is f H hn_pos ≤ f H hn1_pos
-    simp_rw [f] -- Unfold f: goal is H (uniform n) ≤ H (uniform (n+1))
+    -- Unfold f0 for n and n+1
+    rw [f0, dif_pos hn_pos, f0, dif_pos hn1_pos]
+    -- Goal: f hH_axioms hn_pos ≤ f hH_axioms hn1_pos
+    -- This is H (uniformDist_on_Fin_n) ≤ H (uniformDist_on_Fin_{n+1})
 
-    -- Define the uniform distribution on n outcomes
-    let unif_n := (λ _ : Fin n => uniformProb n)
-    -- Define the extended distribution p on n+1 outcomes
-    let p := (λ i : Fin (n + 1) => if h : i.val < n then unif_n (Fin.castLT i h) else 0)
+    -- Let unif_n be the uniform distribution on Fin n
+    let α_n := Fin n
+    have h_card_n_pos : 0 < Fintype.card α_n := by
+      unfold α_n
+      simp only [Fintype.card_fin, hn_pos]
+    let unif_n_dist := uniformDist h_card_n_pos
 
-    -- Show p sums to 1
-    have h_sum_n : ∑ i : Fin n, unif_n i = 1 := sum_uniform_eq_one hn_pos
-    have h_sum_p : ∑ i : Fin (n + 1), p i = 1 := sum_p_ext_eq_one h_sum_n
+    -- Let p_ext be unif_n_dist extended with a zero to Fin (n+1)
+    let p_ext : Fin (n+1) → NNReal :=
+      fun (i : Fin (n+1)) => if h_lt : i.val < n then unif_n_dist (Fin.castLT i h_lt) else 0
 
-    -- Relate H p to H (uniform n) using Property 2
-    have h_p_eq_H_unif_n : H p = H unif_n := by
-       -- Need to provide the explicit function H to prop2_zero_inv
-       exact hH.prop2_zero_inv unif_n h_sum_n
+    -- Show p_ext sums to 1
+    have h_sum_unif_n_dist : (∑ i, unif_n_dist i) = 1 := sum_uniformDist h_card_n_pos
+    have h_sum_p_ext_eq_1 : (∑ i, p_ext i) = 1 :=
+      sum_p_ext_eq_one_of_sum_p_orig_eq_one unif_n_dist h_sum_unif_n_dist
 
-    -- Relate H p to H (uniform n+1) using Property 5
-    -- Direct application of prop5 and simplify uniformProb
-    have h_p_le_H_unif_n1 : H p ≤ H (λ _ : Fin (n + 1) => uniformProb (n + 1)) := by
-      have h5 := hH.prop5_max_uniform hn1_pos p h_sum_p
-      simpa [uniformProb, hn1_pos] using h5
+    -- Relate H p_ext to H unif_n_dist using zero_invariance
+    -- hH_axioms.zero_invariance requires p_orig (unif_n_dist) and its sum.
+    have h_H_p_ext_eq_H_unif_n : H p_ext = H unif_n_dist := by
+      -- The let binding in zero_invariance means we need to match the definition
+      -- or prove our p_ext is equivalent to the one in the axiom.
+      -- The axiom structure is:
+      -- zero_invariance: ∀ {m : ℕ} (p_orig_ax : Fin m → NNReal) (_hp_sum_1_ax : ∑ i, p_orig_ax i = 1),
+      --   let p_ext_ax := (fun (i : Fin (m + 1)) => ...); H p_ext_ax = H p_orig_ax
+      -- Here, m = n, p_orig_ax = unif_n_dist.
+      -- Our p_ext is definitionally the same as p_ext_ax.
+      exact hH_axioms.zero_invariance unif_n_dist h_sum_unif_n_dist
 
-    -- Combine the results: H (uniform n) = H p ≤ H (uniform n+1)
-    rw [← h_p_eq_H_unif_n] -- Replace H (uniform n) with H p
-    exact h_p_le_H_unif_n1 -- The goal is now exactly this inequality
+    -- Relate H p_ext to H (uniformDist_on_Fin_{n+1}) using max_uniform
+    let α_n1 := Fin (n+1)
+    have h_card_n1_pos : 0 < Fintype.card α_n1 := by
+      unfold α_n1
+      simp only [Fintype.card_fin, hn1_pos]
+    let unif_n1_dist := uniformDist h_card_n1_pos
 
-/-!
-Chunk 1 Completed. Next Step: Chunk 2 - The Power Law `f₀(n^k) = k * f₀(n)`.
+    have h_H_p_ext_le_H_unif_n1 : H p_ext ≤ H unif_n1_dist := by
+      -- max_uniform: ∀ {α} [Fintype α] (h_card_α_pos) (p_check) (h_sum_p_check), H p_check ≤ H (uniformDist h_card_α_pos)
+      -- Here, α = Fin (n+1), p_check = p_ext.
+      exact hH_axioms.max_uniform h_card_n1_pos p_ext h_sum_p_ext_eq_1
+
+    -- Combine: H unif_n_dist = H p_ext ≤ H unif_n1_dist
+    -- The goal is f hH_axioms hn_pos ≤ f hH_axioms hn1_pos.
+    -- We show this is definitionally H unif_n_dist ≤ H unif_n1_dist.
+    change H unif_n_dist ≤ H unif_n1_dist
+    rw [← h_H_p_ext_eq_H_unif_n] -- Goal is now H p_ext ≤ H unif_n1_dist
+    exact h_H_p_ext_le_H_unif_n1
+
+-- New helper
+/--
+Helper function: Defines P(i,j) = prior(i) * q_const(j) using DependentPairDist.
 -/
+noncomputable def dependentPairDist_of_independent
+  {N M : ℕ} [hN : NeZero N] [hM : NeZero M]
+  (prior : Fin N → NNReal) (q_const : Fin M → NNReal) :
+  Fin (N * M) → NNReal :=
+  @DependentPairDist N M hN hM prior (fun _i => q_const)
+
+-- New helper
+/--
+If weights `w` sum to `1`, then `∑ w i * C = C`.
+-/
+lemma sum_weighted_constant {β : Type*} [Fintype β]
+    {C_val : NNReal} {w : β → NNReal} (h_w_sum_1 : ∑ i, w i = 1) : -- Renamed C to C_val
+    (∑ i, w i * C_val) = C_val := by
+  rw [← Finset.sum_mul, h_w_sum_1, one_mul]
+
+-- New derivation (replaces logic of old prop4_additivity_product)
+/--
+If P(j|i) = q_const(j), then H(joint) = H(prior) + H(q_const).
+-/
+lemma cond_add_for_independent_distributions
+    {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
+    (hH_axioms : IsEntropyFunction H_func)
+    {N M : ℕ} [NeZero N] [NeZero M]
+    (prior : Fin N → NNReal) (q_const : Fin M → NNReal)
+    (hprior_sum_1 : ∑ i, prior i = 1) (hq_const_sum_1 : ∑ j, q_const j = 1) :
+    H_func (dependentPairDist_of_independent prior q_const)
+      = H_func prior + H_func (α := Fin M) q_const := by
+  simp only [dependentPairDist_of_independent]
+  rw [hH_axioms.cond_add prior (fun _ => q_const) (fun _ => hq_const_sum_1) hprior_sum_1]
+  rw [sum_weighted_constant hprior_sum_1]
+
+
+-- This helper can be local to f0_mul_eq_add_f0 proof or kept if generally useful
+-- noncomputable def DependentPairDist_of_independent_helper -- From Phase 2, might not be needed if  is direct.
+--   {N M : ℕ} (hN_pos : N > 0) (hM_pos : M > 0) :
+--   Fin (N * M) → NNReal :=
+--   haveI : NeZero N := NeZero.of_pos hN_pos
+--   haveI : NeZero M := NeZero.of_pos hM_pos
+--   let prior_dist := uniformDist (by {rw [Fintype.card_fin]; exact hN_pos})
+--   let q_const_dist := uniformDist (by {rw [Fintype.card_fin]; exact hM_pos})
+--   dependentPairDist_of_independent prior_dist q_const_dist
+
+-- Replaced: old `uniformProb_product_uniformProb_is_uniformProb`
+-- This version is more direct for the proof of f0_mul_eq_add_f0.
+
+/--
+Helper Lemma: The joint distribution of two independent uniform random variables
+(on Fin N and Fin M) is equivalent to a uniform distribution on Fin (N*M).
+The result of `dependentPairDist_of_independent (uniformDist_N) (uniformDist_M)`
+is pointwise equal to `uniformDist_NM`.
+-/
+lemma joint_uniform_is_flat_uniform
+    {N M : ℕ} (hN_pos : N > 0) (hM_pos : M > 0) :
+    -- Local NeZero instances for the definition
+    haveI : NeZero N := NeZero.of_pos hN_pos
+    haveI : NeZero M := NeZero.of_pos hM_pos
+    let unif_N_dist := uniformDist (by simp only [Fintype.card_fin]; exact hN_pos : 0 < Fintype.card (Fin N))
+    let unif_M_dist := uniformDist (by simp only [Fintype.card_fin]; exact hM_pos : 0 < Fintype.card (Fin M))
+    let joint_dist := dependentPairDist_of_independent unif_N_dist unif_M_dist
+    let flat_uniform_dist := uniformDist (by simp only [Fintype.card_fin]; exact Nat.mul_pos hN_pos hM_pos : 0 < Fintype.card (Fin (N * M)))
+    joint_dist = flat_uniform_dist := by
+  -- Functional extensionality
+  funext k
+
+  -- Unfold all relevant definitions.
+  -- `simp` will unfold `joint_dist`, `unif_N_dist`, `unif_M_dist`, `flat_uniform_dist`
+  -- as they are let-expressions in the goal.
+  simp only [dependentPairDist_of_independent, DependentPairDist, uniformDist]
+
+  -- At this point, the goal should be:
+  -- (Fintype.card (Fin N))⁻¹ * (Fintype.card (Fin M))⁻¹ = (Fintype.card (Fin (N * M)))⁻¹
+
+  -- Simplify Fintype.card values
+  simp only [Fintype.card_fin]
+  -- Goal: (↑N)⁻¹ * (↑M)⁻¹ = (↑(N * M))⁻¹
+
+  -- Use NNReal properties for inverses and Nat.cast properties
+  simp [Nat.cast_mul, mul_comm] -- Changes LHS to (↑N * ↑M)⁻¹
+
+
+
+/--
+Property: `f0 H (n*m) = f0 H n + f0 H m` for `n, m > 0`.
+This is derived from the conditional additivity axiom for independent distributions.
+Output is `NNReal`.
+-/
+theorem f0_mul_eq_add_f0 {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) {n m : ℕ} (hn_pos : n > 0) (hm_pos : m > 0) :
+    f0 hH_axioms (n * m) = f0 hH_axioms n + f0 hH_axioms m := by
+  -- Step 1: Handle positivity and unfold f0
+  have hnm_pos : n * m > 0 := Nat.mul_pos hn_pos hm_pos
+  simp only [f0, dif_pos hn_pos, dif_pos hm_pos, dif_pos hnm_pos]
+  -- Goal: f hH_axioms hnm_pos = f hH_axioms hn_pos + f hH_axioms hm_pos
+
+  -- Step 2: Define the uniform distributions involved
+  -- For f hH_axioms hn_pos (uniform on Fin n)
+  let card_n_pos_proof : 0 < Fintype.card (Fin n) := by simp [hn_pos]
+  let unif_n_dist := uniformDist card_n_pos_proof
+
+  -- For f hH_axioms hm_pos (uniform on Fin m)
+  let card_m_pos_proof : 0 < Fintype.card (Fin m) := by simp [hm_pos]
+  let unif_m_dist := uniformDist card_m_pos_proof
+
+  -- For f hH_axioms hnm_pos (uniform on Fin (n*m))
+  let card_nm_pos_proof : 0 < Fintype.card (Fin (n*m)) := by simp [hnm_pos]
+  let unif_nm_dist := uniformDist card_nm_pos_proof
+
+  -- Step 3: Rewrite the goal in terms of H applied to these distributions
+  -- LHS: H (α := Fin (n*m)) unif_nm_dist
+  -- RHS: H (α := Fin n) unif_n_dist + H (α := Fin m) unif_m_dist
+  change H (α := Fin (n*m)) unif_nm_dist = H (α := Fin n) unif_n_dist + H (α := Fin m) unif_m_dist
+
+  -- Step 4: Apply conditional additivity for independent distributions
+  -- Need sum = 1 proofs for unif_n_dist and unif_m_dist
+  have h_sum_unif_n : (∑ i, unif_n_dist i) = 1 := sum_uniformDist card_n_pos_proof
+  have h_sum_unif_m : (∑ i, unif_m_dist i) = 1 := sum_uniformDist card_m_pos_proof
+
+  -- Create local NeZero instances required by cond_add_for_independent_distributions
+  haveI : NeZero n := NeZero.of_pos hn_pos
+  haveI : NeZero m := NeZero.of_pos hm_pos
+
+  have h_add_indep :
+      H (dependentPairDist_of_independent unif_n_dist unif_m_dist) =
+        H (α := Fin n) unif_n_dist + H (α := Fin m) unif_m_dist :=
+    cond_add_for_independent_distributions hH_axioms unif_n_dist unif_m_dist h_sum_unif_n h_sum_unif_m
+
+  -- Step 5: Rewrite the RHS of the main goal using h_add_indep
+  rw [← h_add_indep]
+  -- Goal: H (α := Fin (n*m)) unif_nm_dist = H (dependentPairDist_of_independent unif_n_dist unif_m_dist)
+
+  -- Step 6: Prove that unif_nm_dist is the same as the joint distribution
+  -- This uses the helper lemma joint_uniform_is_flat_uniform
+  have h_dist_eq : dependentPairDist_of_independent unif_n_dist unif_m_dist = unif_nm_dist := by
+    -- We need to match the statement of joint_uniform_is_flat_uniform
+    -- joint_uniform_is_flat_uniform states:
+    --   (dependentPairDist_of_independent unif_N unif_M) = unif_NM
+    -- Here, our unif_n_dist and unif_m_dist are already defined correctly.
+    -- The equality is direct from the lemma.
+    exact joint_uniform_is_flat_uniform hn_pos hm_pos
+
+  -- Step 7: Apply the distribution equality to the goal
+  rw [h_dist_eq]
+  -- Goal: H (α := Fin (n*m)) unif_nm_dist = H (α := Fin (n*m)) unif_nm_dist (by rfl)
+
+
 
 /-!
-### Chunk 2: The Power Law `f₀(n^k) = k * f₀(n)`
+Helper lemma for the inductive step of `uniformEntropy_power_law_new`.
+Shows `f0 H (n^(m+1)) = f0 H (n^m) + f0 H n`.
+-/
+lemma f0_pow_succ_step {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) {n m : ℕ} (hn_pos : n > 0) (_hm_pos : m > 0) :
+    f0 hH_axioms (n ^ (m + 1)) = f0 hH_axioms (n ^ m) + f0 hH_axioms n := by
+  -- Assuming pow_succ' n m results in n * n^m based on the error message.
+  -- If it results in n^m * n, the original argument order for f0_mul_eq_add_f0_new was correct,
+  -- and the issue might be more subtle or the error message slightly misleading.
+  -- Proceeding based on the error message's "with" clause indicating goal has n * n^m.
+  rw [pow_succ' n m] -- This should be n * n^m if the error message is precise about the goal state
 
-**Step 1: State the Assumed Lemma (Consequence of Prop 4)**
-**Step 2: Prove the Main Power Law `uniformEntropy_power_law`**
- Assumed step relation derived from Property 4 (Conditional Entropy). -/
+  -- Apply f0_mul_eq_add_f0_new. Need hypotheses for it:
+  -- 1. n^m > 0
+  have h_pow_nm_pos : n ^ m > 0 := by
+    exact Nat.pow_pos hn_pos -- The exponent m is implicit here
+  -- 2. n > 0 (given by hn_pos)
 
-lemma uniformEntropy_product_recursion {n k : ℕ} (hH : IsEntropyFunction H) (hn : n ≥ 1) (_hk : k ≥ 1) : -- hk is not used here but kept for consistency
-    f₀ H (n ^ (k + 1)) = f₀ H (n ^ k) + f₀ H n := by
-  -- Rewrite n^(k+1) as n * n^k to match f0_mul_eq_add_f0's a * b form
-  rw [pow_succ'] -- n^(k+1) = n * n^k
+  -- Apply the multiplicative property.
+  -- The factors in the goal's LHS (n * n^m) are n and n^m.
+  -- Their positivity proofs are hn_pos and h_pow_nm_pos respectively.
+  rw [f0_mul_eq_add_f0 hH_axioms hn_pos h_pow_nm_pos]
+  -- The goal is now:
+  -- f0 hH_axioms n + f0 hH_axioms (n ^ m) = f0 hH_axioms (n ^ m) + f0 hH_axioms n
+  rw [add_comm (f0 hH_axioms n) (f0 hH_axioms (n ^ m))]
 
-  -- Prove the hypothesis n^k ≥ 1 needed for f0_mul_eq_add_f0
-  have hnk_ge1 : n ^ k ≥ 1 := by
-    -- Use the provided Nat.one_le_pow lemma
-    exact Nat.one_le_pow k n hn
 
-  -- Apply the core additivity theorem f0_mul_eq_add_f0 H n (n^k)
-  -- Need arguments H, n, n^k and hypotheses n ≥ 1 (hn) and n^k ≥ 1 (hnk_ge1)
-  have h_add := f0_mul_eq_add_f0 hH hn hnk_ge1
-  -- h_add: f₀ H (n * n ^ k) = f₀ H n + f₀ H (n ^ k)
 
-  -- Rewrite the goal using h_add and commutativity of addition
-  rw [h_add, add_comm] -- Goal: f₀ H n + f₀ H (n ^ k) = f₀ H (n ^ k) + f₀ H n
-  -- The goal is now identical.
 
-/-- Power law for `f₀`: `f₀(n^k) = k * f₀(n)`. -/
+/-
+The proof is by induction on `k`, using the “multiplicativity ⇒
+additivity” lemma `f0_pow_succ_step` and the distributive identity
+`add_mul`.  All algebra is carried out in `NNReal`, so no special coercions
+are needed.
+-/
 theorem uniformEntropy_power_law
-  (_hH : IsEntropyFunction H) {n k : ℕ} (hn : n ≥ 1) (hk : k ≥ 1) :
-    f₀ H (n ^ k) = (k : ℝ) * f₀ H n := by
-  -- predicate we will induct on
-  let P : ℕ → Prop := fun m ↦ f₀ H (n ^ m) = (m : ℝ) * f₀ H n
+    {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H)
+    {n k : ℕ} (hn_pos : n > 0) (hk_pos : k > 0) :
+    f0 hH_axioms (n ^ k) = (k : NNReal) * f0 hH_axioms n := by
+  ------------------------------------------------------------------
+  --  Step 0  ·  Rephrase the goal as a proposition `P k`.
+  ------------------------------------------------------------------
+  let P : ℕ → Prop :=
+    fun k' ↦ f0 hH_axioms (n ^ k') = (k' : NNReal) * f0 hH_axioms n
 
-  -- base : `k = 1`
+  ------------------------------------------------------------------
+  --  Step 1  ·  Establish the base case  k = 1.
+  ------------------------------------------------------------------
   have base : P 1 := by
-    simp [P, pow_one]
+    simp [P, pow_one, Nat.cast_one, one_mul]
 
-  -- step : `m ≥ 1 → P m → P (m + 1)`
-  have step : ∀ m, 1 ≤ m → P m → P (m + 1) := by
-    intro m hm ih
-    -- unfold the predicate
-    simp [P] at ih ⊢
-    -- entropy step (using the proven recursion)
-    -- Correctly pass the IsEntropyFunction instance _hH first
-    have hstep := uniformEntropy_product_recursion _hH hn hm -- Corrected line
-    -- hstep: f₀ H (n ^ (m + 1)) = f₀ H (n ^ m) + f₀ H n
+  ------------------------------------------------------------------
+  --  Step 2  ·  Prove the inductive step  P m → P (m+1)  for m ≥ 1.
+  ------------------------------------------------------------------
+  have step : ∀ m, m ≥ 1 → P m → P (m + 1) := by
+    intro m hm_ge1 hPm       -- inductive hypothesis `hPm`
+    -- positivity of `m`
+    have hm_pos : m > 0 := hm_ge1
 
-    -- rewrite with the step relation and IH
-    rw [hstep, ih] -- Goal: ↑m * f₀ H n + f₀ H n = ↑(m + 1) * f₀ H n
-    -- Simplify using ring tactic or explicit algebra
-    ring -- Applies distributive law
+    -- use the additive recursion lemma
+    have h_rec := f0_pow_succ_step hH_axioms hn_pos hm_pos
+        -- `h_rec : f0 … (n^(m+1)) = f0 … (n^m) + f0 … n`
 
-  -- perform the induction starting at 1
-  simpa [P] using
-    Nat.le_induction (m := 1)
-      base
-      (fun m hm ih => step m hm ih)
-      k
-      hk
+    -- rewrite the right-hand `f0 n^m` via the I.H.
+    have h_rw : f0 hH_axioms (n ^ (m + 1)) =
+                (m : NNReal) * f0 hH_axioms n + f0 hH_axioms n := by
+      rw [h_rec] -- Goal: f0 hH_axioms (n^m) + f0 hH_axioms n = (↑m) * f0 hH_axioms n + f0 hH_axioms n
+      rw [hPm]   -- Goal: (↑m) * f0 hH_axioms n + f0 hH_axioms n = (↑m) * f0 hH_axioms n + f0 hH_axioms n
+                 -- This is true by reflexivity.
 
+    -- Factor the common `f0 hH_axioms n` using `add_mul`.
+    -- (↑m + 1) * C   =   ↑m * C + 1 * C
+    have h_factor :
+        (m : NNReal) * f0 hH_axioms n + f0 hH_axioms n =
+        ((m + 1 : ℕ) : NNReal) * f0 hH_axioms n := by
+      -- turn the lone `f0` into `1 * f0`, then apply `add_mul`
+      simpa [one_mul, add_mul, Nat.cast_add, Nat.cast_one] using
+        congrArg (fun x => x) (rfl :
+          (m : NNReal) * f0 hH_axioms n + 1 * f0 hH_axioms n =
+          ((m : NNReal) + 1) * f0 hH_axioms n)
 
+    -- Combine the two equalities
+    simpa [P] using h_rw.trans h_factor
 
-/-- Lemma: `f₀ H b ≥ 0` for `b ≥ 1`. -/
-lemma f0_nonneg (hH : IsEntropyFunction H) {b : ℕ} (hb : b ≥ 1) : f₀ H b ≥ 0 := by
-  have h_mono_prop : Monotone (f₀ H) := f0_mono hH
-  have h_mono_ineq : f₀ H 1 ≤ f₀ H b := h_mono_prop hb
-  have h_f0_1_zero : f₀ H 1 = 0 := f0_1_eq_0 hH
-  rw [h_f0_1_zero] at h_mono_ineq
-  exact h_mono_ineq
-
-/-!
-### The Trapping Argument Setup
--/
-
-
-/-!
-### Chunk 3.3: Inequalities from Trapping `f₀ H (n^m)`
-Derive `(k/m) * f₀ H b ≤ f₀ H n ≤ ((k+1)/m) * f₀ H b` (or similar, being careful about division).
-This is the core step relating `f₀ H n` and `f₀ H b` via the integer bounds.
--/
+  ------------------------------------------------------------------
+  --  Step 3  ·  Apply `Nat.le_induction` starting from k = 1.
+  ------------------------------------------------------------------
+  have hk_ge1 : k ≥ 1 := Nat.one_le_of_lt hk_pos
+  have : P k := Nat.le_induction base step k hk_ge1
+  simpa [P] using this
 
 
-/- Lemma: `f₀ H b > 0` if `H` is not identically zero and `b ≥ 2`.
-### Chunk 3.3a: Breaking down uniformEntropy_pos_of_nontrivial
--/
+-- Replaced: old `f0_nonneg`
+/-- Property: `f0 H n ≥ 0` for `n ≥ 1`. (Trivial since `f0` outputs `NNReal`). -/
+lemma f0_nonneg {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
+    (hH_axioms : IsEntropyFunction H_func) {n : ℕ} (_hn_ge1 : n ≥ 1) :
+    ((f0 hH_axioms n) : ℝ) ≥ 0 := -- Coerced to Real for comparison with old version.
+  NNReal.coe_nonneg _
 
-/-- Lemma 1: If f₀ H b = 0 for some b ≥ 2, then f₀ H 2 = 0. -/
-lemma f0_2_eq_zero_of_f0_b_eq_zero {b : ℕ} (hH : IsEntropyFunction H) (hb : b ≥ 2) (hf0b_eq_0 : f₀ H b = 0) :
-    f₀ H 2 = 0 := by
-  -- Get monotonicity and non-negativity properties using hH
-  have h_mono := f0_mono hH
-  have h_f0_2_ge_0 : f₀ H 2 ≥ 0 := f0_nonneg hH (by linarith : 2 ≥ 1)
+-- Replaced: old `f0_2_eq_zero_of_f0_b_eq_zero`
+/-- If `f0 H b = 0` for `b ≥ 2`, then `f0 H 2 = 0`. Output `NNReal`. -/
+lemma f0_2_eq_zero_of_f0_b_eq_zero {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
+    (hH_axioms : IsEntropyFunction H_func) {b : ℕ} (hb_ge2 : b ≥ 2) (hf0b_eq_0 : f0 hH_axioms b = 0) :
+    f0 hH_axioms 2 = 0 := by
+  have h_mono := f0_mono hH_axioms
+  have h_f0_2_ge_0 : f0 hH_axioms 2 ≥ 0 := zero_le (f0 hH_axioms 2)
+  have h2_le_b : 2 ≤ b := by linarith
+  have h_f0_2_le_b : f0 hH_axioms 2 ≤ f0 hH_axioms b := h_mono h2_le_b
+  rw [hf0b_eq_0] at h_f0_2_le_b
+  exact le_antisymm h_f0_2_le_b h_f0_2_ge_0
 
-  -- Apply monotonicity: f₀(2) ≤ f₀(b) since 2 ≤ b
-  have h_f0_2_le_b : f₀ H 2 ≤ f₀ H b := h_mono hb
-
-  -- Combine inequalities: 0 ≤ f₀ H 2 ≤ f₀ H b = 0
-  -- Rewrite with the assumption f₀ H b = 0
-  rw [hf0b_eq_0] at h_f0_2_le_b -- Now have f₀ H 2 ≤ 0
-
-  -- Conclude f₀ H 2 = 0 using antisymmetry (or linarith)
-  -- We have f₀ H 2 ≥ 0 and f₀ H 2 ≤ 0
-  linarith [h_f0_2_ge_0, h_f0_2_le_b]
-
-/-!
-### Chunk 3.3b: Breaking down uniformEntropy_pos_of_nontrivial
--/
-
-/-- Lemma 2: If f₀ H 2 = 0, then f₀ H (2^k) = 0 for all k ≥ 1. -/
-lemma f0_pow2_eq_zero_of_f0_2_eq_zero {k : ℕ} (hH : IsEntropyFunction H) (hf0_2_eq_0 : f₀ H 2 = 0) (hk : k ≥ 1) :
-    f₀ H (2 ^ k) = 0 := by
-  -- Apply the power law f₀(n^k) = k * f₀(n) with n=2
-  have h_pow_law := uniformEntropy_power_law hH (by norm_num : 2 ≥ 1) hk
-  -- h_pow_law : f₀ H (2 ^ k) = ↑k * f₀ H 2
-
-  -- Substitute the assumption f₀ H 2 = 0
-  rw [hf0_2_eq_0] at h_pow_law
-  -- h_pow_law : f₀ H (2 ^ k) = ↑k * 0
-
-  -- Simplify
-  rw [mul_zero] at h_pow_law
+/-- If `f0 H 2 = 0`, then `f0 H (2^k) = 0` for `k ≥ 1`. (Output `NNReal`) -/
+lemma f0_pow2_eq_zero_of_f0_2_eq_zero {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) {k : ℕ} (hf0_2_eq_0 : f0 hH_axioms 2 = 0) (hk_ge1 : k ≥ 1) :
+    f0 hH_axioms (2 ^ k) = 0 := by
+  have h2_pos : 2 > 0 := by norm_num
+  have hk_pos : k > 0 := pos_of_one_le hk_ge1
+  have h_pow_law := uniformEntropy_power_law hH_axioms h2_pos hk_pos
+  -- h_pow_law: f0 hH_axioms (2^k) = (k : NNReal) * f0 hH_axioms 2
+  rw [hf0_2_eq_0, mul_zero] at h_pow_law
   exact h_pow_law
 
 
-/-!
-### Chunk 3.3d: Breaking down uniformEntropy_pos_of_nontrivial
--/
 
-
-
-lemma exists_pow2_bound {n : ℕ} (_hn : n ≥ 1) : ∃ k ≥ 1, n ≤ 2 ^ k := by
-  have h2_gt_1 : 1 < 2 := by norm_num
-  have h_exists_k0 : ∃ k₀ : ℕ, n ≤ 2 ^ k₀ := exists_pow_ge h2_gt_1
-  rcases h_exists_k0 with ⟨k₀, h_n_le_pow_k₀⟩
-  let k := max 1 k₀
-  use k
-  have hk_ge_1 : k ≥ 1 := Nat.le_max_left 1 k₀
-  have hk₀_le_k : k₀ ≤ k := Nat.le_max_right 1 k₀
-  have h_pow_mono : 2 ^ k₀ ≤ 2 ^ k := Nat.pow_le_pow_right (Nat.le_of_lt h2_gt_1) hk₀_le_k
-  have hn_le_pow_k : n ≤ 2 ^ k := le_trans h_n_le_pow_k₀ h_pow_mono
-  exact ⟨hk_ge_1, hn_le_pow_k⟩
-
-/-- Lemma 4: If f₀ H (2^k) = 0 for all k ≥ 1, then f₀ H n = 0 for all n ≥ 1. -/
-lemma f0_n_eq_zero_of_f0_pow2_zero {n : ℕ} (hH : IsEntropyFunction H)
-    (h_f0_pow2_zero : ∀ k ≥ 1, f₀ H (2 ^ k) = 0) (hn : n ≥ 1) :
-    f₀ H n = 0 := by
-  -- Find k ≥ 1 such that n ≤ 2^k
-  rcases exists_pow2_bound hn with ⟨k, hk_ge1, hn_le_pow2⟩
-
-  -- Apply monotonicity of f₀ H
-  have h_mono := f0_mono hH
-  have h_f0_n_le_pow2 : f₀ H n ≤ f₀ H (2 ^ k) := h_mono hn_le_pow2
-
-  -- Use the assumption that f₀ H (2^k) = 0 for k ≥ 1
-  have h_f0_pow2_is_zero : f₀ H (2 ^ k) = 0 := h_f0_pow2_zero k hk_ge1
-
-  -- Combine: f₀ H n ≤ 0
-  rw [h_f0_pow2_is_zero] at h_f0_n_le_pow2
-
-  -- Apply non-negativity: f₀ H n ≥ 0
-  have h_f0_n_ge_0 : f₀ H n ≥ 0 := f0_nonneg hH hn
-
-  -- Conclude f₀ H n = 0 by antisymmetry (or linarith)
-  linarith [h_f0_n_ge_0, h_f0_n_le_pow2]
-
-/-!
-### Chunk 3.3e: Breaking down uniformEntropy_pos_of_nontrivial
--/
-
-/-- Lemma 5: If f₀ H b = 0 for some b ≥ 2, then f₀ H n = 0 for all n ≥ 1. -/
-lemma f0_all_zero_of_f0_b_zero {b : ℕ} (hH : IsEntropyFunction H) (hb : b ≥ 2) (hf0b_eq_0 : f₀ H b = 0) :
-    ∀ n ≥ 1, f₀ H n = 0 := by
-  -- Introduce n and the assumption n ≥ 1
-  intro n hn
-
-  -- Step 1: Show f₀ H 2 = 0
-  have hf0_2_eq_0 : f₀ H 2 = 0 := f0_2_eq_zero_of_f0_b_eq_zero hH hb hf0b_eq_0
-
-  -- Step 2: Define the hypothesis needed for the next lemma
-  -- We need to show that f₀ H (2^k) = 0 for all k ≥ 1
-  have h_f0_pow2_zero : ∀ k ≥ 1, f₀ H (2 ^ k) = 0 := by
-    intro k hk
-    exact f0_pow2_eq_zero_of_f0_2_eq_zero hH hf0_2_eq_0 hk
-
-  -- Step 3: Apply the lemma showing f₀ H n = 0
-  exact f0_n_eq_zero_of_f0_pow2_zero hH h_f0_pow2_zero hn
-
-
-/-!
-### Chunk 3.3f: Final Lemma for Positive f₀(b)
--/
-
-/-- Lemma 6 (Original Goal): `f₀ H b > 0` if `H` is not identically zero and `b ≥ 2`. -/
-lemma uniformEntropy_pos_of_nontrivial (hH : IsEntropyFunction H) (hH_nonzero : ∃ n ≥ 1, f₀ H n ≠ 0) (hb : b ≥ 2) :
-    f₀ H b > 0 := by
-  -- Start proof by contradiction
-  by_contra h_f0_b_not_pos
-  -- `h_f0_b_not_pos : ¬(f₀ H b > 0)`
-
-  -- We know f₀ H b ≥ 0 from f0_nonneg
-  have h_f0_b_ge_0 : f₀ H b ≥ 0 := f0_nonneg hH (by linarith : b ≥ 1)
-
-  -- If f₀ H b is not positive and is non-negative, it must be zero
-  have hf0b_eq_0 : f₀ H b = 0 := by
-    linarith [h_f0_b_ge_0, h_f0_b_not_pos]
-
-  -- Use the lemma showing that if f₀ H b = 0, then f₀ H n = 0 for all n ≥ 1
-  have h_all_zero : ∀ n ≥ 1, f₀ H n = 0 := f0_all_zero_of_f0_b_zero hH hb hf0b_eq_0
-
-  -- Extract the witness n_nz from the assumption hH_nonzero
-  rcases hH_nonzero with ⟨n_nz, hn_nz_ge1, h_f0_n_nz_neq_0⟩
-
-  -- Apply the "all zero" result to n_nz
-  have h_f0_n_nz_eq_0 : f₀ H n_nz = 0 := h_all_zero n_nz hn_nz_ge1
-
-  -- This contradicts the hypothesis that f₀ H n_nz ≠ 0
-  exact h_f0_n_nz_neq_0 h_f0_n_nz_eq_0
-
-
-/--
-Lemma: Convert Nat bounds `Bk ≤ Nm < Bkp1` to Real bounds on `f₀ H`.
--/
-lemma f0_bounds_from_nat_bounds (hH : IsEntropyFunction H)
-    {Bk Nm Bkp1 : ℕ} (h_le : Bk ≤ Nm) (h_lt : Nm < Bkp1) :
-    f₀ H Bk ≤ f₀ H Nm ∧ f₀ H Nm ≤ f₀ H Bkp1 := by
-  -- Get the monotonicity property of f₀ H
-  have h_mono := f0_mono hH
-
-  -- Apply monotonicity to the first inequality Bk ≤ Nm
-  have h_f0_le1 : f₀ H Bk ≤ f₀ H Nm := h_mono h_le
-
-  -- Convert the strict inequality Nm < Bkp1 to non-strict Nm ≤ Bkp1
-  have h_le_from_lt : Nm ≤ Bkp1 := Nat.le_of_lt h_lt
-  -- Apply monotonicity to the second (non-strict) inequality Nm ≤ Bkp1
-  have h_f0_le2 : f₀ H Nm ≤ f₀ H Bkp1 := h_mono h_le_from_lt
-
-  -- Combine the two derived f₀ H inequalities using the constructor for ∧
-  constructor
-  · exact h_f0_le1
-  · exact h_f0_le2
-
-
-/-- Helper 4a: Apply power law to the middle term f₀ H (n^m). -/
-lemma f0_pow_middle (hH : IsEntropyFunction H) {n m : ℕ} (hn : n ≥ 1) (hm : m ≥ 1) :
-    f₀ H (n ^ m) = (m : ℝ) * f₀ H n := by
-  exact uniformEntropy_power_law hH hn hm
-
-/-- Helper 4b: Apply power law to the left term f₀ H (b^k) when k ≥ 1. -/
-lemma f0_pow_left_k_ge_1 (hH : IsEntropyFunction H) {b k : ℕ} (hb_ge1 : b ≥ 1) (hk_ge1 : k ≥ 1) :
-    f₀ H (b ^ k) = (k : ℝ) * f₀ H b := by
-  exact uniformEntropy_power_law hH hb_ge1 hk_ge1
-
-/-- Helper 4c: Apply power law to the right term f₀ H (b^(k+1)) when k ≥ 0. -/
-lemma f0_pow_right (hH : IsEntropyFunction H) {b k : ℕ} (hb_ge1 : b ≥ 1) :
-    f₀ H (b ^ (k + 1)) = ((k : ℝ) + 1) * f₀ H b := by
-  have hkp1_ge1 : k + 1 ≥ 1 := Nat.succ_pos k
-  have raw_pow_law := uniformEntropy_power_law hH hb_ge1 hkp1_ge1 -- Gives ↑(k+1) * f₀ H b
-  rw [Nat.cast_add_one k] at raw_pow_law -- Rewrites ↑(k+1) to ↑k + 1
-  exact raw_pow_law
-
-/-- Helper 4d: Combine power laws for the k ≥ 1 case. -/
-lemma apply_power_law_k_ge_1 (hH : IsEntropyFunction H)
-    {n m b k : ℕ} (hn : n ≥ 1) (hm : m ≥ 1) (hb : b ≥ 2) (hk_ge1 : k ≥ 1)
-    (h_f0_le1_orig : f₀ H (b ^ k) ≤ f₀ H (n ^ m))
-    (h_f0_le2_orig : f₀ H (n ^ m) ≤ f₀ H (b ^ (k + 1))) :
-    (k : ℝ) * f₀ H b ≤ (m : ℝ) * f₀ H n ∧ (m : ℝ) * f₀ H n ≤ ((k : ℝ) + 1) * f₀ H b := by
-  have hb_ge1 : b ≥ 1 := by linarith [hb]
-  -- Apply power laws using the helpers
-  let h_mid := f0_pow_middle hH hn hm
-  let h_left := f0_pow_left_k_ge_1 hH hb_ge1 hk_ge1
-  let h_right := f0_pow_right hH (b := b) (k := k) hb_ge1 -- Explicitly provide b and k
-
-  -- Rewrite the original inequalities
-  rw [h_left, h_mid] at h_f0_le1_orig
-  rw [h_mid, h_right] at h_f0_le2_orig
-
-  exact ⟨h_f0_le1_orig, h_f0_le2_orig⟩
-
-/-- Helper 4e: Handle the k = 0 case. -/
-lemma apply_power_law_k_eq_0 (hH : IsEntropyFunction H)
-    {n m b : ℕ} (hn : n ≥ 1) (hm : m ≥ 1) (_hb : b ≥ 2) -- hb needed for context but not directly used
-    (h_f0_le1_orig : f₀ H (b ^ 0) ≤ f₀ H (n ^ m))
-    (h_f0_le2_orig : f₀ H (n ^ m) ≤ f₀ H (b ^ (0 + 1))) :
-    (0 : ℝ) * f₀ H b ≤ (m : ℝ) * f₀ H n ∧ (m : ℝ) * f₀ H n ≤ ((0 : ℝ) + 1) * f₀ H b := by
-  -- Apply power law to middle term
-  let h_mid := f0_pow_middle hH hn hm
-
-  -- Simplify bounds involving k=0
-  rw [pow_zero] at h_f0_le1_orig -- f₀ H 1 ≤ f₀ H (n^m)
-  rw [zero_add, pow_one] at h_f0_le2_orig -- f₀ H (n^m) ≤ f₀ H b
-
-  -- Use f₀ H 1 = 0
-  rw [f0_1_eq_0 hH] at h_f0_le1_orig -- 0 ≤ f₀ H (n^m)
-
-  -- Rewrite middle term
-  rw [h_mid] at h_f0_le1_orig h_f0_le2_orig -- 0 ≤ ↑m * f₀ H n ∧ ↑m * f₀ H n ≤ f₀ H b
-
-  -- Construct the target structure
-  constructor
-  · -- Left inequality: 0 * f₀ H b ≤ ↑m * f₀ H n
-    rw [zero_mul] -- Goal: 0 ≤ ↑m * f₀ H n
-    exact h_f0_le1_orig
-  · -- Right inequality: ↑m * f₀ H n ≤ (0 + 1) * f₀ H b
-    simp only [zero_add, one_mul] -- Goal: ↑m * f₀ H n ≤ f₀ H b
-    exact h_f0_le2_orig
-
-/--
-Lemma (Final Assembly): Apply the power law `f₀(a^p) = p * f₀(a)` to the bounds
-`f₀ H (b^k) ≤ f₀ H (n^m) ≤ f₀ H (b^(k+1))`.
-Requires appropriate positivity conditions `n ≥ 1, m ≥ 1, b ≥ 2`.
-Handles the case k=0 separately using helper lemmas.
--/
-lemma f0_bounds_apply_power_law (hH : IsEntropyFunction H)
-    {n m b k : ℕ} (hn : n ≥ 1) (hm : m ≥ 1) (hb : b ≥ 2)
-    (h_f0_bounds : f₀ H (b ^ k) ≤ f₀ H (n ^ m) ∧ f₀ H (n ^ m) ≤ f₀ H (b ^ (k + 1))) :
-    (k : ℝ) * f₀ H b ≤ (m : ℝ) * f₀ H n ∧ (m : ℝ) * f₀ H n ≤ ((k : ℝ) + 1) * f₀ H b := by
-
-  -- Deconstruct the input bounds
-  rcases h_f0_bounds with ⟨h_f0_le1_orig, h_f0_le2_orig⟩
-
-  -- Case split on k
-  if hk_zero : k = 0 then
-    -- Case k = 0
-    -- Rewrite the original bounds using k=0 *before* calling the helper
-    rw [hk_zero] at h_f0_le1_orig h_f0_le2_orig
-    -- Now h_f0_le1_orig : f₀ H (b ^ 0) ≤ f₀ H (n ^ m)
-    -- And h_f0_le2_orig : f₀ H (n ^ m) ≤ f₀ H (b ^ (0 + 1))
-
-    -- Use the k=0 helper lemma with the rewritten bounds
-    have result_k0 := apply_power_law_k_eq_0 hH hn hm hb h_f0_le1_orig h_f0_le2_orig
-    -- result_k0 : 0 * f₀ H b ≤ ↑m * f₀ H n ∧ ↑m * f₀ H n ≤ (0 + 1) * f₀ H b
-
-    -- Rewrite the *goal* using k=0 to match the result
-    rw [hk_zero] -- Goal: (0:ℝ)*f₀ H b ≤ ... ∧ ... ≤ ((0:ℝ)+1)*f₀ H b
-    simp only [Nat.cast_zero] -- Goal: 0*f₀ H b ≤ ... ∧ ... ≤ (0+1)*f₀ H b
-
-    -- Now the result_k0 should exactly match the goal
-    exact result_k0
+/-- If `f0 H (2^k) = 0` for all `k ≥ 1`, then `f0 H n = 0` for all `n ≥ 1`. (Output `NNReal`) -/
+lemma f0_n_eq_zero_of_f0_pow2_zero {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H)
+    (h_all_f0_pow2_zero : ∀ k ≥ 1, f0 hH_axioms (2 ^ k) = 0)
+    {n : ℕ} (hn_ge1 : n ≥ 1) :
+    f0 hH_axioms n = 0 := by
+  have hn_pos : n > 0 := pos_of_one_le hn_ge1
+  rcases @exists_pow_ge 2 n (by norm_num : 1 < 2) with ⟨k, h_n_le_2k⟩
+  -- Need k ≥ 1 for h_all_f0_pow2_zero.
+  -- If 2^k ≥ n ≥ 1, then k cannot be 0 unless n=1.
+  if hn_eq_1 : n = 1 then
+    rw [hn_eq_1]
+    exact f0_1_eq_0 hH_axioms
   else
-    -- Case k ≠ 0, implies k ≥ 1
-    have hk_ge1 : k ≥ 1 := Nat.pos_of_ne_zero hk_zero
-    -- Use the k ≥ 1 helper lemma with the original bounds
-    exact apply_power_law_k_ge_1 hH hn hm hb hk_ge1 h_f0_le1_orig h_f0_le2_orig
+    have k_ge_1 : k ≥ 1 := by
+      contrapose! hn_eq_1 -- if k=0, then n=1. After contrapose, hn_eq_1 : k < 1, goal is n = 1
+      have k_eq_zero : k = 0 := (Nat.lt_one_iff.mp hn_eq_1)
+      rw [k_eq_zero, pow_zero] at h_n_le_2k
+      exact Nat.le_antisymm h_n_le_2k hn_ge1
 
-/-! ### Chunk 3.4 - Breakdown Step 3 -/
+    have h_f0_n_le_f0_2k : f0 hH_axioms n ≤ f0 hH_axioms (2^k) :=
+      (f0_mono hH_axioms) h_n_le_2k
+    rw [h_all_f0_pow2_zero k k_ge_1] at h_f0_n_le_f0_2k -- f0 H n ≤ 0
+    exact le_antisymm h_f0_n_le_f0_2k (by apply @_root_.zero_le : f0 hH_axioms n ≥ 0)
 
 
-/-! ## Chunk 3.3: THEOREM!!! Trapping Inequalities
-Theorem: Establishes the core trapping inequalities relating the ratio `f₀ H n / f₀ H b`
-to the ratio `k / m` derived from integer power bounds `b^k ≤ n^m < b^(k+1)`.
-Requires H to be non-trivial (`hH_nonzero`).
+
+/-- `f0 H b > 0` (as NNReal, so `f0 H b ≠ 0`) if `H` is non-trivial and `b ≥ 2`. -/
+lemma uniformEntropy_pos_of_nontrivial {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+    {b : ℕ} (hb_ge2 : b ≥ 2) :
+    f0 hH_axioms b ≠ 0 := by
+  by_contra hf0b_eq_0
+  -- hf0b_eq_0 : f0 hH_axioms b = 0
+  have hf0_2_eq_0 : f0 hH_axioms 2 = 0 :=
+    f0_2_eq_zero_of_f0_b_eq_zero hH_axioms hb_ge2 hf0b_eq_0
+  have h_all_f0_pow2_zero : ∀ k ≥ 1, f0 hH_axioms (2^k) = 0 :=
+    fun k hk_ge1 => f0_pow2_eq_zero_of_f0_2_eq_zero hH_axioms hf0_2_eq_0 hk_ge1
+
+  rcases hH_nontrivial with ⟨n', hn'_ge1, h_f0_n'_neq_0⟩
+  have h_f0_n'_eq_0 : f0 hH_axioms n' = 0 :=
+    f0_n_eq_zero_of_f0_pow2_zero hH_axioms h_all_f0_pow2_zero hn'_ge1
+  exact h_f0_n'_neq_0 h_f0_n'_eq_0
+
+
+
+-- New helper
+/-- If `f0 H n ≠ 0` for `n > 0`, then `H` is non-trivial. -/
+lemma hf0n_ne_0_implies_nontrivial
+    {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
+    (hH_axioms : IsEntropyFunction H_func)
+    {n : ℕ} (hf0n_ne_0 : f0 hH_axioms n ≠ 0) (hn_pos : n > 0) :
+    ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0 := by
+  use n; exact ⟨Nat.one_le_of_lt hn_pos, hf0n_ne_0⟩
+
+/-- `f0 H b > 0` (as NNReal) if `H` is non-trivial and `b ≥ 2`.
+    This is a version of `uniformEntropy_pos_of_nontrivial` that directly gives `0 < f0 ...`. -/
+lemma f0_pos_of_nontrivial_nnreal_version {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+    {b : ℕ} (hb_ge2 : b ≥ 2) :
+    0 < f0 hH_axioms b := by
+  have h_ne_zero : f0 hH_axioms b ≠ 0 :=
+    uniformEntropy_pos_of_nontrivial hH_axioms hH_nontrivial hb_ge2
+  exact (@_root_.pos_iff_ne_zero _).mpr h_ne_zero
+
+-- The trapping argument will now mostly deal with `Real` numbers due to division and logarithms.
+-- `f0 H n` will be coerced to `Real` using `(f0 H n : Real)`.
+
+/-- `k_from_f0_trap_satisfies_pow_bounds` but with `f0` outputting `NNReal` and coercing.
+    The inequalities for `f0` ratios will be in `Real`.
+    `k_val / m_val ≤ (f0 H n : ℝ) / (f0 H b : ℝ)`
 -/
-theorem uniformEntropy_ratio_bounds_by_rational (hH : IsEntropyFunction H) (hH_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0)
-    {n m b : ℕ} (hn : n ≥ 1) (hm : m ≥ 1) (hb : b ≥ 2) :
-    ∃ k : ℕ, (k : ℝ) / m ≤ f₀ H n / f₀ H b ∧ f₀ H n / f₀ H b ≤ (k + 1 : ℝ) / m := by
-
-  -- Step 1 & 2: Define x = (n:ℝ)^m (Nat power) and prove x ≥ 1.
-  let x : ℝ := (n : ℝ) ^ m
-  have hx_ge_1 : x ≥ 1 := one_le_pow_cast hn -- Use Nat power version
-
-  -- Step 3: Get k and power bounds b^k ≤ x < b^(k+1)
-  -- exists_nat_pow_bounds expects (b:ℝ)^k and (b:ℝ)^(k+1) which are Nat powers.
-  rcases exists_nat_pow_bounds hb hx_ge_1 with ⟨k, h_bk_le_x, h_x_lt_bkp1⟩
-  -- h_bk_le_x : (b:ℝ)^k ≤ x = (n:ℝ)^m
-  -- h_x_lt_bkp1 : x = (n:ℝ)^m < (b:ℝ)^(k+1)
-
-  -- Step 4: Convert Real bounds (involving Nat powers of casts) to Nat bounds
-  let Bk := b ^ k
-  let Nm := n ^ m
-  let Bkp1 := b ^ (k + 1)
-  have h_nat_bounds : Bk ≤ Nm ∧ Nm < Bkp1 :=
-    nat_bounds_from_cast_pow_bounds h_bk_le_x h_x_lt_bkp1
-
-  -- Step 5: Get f₀ H bounds from Nat bounds
-  have h_f0_bounds := f0_bounds_from_nat_bounds hH h_nat_bounds.1 h_nat_bounds.2
-
-  -- Step 6: Apply power law to get multiplication bounds
-  have h_mul_bounds := f0_bounds_apply_power_law hH hn hm hb h_f0_bounds
-  rcases h_mul_bounds with ⟨h_mul_le1, h_mul_le2⟩
-  -- h_mul_le1: ↑k * f₀ H b ≤ ↑m * f₀ H n
-  -- h_mul_le2: ↑m * f₀ H n ≤ (↑k + 1) * f₀ H b
-
-  -- Step 7: Prepare for division
-  have hf0b_pos : f₀ H b > 0 := uniformEntropy_pos_of_nontrivial hH hH_nonzero hb
-  have hm_pos_real : 0 < (m : ℝ) := Nat.cast_pos.mpr (by linarith [hm] : m > 0)
-
-  -- Step 8: Apply division logic
-  -- Use the k found in Step 3
-  use k
-  constructor
-  · -- Prove k / m ≤ f₀ H n / f₀ H b
-    -- Start from h_mul_le1: k * f₀ H b ≤ m * f₀ H n
-    -- Rewrite using mul_comm to match div_le_div_iff more easily
-    rw [mul_comm (m : ℝ) _] at h_mul_le1 -- k * f₀ H b ≤ (f₀ H n) * m
-    -- Use (a / d ≤ b / c ↔ a * c ≤ b * d) with a=k, d=m, b=f₀ H n, c=f₀ H b
-    -- Need k * f₀ H b ≤ f₀ H n * m
-    rwa [div_le_div_iff₀ hm_pos_real hf0b_pos] -- Goal: k / m ≤ f₀ H n / f₀ H b
-  · -- Prove f₀ H n / f₀ H b ≤ (k + 1) / m
-    -- Start from h_mul_le2: m * f₀ H n ≤ (↑k + 1) * f₀ H b
-    -- Rewrite using mul_comm
-    rw [mul_comm (m : ℝ) _] at h_mul_le2 -- (f₀ H n) * m ≤ (↑k + 1) * f₀ H b
-    -- Use (b / c ≤ e / d ↔ b * d ≤ e * c) with b=f₀ H n, c=f₀ H b, e=k+1, d=m
-    -- Need (f₀ H n) * m ≤ (k + 1) * f₀ H b
-    rwa [div_le_div_iff₀ hf0b_pos hm_pos_real] -- Goal: f₀ H n / f₀ H b ≤ (k + 1) / m
-
-
-/-! ## Chunk 3.4: logb properties -/
-
-
-/--
-Lemma: Guarantees the existence of `k : ℕ` satisfying both the power bounds
-`(b : ℝ) ^ k ≤ (n : ℝ) ^ m ∧ (n : ℝ) ^ m < (b : ℝ) ^ (k + 1)`
-and the ratio bounds derived from `uniformEntropy_ratio_bounds_by_rational`.
-This lemma essentially packages the result of `uniformEntropy_ratio_bounds_by_rational` along
-with the power bounds used to derive it.
--/
-lemma k_from_f0_trap_satisfies_pow_bounds (hH : IsEntropyFunction H) (hH_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0)
-    {n m b : ℕ} (hn : n ≥ 1) (hm : m ≥ 1) (hb : b ≥ 2) :
+lemma k_from_f0_trap_satisfies_pow_bounds_real {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+    {n m b : ℕ} (hn_pos : n > 0) (hm_pos : m > 0) (hb_ge2 : b ≥ 2) :
     ∃ k : ℕ,
-      -- Power bounds
+      -- Power bounds (Real numbers, Nat powers)
       ((b : ℝ) ^ k ≤ (n : ℝ) ^ m ∧ (n : ℝ) ^ m < (b : ℝ) ^ (k + 1)) ∧
-      -- Ratio bounds
-      ((k : ℝ) / m ≤ f₀ H n / f₀ H b ∧ f₀ H n / f₀ H b ≤ (k + 1 : ℝ) / m) := by
-  -- Step 1 & 2: Define x = (n:ℝ)^m (Nat power) and prove x ≥ 1.
-  let x : ℝ := (n : ℝ) ^ m
-  have hx_ge_1 : x ≥ 1 := one_le_pow_cast hn
+      -- Ratio bounds (Real numbers)
+      (((k : ℝ) / (m : ℝ) ≤ (f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ)) ∧
+       ((f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ) ≤ ((k : ℝ) + 1) / (m : ℝ))) := by
+  let x_real : ℝ := (n : ℝ) ^ m
+  have hx_real_ge_1 : x_real ≥ 1 := by
+    exact one_le_pow_cast (Nat.one_le_of_lt hn_pos)
+  have hb_real_gt_1 : (b : ℝ) > 1 := Nat.one_lt_cast.mpr (by linarith : b > 1)
 
-  -- Step 3: Get k and power bounds b^k ≤ x < b^(k+1) using exists_nat_pow_bounds
-  rcases exists_nat_pow_bounds hb hx_ge_1 with ⟨k, h_bk_le_x, h_x_lt_bkp1⟩
-  -- h_bk_le_x : (b:ℝ)^k ≤ x = (n:ℝ)^m
-  -- h_x_lt_bkp1 : x = (n:ℝ)^m < (b:ℝ)^(k+1)
+  rcases exists_nat_pow_bounds hb_ge2 hx_real_ge_1 with ⟨k, h_bk_le_x, h_x_lt_bkp1⟩
+  -- h_bk_le_x : (b:ℝ)^k ≤ x_real
+  -- h_x_lt_bkp1 : x_real < (b:ℝ)^(k+1)
 
-  -- Claim existence of this specific k
   use k
-
-  -- Prove the conjunction: (Power bounds) ∧ (Ratio bounds)
   constructor
-  · -- Prove Power bounds: These are exactly h_bk_le_x and h_x_lt_bkp1
-    exact ⟨h_bk_le_x, h_x_lt_bkp1⟩
-  · -- Prove Ratio bounds: This follows the logic from uniformEntropy_ratio_bounds_by_rational proof for *this* k
+  · exact ⟨h_bk_le_x, h_x_lt_bkp1⟩
+  · -- Prove Ratio bounds using f0 (NNReal) properties, then coerce and divide in Real
+    let f0n_nnreal := f0 hH_axioms n
+    let f0b_nnreal := f0 hH_axioms b
+    let f0_nm_pow_nnreal := f0 hH_axioms (n ^ m)
+    let f0_bk_pow_nnreal := f0 hH_axioms (b ^ k)
+    let f0_bkp1_pow_nnreal := f0 hH_axioms (b ^ (k+1))
 
-    -- Step 4: Convert Real bounds (involving Nat powers of casts) to Nat bounds
-    let Bk := b ^ k
-    let Nm := n ^ m
-    let Bkp1 := b ^ (k + 1)
-    have h_nat_bounds : Bk ≤ Nm ∧ Nm < Bkp1 :=
+    have h_nm_pow_pos : n^m > 0 := Nat.pow_pos hn_pos
+    have h_bk_pow_pos : b^k > 0 := Nat.pow_pos (by linarith : b > 0)
+    have h_bkp1_pow_pos : b^(k+1) > 0 := Nat.pow_pos (by linarith : b > 0)
+    have m_pos_real : (m:ℝ) > 0 := Nat.cast_pos.mpr hm_pos
+
+    -- Nat bounds from Real bounds on powers: b^k ≤ n^m < b^(k+1)
+    have h_nat_bounds : b^k ≤ n^m ∧ n^m < b^(k+1) :=
       nat_bounds_from_cast_pow_bounds h_bk_le_x h_x_lt_bkp1
+    have h_nat_le := h_nat_bounds.left
+    have h_nat_lt := h_nat_bounds.right
 
-    -- Step 5: Get f₀ H bounds from Nat bounds
-    have h_f0_bounds := f0_bounds_from_nat_bounds hH h_nat_bounds.1 h_nat_bounds.2
+    -- Monotonicity of f0 for these Nat bounds
+    have h_f0_mono1 : f0_bk_pow_nnreal ≤ f0_nm_pow_nnreal := (f0_mono hH_axioms) h_nat_le
+    have h_f0_mono2 : f0_nm_pow_nnreal ≤ f0_bkp1_pow_nnreal := (f0_mono hH_axioms) (Nat.le_of_lt h_nat_lt)
 
-    -- Step 6: Apply power law to get multiplication bounds
-    have h_mul_bounds := f0_bounds_apply_power_law hH hn hm hb h_f0_bounds
-    rcases h_mul_bounds with ⟨h_mul_le1, h_mul_le2⟩
-    -- h_mul_le1: ↑k * f₀ H b ≤ ↑m * f₀ H n
-    -- h_mul_le2: ↑m * f₀ H n ≤ (↑k + 1) * f₀ H b
+    -- Apply power law (outputs NNReal)
+    -- f0 H (n^m) = m * f0 H n
+    have pl_nm : f0_nm_pow_nnreal = (m : NNReal) * f0n_nnreal :=
+      uniformEntropy_power_law hH_axioms hn_pos hm_pos
+    -- f0 H (b^k) = k * f0 H b (if k>0, else f0 H 1 = 0)
+    have pl_bk : f0_bk_pow_nnreal = (if k_is_0 : k = 0 then 0 else (k : NNReal) * f0b_nnreal) := by
+      split_ifs with hk_cond
+      · -- Case k = 0. Goal is f0_bk_pow_nnreal = 0.
+        -- hk_cond : k = 0
+        change f0 hH_axioms (b ^ k) = 0 -- Unfold f0_bk_pow_nnreal
+        rw [hk_cond, pow_zero]          -- Goal: f0 hH_axioms 1 = 0
+        exact f0_1_eq_0 hH_axioms
+      · -- Case k ≠ 0. Goal is f0_bk_pow_nnreal = (k : NNReal) * f0b_nnreal.
+        -- hk_cond : k ≠ 0
+        change f0 hH_axioms (b ^ k) = (k : NNReal) * f0b_nnreal -- Unfold f0_bk_pow_nnreal
+        exact uniformEntropy_power_law hH_axioms (by linarith) (Nat.pos_of_ne_zero hk_cond)
+    -- f0 H (b^(k+1)) = (k+1) * f0 H b
+    have pl_bkp1 : f0_bkp1_pow_nnreal = ((k+1 : ℕ) : NNReal) * f0b_nnreal :=
+      uniformEntropy_power_law hH_axioms (by linarith) (Nat.succ_pos k)
 
-    -- Step 7: Prepare for division (need f₀ H b > 0 and m > 0)
-    have hf0b_pos : f₀ H b > 0 := uniformEntropy_pos_of_nontrivial hH hH_nonzero hb
-    have hm_pos_real : 0 < (m : ℝ) := Nat.cast_pos.mpr (by linarith [hm] : m > 0)
+    -- Substitute power laws into mono inequalities (still in NNReal)
+    rw [pl_bk, pl_nm] at h_f0_mono1
+    rw [pl_nm, pl_bkp1] at h_f0_mono2
 
-    -- Step 8: Apply division logic to get the ratio bounds
+    -- Coerce to Real and divide
+    have h_f0b_real_pos : (f0b_nnreal : ℝ) > 0 := by
+      simp only [coe_pos] -- coe_pos is NNReal.coe_pos, needs f0b_nnreal > 0 (as NNReal)
+      exact f0_pos_of_nontrivial_nnreal_version hH_axioms hH_nontrivial hb_ge2
+
     constructor
-    · -- Prove k / m ≤ f₀ H n / f₀ H b
-      -- Start from h_mul_le1: k * f₀ H b ≤ m * f₀ H n
-      rw [mul_comm (m : ℝ) _] at h_mul_le1 -- k * f₀ H b ≤ (f₀ H n) * m
-      -- Use (a / d ≤ b / c ↔ a * c ≤ b * d) with a=k, d=m, b=f₀ H n, c=f₀ H b
-      rwa [div_le_div_iff₀ hm_pos_real hf0b_pos] -- Goal: k / m ≤ f₀ H n / f₀ H b
-    · -- Prove f₀ H n / f₀ H b ≤ (k + 1) / m
-      -- Start from h_mul_le2: m * f₀ H n ≤ (↑k + 1) * f₀ H b
-      rw [mul_comm (m : ℝ) _] at h_mul_le2 -- (f₀ H n) * m ≤ (↑k + 1) * f₀ H b
-      -- Use (b / c ≤ e / d ↔ b * d ≤ e * c) with b=f₀ H n, c=f₀ H b, e=k+1, d=m
-      rwa [div_le_div_iff₀ hf0b_pos hm_pos_real] -- Goal: f₀ H n / f₀ H b ≤ (k + 1) / m
+    · -- Left inequality: k/m ≤ (f0n)/(f0b)
+      -- from: (if k=0 then 0 else k*f0b) ≤ m*f0n
+      by_cases hk0_case : k = 0
+      · -- Case k = 0
+        -- First, simplify h_f0_mono1 using k=0, though it's not directly used for this goal.
+        rw [hk0_case] at h_f0_mono1; simp only [if_pos] at h_f0_mono1
+        -- h_f0_mono1 is now `0 ≤ (m : NNReal) * f0n_nnreal`
+
+        -- Now, simplify the goal using k=0.
+        -- Goal was: (k:ℝ)/(m:ℝ) ≤ (f0n_nnreal:ℝ)/(f0b_nnreal:ℝ)
+        simp only [hk0_case, Nat.cast_zero, zero_div]
+        -- Goal is now: 0 ≤ (f0n_nnreal:ℝ)/(f0b_nnreal:ℝ)
+        -- This simp uses m_pos_real (↑m > 0) to simplify 0/(m:ℝ) to 0.
+
+        -- Prove 0 ≤ (f0n_nnreal:ℝ)/(f0b_nnreal:ℝ)
+        apply div_nonneg
+        · -- Numerator f0n_nnreal ≥ 0
+          exact NNReal.coe_nonneg f0n_nnreal
+        · -- Denominator f0b_nnreal > 0, so f0b_nnreal ≥ 0
+          exact le_of_lt h_f0b_real_pos
+      · -- k > 0 case
+        -- h_f0_mono1 was: (if k_is_0 : k = 0 then 0 else (k:NNReal)*f0b_nnreal) ≤ (m:NNReal)*f0n_nnreal
+        -- hk0_case : ¬(k = 0)
+        -- We want to simplify h_f0_mono1 using hk0_case.
+        simp [hk0_case] at h_f0_mono1
+        -- h_f0_mono1 is now: (k:NNReal)*f0b_nnreal ≤ (m:NNReal)*f0n_nnreal
+        -- Goal: (k:ℝ)/(m:ℝ) ≤ (f0n_nnreal:ℝ)/(f0b_nnreal:ℝ)
+        -- Rewrite as k * f0b ≤ m * f0n using mul_le_mul_iff_of_pos (for Real)
+        rw [div_le_div_iff₀ m_pos_real h_f0b_real_pos]
+        -- Goal is now (k:ℝ)*(f0b_nnreal:ℝ) ≤ (f0n_nnreal:ℝ)*(m:ℝ) due to div_le_div_iff₀ structure
+        -- Transform goal to match NNReal.coe_le_coe structure
+        rw [← NNReal.coe_natCast k, ← NNReal.coe_natCast m] -- Converts (k:ℝ) to ↑(k:NNReal) etc.
+                                                        -- Goal: ↑k * ↑f0b ≤ ↑f0n * ↑m (all terms now coe from NNReal)
+        rw [← NNReal.coe_mul, ← NNReal.coe_mul] -- Converts ↑X * ↑Y to ↑(X * Y)
+                                            -- Goal: ↑(k*f0b) ≤ ↑(f0n*m) (ops inside coe are NNReal)
+        rw [NNReal.coe_le_coe] -- Applies ↑A ≤ ↑B ↔ A ≤ B
+                                -- Goal: (k:NNReal)*f0b_nnreal ≤ (f0n_nnreal:NNReal)*(m:NNReal)
+        conv_rhs => rw [mul_comm] -- Goal: (k:NNReal)*f0b_nnreal ≤ (m:NNReal)*(f0n_nnreal:NNReal)
+        exact h_f0_mono1
+    · -- Right inequality: (f0n)/(f0b) ≤ (k+1)/m
+      -- from: m*f0n ≤ (k+1)*f0b
+      -- h_f0_mono2: (m:NNReal)*f0n_nnreal ≤ ((k+1):NNReal)*f0b_nnreal
+      rw [div_le_div_iff₀ h_f0b_real_pos m_pos_real]
+      -- Goal: (f0n_nnreal:ℝ)*(m:ℝ) ≤ (((k+1):ℕ):ℝ)*(f0b_nnreal:ℝ)
+      rw [mul_comm (f0n_nnreal:ℝ) _] -- match order for next steps
+      -- Goal: (m:ℝ)*(f0n_nnreal:ℝ) ≤ (((k+1):ℕ):ℝ)*(f0b_nnreal:ℝ)
+      -- Note: by Nat.cast_add_one, the term (((k+1):ℕ):ℝ) is (↑k + 1) in Real.
+
+      -- Transform goal to match NNReal.coe_le_coe structure
+      rw [← NNReal.coe_natCast m] -- Handles LHS factor (m:ℝ) becoming ↑(↑m:NNReal)
+      -- At this point, the RHS factor involving k is (↑k + 1):ℝ
+      rw [← Nat.cast_add_one k]   -- Changes (↑k + 1) on RHS to ↑(k+1:ℕ)
+      rw [← NNReal.coe_natCast (k+1)] -- Changes ↑(k+1:ℕ) on RHS to ↑(↑(k+1:ℕ):NNReal)
+
+      -- Goal should now be:
+      -- ↑(↑m:NNReal) * ↑f0n_nnreal ≤ ↑(↑(k+1:ℕ):NNReal) * ↑f0b_nnreal
+      rw [← NNReal.coe_mul, ← NNReal.coe_mul]
+      rw [NNReal.coe_le_coe]
+      -- Goal: (m:NNReal)*f0n_nnreal ≤ ((k+1):NNReal)*f0b_nnreal
+      exact h_f0_mono2
 
 
+-- Replaced: old `le_logb_rpow_self_of_le`
+/-- `k ≤ logb b X` given `b > 1, X > 0, b^k ≤ X`. -/
+lemma le_logb_rpow_self_of_le {b k X : ℝ} (hb_gt_1 : b > 1) (hX_pos : 0 < X) (hkX : b^k ≤ X) :
+    k ≤ Real.logb b X := by
+  have b_pos : 0 < b := lt_trans zero_lt_one hb_gt_1
+  have b_ne_one : b ≠ 1 := ne_of_gt hb_gt_1
+  rw [← Real.logb_rpow b_pos b_ne_one (x := k)]
+  apply (Real.logb_le_logb hb_gt_1 (Real.rpow_pos_of_pos b_pos k) hX_pos).mpr
+  exact hkX
 
-/-! ### Chunk 3.4 - Breakdown Step 5 - Helper 4: Real Arithmetic Equivalence -/
+-- Replaced: old `logb_rpow_self_lt_of_lt`
+/-- `logb b X < k_plus_1` given `b > 1, X > 0, X < b^(k_plus_1)`. -/
+lemma logb_rpow_self_lt_of_lt {b X k_plus_1 : ℝ} (hb_gt_1 : b > 1) (hX_pos : 0 < X) (hXlt : X < b^k_plus_1) :
+    Real.logb b X < k_plus_1 := by
+  have b_pos : 0 < b := lt_trans zero_lt_one hb_gt_1
+  have b_ne_one : b ≠ 1 := ne_of_gt hb_gt_1
+  rw [← Real.logb_rpow b_pos b_ne_one (x := k_plus_1)]
+  apply Real.logb_lt_logb hb_gt_1 hX_pos hXlt
 
+/-!  Helper for `abs_sub_le_iff`  -/
+structure AbsPair (a b r : ℝ) : Prop where
+  left  : a - b ≤ r       -- 1ˢᵗ inequality
+  right : b - a ≤ r       -- 2ⁿᵈ inequality
 
-/--
-Lemma: Proves the lower bound part of the absolute difference inequality.
-Combines the lower bound on the f₀ ratio (`k/m ≤ f0_ratio`)
-and the upper bound relating `logb` to `k/m` (`logb - 1/m < k/m`).
-Uses helper lemmas for arithmetic and transitivity.
--/
-lemma prove_diff_lower_bound {f0_ratio logb_val k_val m_val : ℝ}
-    (h_f0_lower : k_val / m_val ≤ f0_ratio)
-    (h_logb_upper_shifted : logb_val - 1 / m_val < k_val / m_val) :
-    -1 / m_val < f0_ratio - logb_val := by
-  -- 1. Combine the hypotheses using transitivity
-  have h_trans : logb_val - 1 / m_val < f0_ratio :=
-    lt_of_lt_of_le h_logb_upper_shifted h_f0_lower
-
-  -- 2. Rearrange h_trans: logb_val - 1 / m_val < f0_ratio
-  -- Use `sub_lt_iff_lt_add`: logb_val < f0_ratio + 1 / m_val
-  have h_step2 : logb_val < f0_ratio + 1 / m_val := by
-    exact (sub_lt_iff_lt_add).mp h_trans -- Changed to sub_lt_iff_lt_add (no prime)
-
-  -- Rewrite h_step2 to match the expected form for lt_add_iff_sub_left_real
-  rw [add_comm] at h_step2 -- Now h_step2 : logb_val < 1 / m_val + f0_ratio
-
-  -- 3. Rearrange h_step2: logb_val < 1 / m_val + f0_ratio
-  -- Use custom `lt_add_iff_sub_left_real`: logb_val - f0_ratio < 1 / m_val
-  -- Lemma: a < b + c ↔ a - c < b. Here a=logb_val, b=1/m_val, c=f0_ratio
-  have h_step3 : logb_val - f0_ratio < 1 / m_val := by
-    exact (lt_add_iff_sub_left_real logb_val (1 / m_val) f0_ratio).mp h_step2 -- Use the rewritten h_step2
-
-  -- 4. Rearrange h_step3: logb_val - f0_ratio < 1 / m_val
-  -- Multiply by -1 and flip inequality
-  have h_step4_raw : -(1 / m_val) < -(logb_val - f0_ratio) := by
-    exact neg_lt_neg_iff.mpr h_step3
-
-  -- 5. Simplify LHS using helper_neg_div
-  have h_step5 : -1 / m_val < -(logb_val - f0_ratio) := by
-    rw [helper_neg_div 1 m_val] at h_step4_raw
-    exact h_step4_raw
-
-  -- 6. Simplify RHS using helper_neg_sub
-  have h_step6 : -1 / m_val < f0_ratio - logb_val := by
-    rw [helper_neg_sub logb_val f0_ratio] at h_step5
-    exact h_step5
-
-  -- 7. Check goal
-  exact h_step6
-
-
-
-/--
-Lemma: Proves the upper bound part of the absolute difference inequality.
-Combines the upper bound on the f₀ ratio (`f0_ratio ≤ (k+1)/m`)
-and the lower bound relating `logb` to `k/m` (`k/m ≤ logb`).
-Uses helper lemmas for arithmetic and transitivity.
--/
-lemma prove_diff_upper_bound {f0_ratio logb_val k_val m_val : ℝ}
-    (h_f0_upper : f0_ratio ≤ (k_val + 1) / m_val)
-    (h_km_le_logb : k_val / m_val ≤ logb_val) :
-    f0_ratio - logb_val ≤ 1 / m_val := by
-
-  -- 1. Rewrite the upper bound on f0_ratio to isolate k/m
-  have h_f0_upper_rewritten : f0_ratio ≤ k_val / m_val + 1 / m_val := by
-    rw [add_div] at h_f0_upper -- Rewrite (k+1)/m as k/m + 1/m
-    exact h_f0_upper
-
-  -- 2. Combine inequalities using transitivity
-  -- We have f0_ratio ≤ k/m + 1/m and k/m ≤ logb_val
-  have h_trans : f0_ratio ≤ logb_val + 1 / m_val := by
-    calc
-      f0_ratio ≤ k_val / m_val + 1 / m_val := h_f0_upper_rewritten
-      -- Apply `add_le_add_right`: If k/m ≤ logb_val, then k/m + 1/m ≤ logb_val + 1/m
-      _ ≤ logb_val + 1 / m_val := by exact add_le_add_right h_km_le_logb (1 / m_val)
-
-  -- 3. Rearrange h_trans: f0_ratio ≤ logb_val + 1 / m_val
-  -- Use helper `le_add_iff_sub_left_real`: a ≤ b + c ↔ a - b ≤ c
-  -- Let a = f0_ratio, b = logb_val, c = 1 / m_val
-  exact (le_add_iff_sub_left_real f0_ratio logb_val (1 / m_val)).mp h_trans
+instance {a b r : ℝ} : Coe (AbsPair a b r)
+    (a - b ≤ r ∧ b - a ≤ r) where
+  coe := fun h => ⟨h.left, h.right⟩
 
 
 /--
-Theorem: Establishes that the difference between the normalized `f₀ H n` ratio
-and the logarithm `logb b n` is bounded by `1/m`. This is the key result
-showing `f₀` behaves like `log`.
-Requires H to be non-trivial (`hH_nonzero`).
+Logarithmic trapping: `| (f0 H n : ℝ) / (f0 H b : ℝ) - logb b n | ≤ 1 / (m : ℝ)`.
+This uses the Real‐valued bounds from `k_from_f0_trap_satisfies_pow_bounds_real`.
 -/
-theorem logarithmic_trapping (hH : IsEntropyFunction H) (hH_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0)
-    {n m b : ℕ} (hn : n ≥ 1) (hm : m ≥ 1) (hb : b ≥ 2) :
-    |f₀ H n / f₀ H b - Real.logb b n| ≤ 1 / (m : ℝ) := by
+theorem logarithmic_trapping
+  {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+  (hH_axioms     : IsEntropyFunction H)
+  (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+  {n m b : ℕ} (hn_pos  : n > 0) (hm_pos  : m > 0) (hb_ge2 : b ≥ 2) :
+  |(f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ) - Real.logb b n| ≤ 1 / (m : ℝ) :=
+by
+  -- Unpack the “k from f0” bounds:
+  rcases k_from_f0_trap_satisfies_pow_bounds_real
+    hH_axioms hH_nontrivial hn_pos hm_pos hb_ge2
+    with ⟨k, ⟨h_pow_le_nm,   h_nm_lt_pow_kp1⟩,
+              ⟨h_f0_ratio_lower_bound, h_f0_ratio_upper_bound⟩⟩
 
-  -- Steps 1-5: Obtain k and the bounds (as before)
-  rcases k_from_f0_trap_satisfies_pow_bounds hH hH_nonzero hn hm hb with
-    ⟨k, ⟨h_pow_bounds_le, h_pow_bounds_lt⟩, ⟨h_ratio_lower, h_ratio_upper⟩⟩
-  let x : ℝ := (n : ℝ) ^ m
-  have hx_ge_1 : x ≥ 1 := one_le_pow_cast hn
-  have h_logb_x_bounds : Real.logb b x - 1 < (k : ℝ) ∧ (k : ℝ) ≤ Real.logb b x := by
-    apply logb_x_bounds_k hb hx_ge_1; exact ⟨h_pow_bounds_le, h_pow_bounds_lt⟩
-  have h_logb_nm_bounds : (m : ℝ) * Real.logb b n - 1 < (k : ℝ) ∧ (k : ℝ) ≤ (m : ℝ) * Real.logb b n := by
-    apply logb_n_times_m_bounds_k hn hb x (Eq.refl x) h_logb_x_bounds
-  have h_logb_n_div_bounds : Real.logb b n - 1 / (m : ℝ) < (k : ℝ) / (m : ℝ) ∧ (k : ℝ) / (m : ℝ) ≤ Real.logb b n := by
-    apply logb_n_bounds_k_div_m hn hb hm h_logb_nm_bounds
-  rcases h_logb_n_div_bounds with ⟨h_logb_upper_shifted, h_km_le_logb⟩
+  let f0_ratio  := (f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ)
+  let logb_n_val := Real.logb b n
+  let k_real    := (k : ℝ)
+  let m_real    := (m : ℝ)
 
-  -- Step 6 & 7: Prove the lower bound on the difference (as before)
-  have h_diff_lower : -1 / (m : ℝ) < f₀ H n / f₀ H b - Real.logb b n := by
-    apply prove_diff_lower_bound (f0_ratio := f₀ H n / f₀ H b) (logb_val := Real.logb b n) (k_val := k) (m_val := m)
-    · exact h_ratio_lower
-    · exact h_logb_upper_shifted
+  -- Basic casts and positivity facts
+  have hb_real_gt_1 : (b : ℝ) > 1 := Nat.one_lt_cast.mpr (by linarith : b > 1)
+  have hn_real_pos : (n : ℝ) > 0 := Nat.cast_pos.mpr hn_pos
+  have hm_real_pos : m_real > 0   := Nat.cast_pos.mpr hm_pos
 
-  -- Step 8: Prove the upper bound on the difference (as before)
-  have h_diff_upper : f₀ H n / f₀ H b - Real.logb b n ≤ 1 / (m : ℝ) := by
-    apply prove_diff_upper_bound (f0_ratio := f₀ H n / f₀ H b) (logb_val := Real.logb b n) (k_val := k) (m_val := m)
-    · exact h_ratio_upper
-    · exact h_km_le_logb
+  -- Derive     k_real ≤ m_real * logb_n_val   <   k_real + 1
+  have h_k_le_m_logbn : k_real ≤ m_real * logb_n_val := by
+    -- rewrite m * logb b n as logb b ((n^m : ℝ))
+    rw [← Real.logb_rpow_eq_mul_logb_of_pos hn_real_pos (y := m_real)]
+    -- reduce to proving (b^k : ℝ) ≤ (n^m : ℝ)
+    have : (b : ℝ)^k_real ≤ (n : ℝ)^m_real := by
+      simp_rw [k_real, m_real]
+      rw [Real.rpow_natCast, Real.rpow_natCast]
+      exact h_pow_le_nm
+    apply le_logb_rpow_self_of_le hb_real_gt_1 (Real.rpow_pos_of_pos hn_real_pos m_real) this
 
-  -- Step 9: Combine bounds using abs_le.mpr
-  -- Goal: |f₀ H n / f₀ H b - Real.logb b n| ≤ 1 / (m : ℝ)
-  -- Use `abs_le.mpr : (-y ≤ x ∧ x ≤ y) → |x| ≤ y`
-  apply abs_le.mpr
-  -- Need to prove: - (1 / m) ≤ (f₀ H n / f₀ H b - Real.logb b n) ∧ (f₀ H n / f₀ H b - Real.logb b n) ≤ 1 / m
-  constructor
-  · -- Prove Left Goal: - (1 / m) ≤ (f₀ H n / f₀ H b - Real.logb b n)
-    -- Rewrite the goal using neg_div to match h_diff_lower
-    rw [← neg_div] -- Goal is now: -1 / m ≤ ...
-    -- We have h_diff_lower : -1 / m < ...
-    -- Use `le_of_lt`
-    exact le_of_lt h_diff_lower
-  · -- Prove Right Goal: (f₀ H n / f₀ H b - Real.logb b n) ≤ 1 / m
-    -- This is exactly h_diff_upper
-    exact h_diff_upper
+  have h_m_logbn_lt_kp1 : m_real * logb_n_val < k_real + 1 := by
+    rw [← Real.logb_rpow_eq_mul_logb_of_pos hn_real_pos (y := m_real)]
+    have : (n : ℝ)^m_real < (b : ℝ)^(k_real + 1) := by
+      simp_rw [m_real, k_real]
+      rw [Real.rpow_natCast, ← Nat.cast_add_one, Real.rpow_natCast] -- Corrected order
+      exact h_nm_lt_pow_kp1
+    apply logb_rpow_self_lt_of_lt hb_real_gt_1 (Real.rpow_pos_of_pos hn_real_pos m_real) this
 
+  -- Convert to the two sided‐inequalities on logb_n_val
+  have h_logb_lt_kp1_m : logb_n_val < (k_real + 1) / m_real := by
+    rw [lt_div_iff₀ hm_real_pos, mul_comm]
+    exact h_m_logbn_lt_kp1
 
+  have h_km_le_logb : k_real / m_real ≤ logb_n_val := by
+    rw [div_le_iff₀ hm_real_pos, mul_comm]
+    exact h_k_le_m_logbn
 
+  have h_logb_minus_1m_lt_km : logb_n_val - 1 / m_real < k_real / m_real := by
+    rw [sub_lt_iff_lt_add, div_add_div_same]
+    exact h_logb_lt_kp1_m
+
+  ----------------------------------------------------------------
+  --  NEW: prove the two sides in the correct orientations:
+  ----------------------------------------------------------------
+  -- (1) logb_n_val - f0_ratio ≤ 1 / m_real
+  have h_right : logb_n_val - f0_ratio ≤ 1 / m_real := by
+    have : logb_n_val - f0_ratio < 1 / m_real := by
+      -- f0_ratio ≥ k/m and logb_n_val - 1/m < k/m
+      linarith [h_logb_minus_1m_lt_km, h_f0_ratio_lower_bound]
+    exact le_of_lt this
+
+  -- (2)  –(1/m_real) ≤  logb_n_val - f0_ratio
+  --     ↔  f0_ratio - logb_n_val ≤ 1/m_real
+  have h_left : f0_ratio - logb_n_val ≤ 1 / m_real := by
+    -- first prove  f0_ratio ≤ logb_n_val + 1/m_real
+    have h_aux : f0_ratio ≤ logb_n_val + 1 / m_real := by
+      have h2 : f0_ratio ≤ (k_real + 1) / m_real := h_f0_ratio_upper_bound
+      have h3 : (k_real + 1) / m_real ≤ logb_n_val + 1 / m_real := by
+        have h_base : k_real + 1 ≤ m_real * logb_n_val + 1 := by
+          exact add_le_add_right h_k_le_m_logbn 1
+        -- rewrite logb_n_val + 1/m_real as (m_real * logb_n_val + 1)/m_real
+        rw [show logb_n_val + 1 / m_real = (m_real * logb_n_val + 1) / m_real by
+              field_simp [mul_comm, ne_of_gt hm_real_pos]]
+        exact (div_le_div_iff_of_pos_right hm_real_pos).mpr h_base
+      exact h2.trans h3
+    -- now sub_le_iff_le_add turns `f0_ratio ≤ logb_n_val + 1/m` into the goal
+    -- The simplified goal becomes `f0_ratio ≤ 1 / m_real + logb_n_val` (due to simpa's canonicalization).
+    -- h_aux is `f0_ratio ≤ logb_n_val + 1 / m_real`.
+    -- Adding `add_comm` allows simpa to match these.
+    simpa [sub_le_iff_le_add, add_comm] using h_aux
+
+  -- Assemble and finish
+  rw [abs_sub_comm f0_ratio logb_n_val]
+  have h_bounds : AbsPair logb_n_val f0_ratio (1 / m_real) := ⟨h_right, h_left⟩
+  exact abs_sub_le_iff.mpr h_bounds
 
 
 /--
-Lemma (Apply Limit to Trapping): Shows that the ratio `f₀ H n / f₀ H b` is exactly
-equal to `logb b n`. Assumes `H` is non-trivial.
+The ratio `(f0 H n : ℝ) / (f0 H b : ℝ)` is exactly `logb b n`.
+Requires `H` to be non-trivial.
 -/
-lemma uniformEntropy_ratio_eq_logb (hH : IsEntropyFunction H) (hH_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0)
-    {n b : ℕ} (hn : n ≥ 1) (hb : b ≥ 2) :
-    f₀ H n / f₀ H b = Real.logb b n := by
-  -- Apply the limit lemma eq_of_abs_sub_le_inv_ge_one_nat
-  -- Let x = f₀ H n / f₀ H b and y = Real.logb b n
+theorem uniformEntropy_ratio_eq_logb {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+    {n b : ℕ} (hn_pos : n > 0) (hb_ge2 : b ≥ 2) :
+    (f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ) = Real.logb b n := by
   apply eq_of_abs_sub_le_inv_ge_one_nat
-  -- The goal becomes: ∀ m : ℕ, m ≥ 1 → |f₀ H n / f₀ H b - Real.logb b n| ≤ 1 / (m : ℝ)
-  -- This is precisely the statement provided by logarithmic_trapping for any m ≥ 1
-  intro m hm
-  exact logarithmic_trapping hH hH_nonzero hn hm hb
-
-
-
--- Replacement for logb_eq_log_div_log
-lemma f0_ratio_eq_log_ratio (hH : IsEntropyFunction H) (hH_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0)
-    {n b : ℕ} (hn : n ≥ 1) (hb : b ≥ 2) :
-    f₀ H n / f₀ H b = Real.log n / Real.log b := by
-  -- Step 1: Get the previous equality involving logb
-  have h_eq_logb : f₀ H n / f₀ H b = Real.logb b n := by
-    exact uniformEntropy_ratio_eq_logb hH hH_nonzero hn hb
-
-  -- Step 2: Establish preconditions for Real.logb_eq_log
-  have hb_pos_real : 0 < (b : ℝ) := cast_pos_of_ge_two hb
-  have hb_ne_one_real : (b : ℝ) ≠ 1 := ne_of_gt (one_lt_cast_of_ge_two hb)
-  -- Correctly prove 0 < n (Nat) from hn : n ≥ 1 (Nat)
-  have hn_pos_nat : 0 < n := pos_of_one_le hn
-  -- Use Nat.cast_pos.mpr with the correct Nat proof
-  have hn_pos_real : 0 < (n : ℝ) := Nat.cast_pos.mpr hn_pos_nat
-
-  -- Step 3: Rewrite logb using Real.logb_eq_log
-  have h_logb_rewrite : Real.logb b n = Real.log n / Real.log b := by
-    exact logb_eq_log
-
-  -- Step 4: Substitute the rewritten logb into the equality from Step 1
-  rw [h_eq_logb, h_logb_rewrite]
-
-
+  intro m hm_ge1
+  exact logarithmic_trapping hH_axioms hH_nontrivial hn_pos (pos_of_one_le hm_ge1) hb_ge2
 
 /--
-Lemma: The constant `C` relating `f₀` to `log` is non-negative.
+The constant `C_H` relating `f0 H n` to `Real.log n`.
+Defined as `(f0 H 2 : ℝ) / Real.log 2` if H is non-trivial, else 0.
+This constant is `Real`-valued.
 -/
-lemma C_constant_nonneg (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH : IsEntropyFunction H) :
-    C_constant H ≥ 0 := by
-  -- Unfold the definition of C_constant
-  rw [C_constant]
-  -- Split the proof based on the if condition
-  split_ifs with h_nonzero
-  · -- Case 1: H is non-trivial (h_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0)
-    -- Goal is: f₀ H 2 / Real.log 2 ≥ 0
-    -- Prove numerator is non-negative
-    have h_num_nonneg : f₀ H 2 ≥ 0 := by
-      apply f0_nonneg hH
-      norm_num -- Proves 2 ≥ 1
-    -- Prove denominator is positive (which implies non-negative)
-    have h_den_pos : Real.log 2 > 0 := by
-      -- Use Real.log_pos which requires 2 > 1
-      apply Real.log_pos
-      norm_num -- Proves (2 : ℝ) > 1
-    -- Apply div_nonneg (requires numerator non-negative, denominator non-negative)
-    apply div_nonneg h_num_nonneg (le_of_lt h_den_pos)
-  · -- Case 2: H is trivial (h_not_nonzero : ¬(∃ n' ≥ 1, f₀ H n' ≠ 0))
-    -- Goal is: 0 ≥ 0
+noncomputable def C_constant_real {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) : Real :=
+  by classical -- Use classical logic to ensure the condition is decidable
+  exact if h_nontrivial : (∃ n' ≥ 1, f0 hH_axioms n' ≠ 0) then
+    (f0 hH_axioms 2 : ℝ) / Real.log 2
+  else
+    0
+
+/-- `C_constant_real` is non-negative. -/
+lemma C_constant_real_nonneg {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) : C_constant_real hH_axioms ≥ 0 := by
+  rw [C_constant_real]
+  split_ifs with h_nontrivial
+  · -- Case: H non-trivial
+    have hf02_real_nonneg : (f0 hH_axioms 2 : ℝ) ≥ 0 := NNReal.coe_nonneg _
+    have hlog2_pos : Real.log 2 > 0 := Real.log_pos (by norm_num : (2:ℝ) > 1)
+    exact div_nonneg hf02_real_nonneg (le_of_lt hlog2_pos)
+  · -- Case: H trivial
     exact le_refl 0
 
-/-- Helper: f₀ H 2 is non-zero if H is non-trivial. -/
-lemma f0_2_ne_zero (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH : IsEntropyFunction H)
-    (h_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0) :
-    f₀ H 2 ≠ 0 := by
-  have hb2 : 2 ≥ 2 := by norm_num
-  have h_pos : f₀ H 2 > 0 := uniformEntropy_pos_of_nontrivial hH h_nonzero hb2
-  exact ne_of_gt h_pos
-
-/-- Helper: log 2 is non-zero. -/
-lemma log_2_ne_zero : Real.log 2 ≠ 0 := by
-  have hb2 : 2 ≥ 2 := by norm_num
-  have h_pos : Real.log 2 > 0 := log_b_pos hb2
-  exact ne_of_gt h_pos
-
 
 /--
-Helper Lemma: Explicitly proves that C_constant H equals the 'then' branch
-of its definition when H is non-trivial.
+Rota's Uniform Theorem (final part of Phase 2):
+`f0 H n` (coerced to Real) is `C * Real.log n`.
 -/
-lemma C_constant_eq_term_A_of_nonzero (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ)
-    (h_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0) :
-    C_constant H = f₀ H 2 / Real.log 2 := by
-  -- Unfold the definition of C_constant
-  unfold C_constant
-  -- Use the provided hypothesis h_nonzero to simplify the if statement
-  exact if_pos h_nonzero
-
-/--
-Lemma: If the entropy function `H` is non-trivial, then `f₀ H n` equals
-`C * Real.log n`, where `C` is the defined constant `C_constant H hH`.
-Uses helper lemmas for clarity.
--/
-lemma f0_eq_C_log_of_nonzero (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH : IsEntropyFunction H)
-    (h_nonzero : ∃ n' ≥ 1, f₀ H n' ≠ 0) {n : ℕ} (hn : n ≥ 1) :
-    f₀ H n = C_constant H * Real.log n := by
-
-  -- Step 1: Get the core relationship derived from ratios
-  have hb2 : 2 ≥ 2 := by norm_num
-  have h_ratio_eq : f₀ H n / f₀ H 2 = Real.log n / Real.log 2 := by
-    exact f0_ratio_eq_log_ratio hH h_nonzero hn hb2
-  have hf0_2_ne_zero : f₀ H 2 ≠ 0 := f0_2_ne_zero H hH h_nonzero
-  have hlog2_ne_zero : Real.log 2 ≠ 0 := log_2_ne_zero
-  have h_core_relation : f₀ H n = (f₀ H 2 / Real.log 2) * Real.log n := by
-    exact rearrange_ratio_equality hf0_2_ne_zero hlog2_ne_zero h_ratio_eq
-
-  -- Step 2: Establish that C_constant H equals the 'then' branch value
-  have h_C_eq_A : C_constant H = f₀ H 2 / Real.log 2 := by
-    exact C_constant_eq_term_A_of_nonzero H h_nonzero
-
-  -- Step 3: Rewrite the LHS of the goal using the core relationship
-  rw [h_core_relation]
-  -- Goal is now: (f₀ H 2 / Real.log 2) * Real.log n = C_constant H * Real.log n
-
-  -- Step 4: Rewrite the RHS of the goal using the equality for C_constant
-  rw [h_C_eq_A]
-  -- Goal is now: (f₀ H 2 / Real.log 2) * Real.log n = (f₀ H 2 / Real.log 2) * Real.log n
-
-  -- Step 5: Close the goal by reflexivity
-  --rfl
-
-/--
-Helper Lemma: If H is the trivial entropy function (f₀ H n = 0 for all n ≥ 1),
-then f₀ H n is indeed 0 for any specific n ≥ 1.
--/
-lemma f0_eq_zero_of_not_nonzero (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ)
-    (h_not_nonzero : ¬(∃ n' ≥ 1, f₀ H n' ≠ 0)) {n : ℕ} (_hn : n ≥ 1) :
-    f₀ H n = 0 := by
-  -- Proof by contradiction
-  by_contra h_f0_n_ne_zero
-  -- Assume f₀ H n ≠ 0.
-  -- Since n ≥ 1 (from hn), this provides a witness for the existence claim.
-  have h_exists : ∃ n' ≥ 1, f₀ H n' ≠ 0 := by
-    use n -- Use the specific n we are considering
-    -- Need to provide proof of n ≥ 1 and f₀ H n ≠ 0
-  -- This contradicts the main hypothesis h_not_nonzero
-  exact h_not_nonzero h_exists
-
-/--
-Helper Lemma: Explicitly proves that C_constant H equals the 'else' branch (0)
-of its definition when H is trivial.
--/
-lemma C_constant_eq_zero_of_not_nonzero (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ)
-    (h_not_nonzero : ¬(∃ n' ≥ 1, f₀ H n' ≠ 0)) :
-    C_constant H = 0 := by
-  -- Unfold the definition of C_constant
-  unfold C_constant
-  -- Use the provided hypothesis h_not_nonzero to simplify the if statement
-  exact if_neg h_not_nonzero
-
-/--
-Lemma: If the entropy function `H` is trivial (f₀ H n = 0 for all n ≥ 1),
-then `f₀ H n` equals `C * Real.log n`, where `C` is the defined constant (which is 0).
--/
-lemma f0_eq_C_log_of_zero (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (_hH : IsEntropyFunction H)
-    (h_not_nonzero : ¬(∃ n' ≥ 1, f₀ H n' ≠ 0)) {n : ℕ} (hn : n ≥ 1) :
-    f₀ H n = C_constant H * Real.log n := by
-
-  -- Step 1: Establish f₀ H n = 0 using the first helper
-  have h_f0_n_zero : f₀ H n = 0 := by
-    exact f0_eq_zero_of_not_nonzero H h_not_nonzero hn
-
-  -- Step 2: Establish C_constant H = 0 using the second helper
-  have h_C_zero : C_constant H = 0 := by
-    exact C_constant_eq_zero_of_not_nonzero H h_not_nonzero
-
-  -- Step 3: Rewrite the goal using these two facts
-  rw [h_f0_n_zero, h_C_zero]
-  -- Goal is now: 0 = 0 * Real.log n
-
-  -- Step 4: Prove the final equality using symmetry
-  exact Eq.symm (zero_mul (Real.log n))
-
-/--
-Helper Lemma: Combines the results for the non-trivial and trivial cases
-to show that `f₀ H n = C * Real.log n` holds for all n ≥ 1.
--/
-lemma f0_eq_C_log_cases (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH : IsEntropyFunction H)
-    {n : ℕ} (hn : n ≥ 1) :
-    f₀ H n = C_constant H * Real.log n := by
-  -- Use classical logic to split on whether H is non-trivial
-  apply Classical.by_cases
-  · -- Case 1: Assume H is non-trivial (h_nonzero : ∃ ...)
-    intro h_nonzero
-    exact f0_eq_C_log_of_nonzero H hH h_nonzero hn
-  · -- Case 2: Assume H is trivial (h_not_nonzero : ¬(∃ ...))
-    intro h_not_nonzero
-    exact f0_eq_C_log_of_zero H hH h_not_nonzero hn
-
-/--
-Helper Lemma: Connects the original function `f` (defined for `n > 0`)
-to the extended function `f₀` (defined for all `n`).
--/
-lemma f_eq_f0_for_positive_n (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ)
-    {n : ℕ} (hn_pos : n > 0) :
-    f H hn_pos = f₀ H n := by
-  -- Unfold the definition of f₀ on the RHS
-  rw [f₀]
-  -- Goal is now: f H hn_pos = (dite (n > 0) (fun hn => f H hn) (fun _ => 0))
-  -- Use the hypothesis hn_pos to simplify the 'dite' to the 'then' branch
-  -- dif_pos rewrites (dite c t e) to t(hc) given hc : c
-  rw [dif_pos hn_pos]
-
-/-!
-### Chunk 3.4 - Breakdown Step 5 - Main Theorem: Existence of C and log formula
-Theorem (Chunk 3 Goal): There exists a non-negative constant `C` such that
-for all `n > 0`, the entropy of the uniform distribution `f H n` is equal
-to `C * log n`.
--/
-theorem RotaEntropyTheorem (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH : IsEntropyFunction H) :
-    ∃ C ≥ 0, ∀ n (hn : n > 0), f H hn = C * Real.log n := by
-  -- Step 1: Define the constant C using the existing definition
-  let C := C_constant H
-  -- Step 2: Claim existence of this C
-  use C
-
-  -- Step 3: Prove the two required properties: C ≥ 0 and the universal quantification
+theorem RotaUniformTheorem_formula_with_C_constant {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) :
+    let C_val := C_constant_real hH_axioms
+    (C_val ≥ 0 ∧
+     ∀ (n : ℕ) (_hn_pos : n > 0), (f0 hH_axioms n : ℝ) = C_val * Real.log n) := by
+  let C_val := C_constant_real hH_axioms
   constructor
-  · -- Prove C ≥ 0 using the previously proven lemma
-    exact C_constant_nonneg H hH
-  · -- Prove ∀ n > 0, f H ... = C * Real.log n
-    -- Introduce arbitrary n and the hypothesis n > 0
-    intro n hn_pos
-    -- Goal: f H hn_pos = C * Real.log n
+  · exact C_constant_real_nonneg hH_axioms
+  · intro n hn_pos
+    -- Goal: (f0 hH_axioms n : ℝ) = C_val * Real.log n
+    simp_rw [C_constant_real] -- Unfold C_val definition in the goal
+    split_ifs with h_nontrivial
+    · -- Case: H non-trivial. C_val_expanded = (f0 hH_axioms 2 : ℝ) / Real.log 2
+      -- Goal: (f0 hH_axioms n : ℝ) = ((f0 hH_axioms 2 : ℝ) / Real.log 2) * Real.log n
+      let F0N := (f0 hH_axioms n : ℝ)
+      let F02 := (f0 hH_axioms 2 : ℝ)
+      let LOGN := Real.log n
+      let LOG2 := Real.log 2
+      change F0N = (F02 / LOG2) * LOGN -- Makes the goal structure explicit with local names
 
-    -- Step 4: Connect f to f₀ using the helper lemma
-    rw [f_eq_f0_for_positive_n H hn_pos]
-    -- Goal: f₀ H n = C * Real.log n
+      have h_ratio_eq_logb : F0N / F02 = Real.logb 2 n :=
+        uniformEntropy_ratio_eq_logb hH_axioms h_nontrivial hn_pos (by norm_num : 2 ≥ 2)
 
-    -- Step 5: Prove n ≥ 1 (needed for the next lemma)
-    have hn_ge_1 : n ≥ 1 := Nat.one_le_of_lt hn_pos
+      have hf02_ne_zero : F02 ≠ 0 := by
+        exact coe_ne_zero.mpr (uniformEntropy_pos_of_nontrivial hH_axioms h_nontrivial (by norm_num))
+      have hlog2_ne_zero : LOG2 ≠ 0 := ne_of_gt (Real.log_pos (by norm_num : (2:ℝ) > 1))
+      have hn_real_pos : (n:ℝ) > 0 := Nat.cast_pos.mpr hn_pos
+      have h2_real_pos : (2:ℝ) > 0 := by norm_num
 
-    -- Step 6: Apply the lemma that combines the zero/non-zero cases
-    exact f0_eq_C_log_cases H hH hn_ge_1
+      -- Rewrite logb using log: F0N / F02 = LOGN / LOG2
+      rw [Real.logb] at h_ratio_eq_logb
+      -- Note: Real.logb_def is logb b x = log x / log b.
+      -- This changes h_ratio_eq_logb to: F0N / F02 = LOGN / LOG2
 
-/--
-This is just an alternate form RotaEntropyTheorem directly states the conclusion of Rota's Entropy Theorem
-using the specific constant `C_constant H`. The proof of `RotaEntropyTheorem`
-constructs its existential witness `C` as `C_constant H`.
--/
-theorem RotaEntropyTheorem_formula_with_C_constant
-    (H : ∀ {n : ℕ}, (Fin n → NNReal) → ℝ) (hH_axioms : IsEntropyFunction H) :
-    (C_constant H) ≥ 0 ∧ ∀ (n : ℕ) (hn : n > 0), f H hn = (C_constant H) * Real.log n := by
-  -- The proof of RotaEntropyTheorem is `use (C_constant H)`.
-  -- We reconstruct that here to get the properties specifically for `C_constant H`.
-  constructor
-  · -- Property 1: C_constant H ≥ 0
-    exact C_constant_nonneg H hH_axioms
-  · -- Property 2: ∀ n (hn > 0), f H hn = (C_constant H) * Real.log n
-    intro n hn_pos
-    -- This relies on f0_eq_C_log_cases, which is used in the proof of RotaEntropyTheorem
-    -- and f_eq_f0_for_positive_n to switch from f to f₀.
-    rw [f_eq_f0_for_positive_n H hn_pos]
-    exact f0_eq_C_log_cases H hH_axioms (Nat.one_le_of_lt hn_pos)
+      -- Now we have F0N / F02 = LOGN / LOG2
+      -- Goal is F0N = (F02 / LOG2) * LOGN
+      rw [div_eq_iff hf02_ne_zero] at h_ratio_eq_logb
+      -- h_ratio_eq_logb is now: F0N = (LOGN / LOG2) * F02
+      -- Goal is:                F0N = (F02 / LOG2) * LOGN
+      rw [h_ratio_eq_logb]
+      -- Goal: (LOGN / LOG2) * F02 = (F02 / LOG2) * LOGN
+      -- This can be rearranged using field properties
+      -- field_simp [hlog2_ne_zero] -- Should simplify both sides to (LOGN * F02) / LOG2
+      -- The goal is (Real.log ↑n / Real.log 2) * F02 = F02 / Real.log 2 * Real.log ↑n
+      -- which simplifies to (Real.log n * F02) / Real.log 2 = (F02 * Real.log n) / Real.log 2.
+      -- This is true by commutativity of multiplication. `ring` handles this.
+      ring
+
+    · -- Case: H trivial (¬h_nontrivial). C_val_expanded = 0
+      -- Goal: (f0 hH_axioms n : ℝ) = 0 * Real.log n
+      have hf0n_eq_0_nnreal : f0 hH_axioms n = 0 := by
+        by_contra hf0n_ne_0_hyp
+        -- Use the externalized lemma:
+        -- hf0n_ne_0_implies_nontrivial takes (f0 H n ≠ 0) and (n > 0)
+        -- and returns (∃ n' ≥ 1, f0 H n' ≠ 0)
+        -- This contradicts h_nontrivial (which is ¬(∃ n' ≥ 1, f0 H n' ≠ 0))
+        exact h_nontrivial (hf0n_ne_0_implies_nontrivial hH_axioms hf0n_ne_0_hyp hn_pos)
+      simp only [hf0n_eq_0_nnreal, NNReal.coe_zero, zero_mul]
+
+theorem RotaUniformTheorem {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : IsEntropyFunction H) :
+    ∃ C ≥ 0, ∀ (n : ℕ) (_hn_pos : n > 0), (f0 hH_axioms n : ℝ) = C * Real.log n := by
+  use C_constant_real hH_axioms
+  exact RotaUniformTheorem_formula_with_C_constant hH_axioms
