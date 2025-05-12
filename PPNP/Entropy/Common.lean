@@ -27,8 +27,10 @@ import PPNP.Common.Basic
 
 namespace PPNP.Entropy.Common
 
-open BigOperators Fin Real Topology NNReal Filter Nat
+open BigOperators Fin Real Topology NNReal Filter Nat Function
 open PPNP.Common
+
+universe u
 
 -- Definition: f(n) = H(uniform distribution on n outcomes)
 noncomputable def uniformProb (n : ℕ) : NNReal :=
@@ -94,6 +96,9 @@ noncomputable instance {N M : ℕ} [NeZero N] [NeZero M] : Coe
   coe := fun (⟨pr, P_cond⟩ : (Fin N → NNReal) × (Fin N → Fin M → NNReal)) => -- Renamed P to P_cond
     DependentPairDist pr P_cond
 
+-- noncomputable instance {α β : Type*} :
+--   CoeTC ((β → NNReal) × (α ≃ β)) (α → NNReal) where
+--   coe := fun (⟨p, e⟩ : (β → NNReal) × (α ≃ β)) => p ∘ e
 
 -- Component Structures for IsEntropyFunction
 -- H maps (α → NNReal) to NNReal.
@@ -104,13 +109,13 @@ structure IsEntropyNormalized
   normalized : ∀ (p : Fin 1 → NNReal), (∑ i, p i = 1) → H_func p = 0
 
 structure IsEntropySymmetric
-  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
-: Prop where
-  symmetry   : ∀ {α : Type} [Fintype α] (p : α → NNReal) (_hp : ∑ i, p i = 1)
-                  (σ : Equiv.Perm α), H_func (p ∘ σ) = H_func p
-                  -- Note: p ∘ σ is p(σ(i)) for new_p(i). Or p ∘ σ.invFun for p_old(σ(i_new)) = p_new(i_new)
-                  -- The provided Phase 2 code had `p ∘ σ`. This means if `p'` is the permuted distribution,
-                  -- `p'(i) = p(σ(i))`.
+  (H_func : ∀ {α : Type u} [Fintype α], (α → NNReal) → NNReal) : Prop where
+  symmetry :
+    ∀ {α β : Type u} [Fintype α] [Fintype β]
+      (p_target : β → NNReal) (_hp : ∑ y, p_target y = 1)
+      (e : α ≃ β),
+      H_func (α := α) (fun x : α => p_target (e x)) =
+      H_func (α := β) p_target
 
 structure IsEntropyContinuous
   (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func

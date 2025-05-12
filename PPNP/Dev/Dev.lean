@@ -57,5 +57,47 @@ open BigOperators Fin Real Topology NNReal Filter Nat Set Multiset
 
 /- PPNP.Entropy.Common - Phase 0 Revised/New Objects -/
 
-open BigOperators Fin Real Topology NNReal Filter Nat
 open PPNP.Common PPNP.Entropy.Common PPNP.Entropy.RET PPNP.Entropy.Physics.BE
+
+
+/--
+The canonical uniform distribution on `Fin k`.
+Defined as `fun (_ : Fin k) => (k : NNReal)⁻¹`.
+This is a specialization of `uniformDist` for clarity and specific use with `Fin k`.
+-/
+noncomputable def canonicalUniformDist (k : ℕ) (hk_pos : k > 0) : Fin k → NNReal :=
+  uniformDist (Fintype_card_fin_pos hk_pos)
+
+/--
+Proof that `canonicalUniformDist k hk_pos` sums to 1.
+This directly uses `sum_uniformDist` with the appropriate proof of positivity
+for `Fintype.card (Fin k)`.
+-/
+lemma sum_canonicalUniformDist_eq_one (k : ℕ) (hk_pos : k > 0) :
+    (∑ i, canonicalUniformDist k hk_pos i) = 1 := by
+  simp only [canonicalUniformDist] -- Unfold to uniformDist (Fintype_card_fin_pos hk_pos)
+  exact sum_uniformDist (Fintype_card_fin_pos hk_pos)
+
+/--
+Symmetry of `stdShannonEntropyLn`: `stdShannonEntropyLn (p ∘ e) = stdShannonEntropyLn p`
+for an `Equiv e : α ≃ β` between two Fintypes `α` and `β`,
+and a target distribution `p_target : β → NNReal`.
+The sum `∑ x:α, negMulLog(p_target(e x))` is transformed to `∑ y:β, negMulLog(p_target y)`.
+-/
+theorem stdShannonEntropyLn_comp_equiv {α β : Type*} [Fintype α] [Fintype β]
+    (p_target : β → NNReal) (e : α ≃ β) :
+    stdShannonEntropyLn (p_target ∘ e) = stdShannonEntropyLn p_target := by
+  -- Unfold stdShannonEntropyLn on both sides to expose the sums.
+  unfold stdShannonEntropyLn
+  -- LHS: ∑ (x : α), negMulLog ((p_target (e x)) : ℝ)
+  -- RHS: ∑ (y : β), negMulLog ((p_target y) : ℝ)
+  -- Apply Function.comp_apply to the term inside the sum on the LHS.
+  simp_rw [Function.comp_apply]
+  -- LHS is now: ∑ (x : α), negMulLog ((p_target (e x)) : ℝ)
+  -- Let g(y) := negMulLog ((p_target y) : ℝ).
+  -- LHS is ∑ (x : α), g (e x).
+  -- Equiv.sum_comp states: (∑ x, g (e x)) = (∑ y, g y).
+  exact Equiv.sum_comp e (fun (y : β) => negMulLog ((p_target y) : ℝ))
+
+-- We'll continue with `stdShannonEntropyLn_canonicalUniform_eq_log_k` and the main theorem
+-- `H_uniform_mapped_dist_eq_C_shannon` once this part is verified.
