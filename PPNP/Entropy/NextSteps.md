@@ -161,3 +161,5 @@ the following variables have been introduced by the implicit lambda feature
 b) H_BE_eq_C_shannon
 ℝ≥0)
 2) Let's brainstorm the simplest way to perform the same approcah. Does the lean code also allow for the "two part" application of identifying entropy via the properties and then verifying uniqueness? Summarize the approach of the lean code vs the paper and then do a detailed identification of congruence and gaps.
+
+

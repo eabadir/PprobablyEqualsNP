@@ -35,6 +35,7 @@ open PPNP.Entropy.Common
 -- Define the type for Macrostates (occupancy vectors summing to M)
 -- Needed for both MB and BE state space definitions
 def MBMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
+def UDMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
 -- Define the type for multisets of size M over Fin N
 -- This uses the standard Mathlib definition `Sym α n := {s : Multiset α // card s = n}`
 @[reducible] def SymFin (N M : ℕ) := Sym (Fin N) M
