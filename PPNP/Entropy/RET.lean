@@ -36,11 +36,11 @@ open PPNP.Entropy.Common
 -- Replaced: old `f` definition
 /--
 Defines `f H n = H(uniform distribution on n outcomes)`.
-`H` is an entropy function satisfying `IsEntropyFunction`.
+`H` is an entropy function satisfying `HasRotaEntropyProperties`.
 Requires `n > 0`. Output is `NNReal`.
 -/
 noncomputable def f {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func for clarity
-    (_hH_axioms : IsEntropyFunction H_func) {n : ℕ} (hn_pos : n > 0) : NNReal :=
+    (_hH_axioms : HasRotaEntropyProperties H_func) {n : ℕ} (hn_pos : n > 0) : NNReal :=
   let α_n := Fin n
   have h_card_pos : 0 < Fintype.card α_n := by
     rw [Fintype.card_fin]
@@ -53,7 +53,7 @@ Defines `f0 H n` which extends `f H n` to include `n=0` by setting `f0 H 0 = 0`.
 Output is `NNReal`.
 -/
 noncomputable def f0 {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
-    (hH_axioms : IsEntropyFunction H_func) (n : ℕ) : NNReal :=
+    (hH_axioms : HasRotaEntropyProperties H_func) (n : ℕ) : NNReal :=
   if hn_pos : n > 0 then f hH_axioms hn_pos else 0
 
 -- New helper
@@ -114,10 +114,10 @@ lemma sum_p_ext_eq_one_of_sum_p_orig_eq_one
 
 /--
 Property: `f0 H 1 = 0`.
-This follows from the `normalized` axiom of `IsEntropyFunction`.
+This follows from the `normalized` axiom of `HasRotaEntropyProperties`.
 -/
 theorem f0_1_eq_0 {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) : f0 hH_axioms 1 = 0 := by
+    (hH_axioms : HasRotaEntropyProperties H) : f0 hH_axioms 1 = 0 := by
   have h1_pos : 1 > 0 := Nat.one_pos
   -- Unfold f0 using h1_pos
   simp only [f0, dif_pos h1_pos]
@@ -133,7 +133,7 @@ Property: `f0 H n` is monotone non-decreasing.
 Uses `zero_invariance` and `max_uniform` axioms.
 -/
 theorem f0_mono {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) : Monotone (f0 hH_axioms) := by
+    (hH_axioms : HasRotaEntropyProperties H) : Monotone (f0 hH_axioms) := by
   apply monotone_nat_of_le_succ
   intro n
   -- Case n = 0
@@ -229,7 +229,7 @@ If P(j|i) = q_const(j), then H(joint) = H(prior) + H(q_const).
 -/
 lemma cond_add_for_independent_distributions
     {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
-    (hH_axioms : IsEntropyFunction H_func)
+    (hH_axioms : HasRotaEntropyProperties H_func)
     {N M : ℕ} [NeZero N] [NeZero M]
     (prior : Fin N → NNReal) (q_const : Fin M → NNReal)
     (hprior_sum_1 : ∑ i, prior i = 1) (hq_const_sum_1 : ∑ j, q_const j = 1) :
@@ -295,7 +295,7 @@ This is derived from the conditional additivity axiom for independent distributi
 Output is `NNReal`.
 -/
 theorem f0_mul_eq_add_f0 {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) {n m : ℕ} (hn_pos : n > 0) (hm_pos : m > 0) :
+    (hH_axioms : HasRotaEntropyProperties H) {n m : ℕ} (hn_pos : n > 0) (hm_pos : m > 0) :
     f0 hH_axioms (n * m) = f0 hH_axioms n + f0 hH_axioms m := by
   -- Step 1: Handle positivity and unfold f0
   have hnm_pos : n * m > 0 := Nat.mul_pos hn_pos hm_pos
@@ -359,7 +359,7 @@ Helper lemma for the inductive step of `uniformEntropy_power_law_new`.
 Shows `f0 H (n^(m+1)) = f0 H (n^m) + f0 H n`.
 -/
 lemma f0_pow_succ_step {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) {n m : ℕ} (hn_pos : n > 0) (_hm_pos : m > 0) :
+    (hH_axioms : HasRotaEntropyProperties H) {n m : ℕ} (hn_pos : n > 0) (_hm_pos : m > 0) :
     f0 hH_axioms (n ^ (m + 1)) = f0 hH_axioms (n ^ m) + f0 hH_axioms n := by
   -- Assuming pow_succ' n m results in n * n^m based on the error message.
   -- If it results in n^m * n, the original argument order for f0_mul_eq_add_f0_new was correct,
@@ -392,7 +392,7 @@ are needed.
 -/
 theorem uniformEntropy_power_law
     {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H)
+    (hH_axioms : HasRotaEntropyProperties H)
     {n k : ℕ} (hn_pos : n > 0) (hk_pos : k > 0) :
     f0 hH_axioms (n ^ k) = (k : NNReal) * f0 hH_axioms n := by
   ------------------------------------------------------------------
@@ -451,14 +451,14 @@ theorem uniformEntropy_power_law
 -- Replaced: old `f0_nonneg`
 /-- Property: `f0 H n ≥ 0` for `n ≥ 1`. (Trivial since `f0` outputs `NNReal`). -/
 lemma f0_nonneg {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
-    (hH_axioms : IsEntropyFunction H_func) {n : ℕ} (_hn_ge1 : n ≥ 1) :
+    (hH_axioms : HasRotaEntropyProperties H_func) {n : ℕ} (_hn_ge1 : n ≥ 1) :
     ((f0 hH_axioms n) : ℝ) ≥ 0 := -- Coerced to Real for comparison with old version.
   NNReal.coe_nonneg _
 
 -- Replaced: old `f0_2_eq_zero_of_f0_b_eq_zero`
 /-- If `f0 H b = 0` for `b ≥ 2`, then `f0 H 2 = 0`. Output `NNReal`. -/
 lemma f0_2_eq_zero_of_f0_b_eq_zero {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
-    (hH_axioms : IsEntropyFunction H_func) {b : ℕ} (hb_ge2 : b ≥ 2) (hf0b_eq_0 : f0 hH_axioms b = 0) :
+    (hH_axioms : HasRotaEntropyProperties H_func) {b : ℕ} (hb_ge2 : b ≥ 2) (hf0b_eq_0 : f0 hH_axioms b = 0) :
     f0 hH_axioms 2 = 0 := by
   have h_mono := f0_mono hH_axioms
   have h_f0_2_ge_0 : f0 hH_axioms 2 ≥ 0 := zero_le (f0 hH_axioms 2)
@@ -469,7 +469,7 @@ lemma f0_2_eq_zero_of_f0_b_eq_zero {H_func : ∀ {α : Type} [Fintype α], (α �
 
 /-- If `f0 H 2 = 0`, then `f0 H (2^k) = 0` for `k ≥ 1`. (Output `NNReal`) -/
 lemma f0_pow2_eq_zero_of_f0_2_eq_zero {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) {k : ℕ} (hf0_2_eq_0 : f0 hH_axioms 2 = 0) (hk_ge1 : k ≥ 1) :
+    (hH_axioms : HasRotaEntropyProperties H) {k : ℕ} (hf0_2_eq_0 : f0 hH_axioms 2 = 0) (hk_ge1 : k ≥ 1) :
     f0 hH_axioms (2 ^ k) = 0 := by
   have h2_pos : 2 > 0 := by norm_num
   have hk_pos : k > 0 := pos_of_one_le hk_ge1
@@ -482,7 +482,7 @@ lemma f0_pow2_eq_zero_of_f0_2_eq_zero {H : ∀ {α : Type} [Fintype α], (α →
 
 /-- If `f0 H (2^k) = 0` for all `k ≥ 1`, then `f0 H n = 0` for all `n ≥ 1`. (Output `NNReal`) -/
 lemma f0_n_eq_zero_of_f0_pow2_zero {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H)
+    (hH_axioms : HasRotaEntropyProperties H)
     (h_all_f0_pow2_zero : ∀ k ≥ 1, f0 hH_axioms (2 ^ k) = 0)
     {n : ℕ} (hn_ge1 : n ≥ 1) :
     f0 hH_axioms n = 0 := by
@@ -509,7 +509,7 @@ lemma f0_n_eq_zero_of_f0_pow2_zero {H : ∀ {α : Type} [Fintype α], (α → NN
 
 /-- `f0 H b > 0` (as NNReal, so `f0 H b ≠ 0`) if `H` is non-trivial and `b ≥ 2`. -/
 lemma uniformEntropy_pos_of_nontrivial {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+    (hH_axioms : HasRotaEntropyProperties H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
     {b : ℕ} (hb_ge2 : b ≥ 2) :
     f0 hH_axioms b ≠ 0 := by
   by_contra hf0b_eq_0
@@ -530,7 +530,7 @@ lemma uniformEntropy_pos_of_nontrivial {H : ∀ {α : Type} [Fintype α], (α �
 /-- If `f0 H n ≠ 0` for `n > 0`, then `H` is non-trivial. -/
 lemma hf0n_ne_0_implies_nontrivial
     {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
-    (hH_axioms : IsEntropyFunction H_func)
+    (hH_axioms : HasRotaEntropyProperties H_func)
     {n : ℕ} (hf0n_ne_0 : f0 hH_axioms n ≠ 0) (hn_pos : n > 0) :
     ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0 := by
   use n; exact ⟨Nat.one_le_of_lt hn_pos, hf0n_ne_0⟩
@@ -538,7 +538,7 @@ lemma hf0n_ne_0_implies_nontrivial
 /-- `f0 H b > 0` (as NNReal) if `H` is non-trivial and `b ≥ 2`.
     This is a version of `uniformEntropy_pos_of_nontrivial` that directly gives `0 < f0 ...`. -/
 lemma f0_pos_of_nontrivial_nnreal_version {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+    (hH_axioms : HasRotaEntropyProperties H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
     {b : ℕ} (hb_ge2 : b ≥ 2) :
     0 < f0 hH_axioms b := by
   have h_ne_zero : f0 hH_axioms b ≠ 0 :=
@@ -553,7 +553,7 @@ lemma f0_pos_of_nontrivial_nnreal_version {H : ∀ {α : Type} [Fintype α], (α
     `k_val / m_val ≤ (f0 H n : ℝ) / (f0 H b : ℝ)`
 -/
 lemma k_from_f0_trap_satisfies_pow_bounds_real {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+    (hH_axioms : HasRotaEntropyProperties H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
     {n m b : ℕ} (hn_pos : n > 0) (hm_pos : m > 0) (hb_ge2 : b ≥ 2) :
     ∃ k : ℕ,
       -- Power bounds (Real numbers, Nat powers)
@@ -722,7 +722,7 @@ This uses the Real‐valued bounds from `k_from_f0_trap_satisfies_pow_bounds_rea
 -/
 theorem logarithmic_trapping
   {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-  (hH_axioms     : IsEntropyFunction H)
+  (hH_axioms     : HasRotaEntropyProperties H)
   (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
   {n m b : ℕ} (hn_pos  : n > 0) (hm_pos  : m > 0) (hb_ge2 : b ≥ 2) :
   |(f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ) - Real.logb b n| ≤ 1 / (m : ℝ) :=
@@ -816,7 +816,7 @@ The ratio `(f0 H n : ℝ) / (f0 H b : ℝ)` is exactly `logb b n`.
 Requires `H` to be non-trivial.
 -/
 theorem uniformEntropy_ratio_eq_logb {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
+    (hH_axioms : HasRotaEntropyProperties H) (hH_nontrivial : ∃ n' ≥ 1, f0 hH_axioms n' ≠ 0)
     {n b : ℕ} (hn_pos : n > 0) (hb_ge2 : b ≥ 2) :
     (f0 hH_axioms n : ℝ) / (f0 hH_axioms b : ℝ) = Real.logb b n := by
   apply eq_of_abs_sub_le_inv_ge_one_nat
@@ -829,7 +829,7 @@ Defined as `(f0 H 2 : ℝ) / Real.log 2` if H is non-trivial, else 0.
 This constant is `Real`-valued.
 -/
 noncomputable def C_constant_real {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) : Real :=
+    (hH_axioms : HasRotaEntropyProperties H) : Real :=
   by classical -- Use classical logic to ensure the condition is decidable
   exact if h_nontrivial : (∃ n' ≥ 1, f0 hH_axioms n' ≠ 0) then
     (f0 hH_axioms 2 : ℝ) / Real.log 2
@@ -838,7 +838,7 @@ noncomputable def C_constant_real {H : ∀ {α : Type} [Fintype α], (α → NNR
 
 /-- `C_constant_real` is non-negative. -/
 lemma C_constant_real_nonneg {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) : C_constant_real hH_axioms ≥ 0 := by
+    (hH_axioms : HasRotaEntropyProperties H) : C_constant_real hH_axioms ≥ 0 := by
   rw [C_constant_real]
   split_ifs with h_nontrivial
   · -- Case: H non-trivial
@@ -854,7 +854,7 @@ Rota's Uniform Theorem (final part of Phase 2):
 `f0 H n` (coerced to Real) is `C * Real.log n`.
 -/
 theorem RotaUniformTheorem_formula_with_C_constant {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) :
+    (hH_axioms : HasRotaEntropyProperties H) :
     let C_val := C_constant_real hH_axioms
     (C_val ≥ 0 ∧
      ∀ (n : ℕ) (_hn_pos : n > 0), (f0 hH_axioms n : ℝ) = C_val * Real.log n) := by
@@ -913,7 +913,7 @@ theorem RotaUniformTheorem_formula_with_C_constant {H : ∀ {α : Type} [Fintype
       simp only [hf0n_eq_0_nnreal, NNReal.coe_zero, zero_mul]
 
 theorem RotaUniformTheorem {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : IsEntropyFunction H) :
+    (hH_axioms : HasRotaEntropyProperties H) :
     ∃ C ≥ 0, ∀ (n : ℕ) (_hn_pos : n > 0), (f0 hH_axioms n : ℝ) = C * Real.log n := by
   use C_constant_real hH_axioms
   exact RotaUniformTheorem_formula_with_C_constant hH_axioms

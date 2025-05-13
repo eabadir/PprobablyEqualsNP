@@ -41,11 +41,11 @@ def UDMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
 @[reducible] def SymFin (N M : ℕ) := Sym (Fin N) M
 
 -- This is the actual function that calculates entropy for a physical system's distribution.
--- It now has the type expected by IsEntropyFunction: (distribution over α) → NNReal
+-- It now has the type expected by HasRotaEntropyProperties: (distribution over α) → NNReal
 axiom H_physical_system : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal
 
 -- This axiom states that the true entropy of physical systems behaves according to Rota's postulates.
-axiom H_physical_system_is_IsEntropyFunction : IsEntropyFunction H_physical_system
+axiom H_physical_system_has_Rota_entropy_properties : HasRotaEntropyProperties H_physical_system
 
 /-- `Multiset.count` distributes over a `Finset` sum of multisets. -/
 @[simp] lemma Multiset.count_finset_sum

@@ -100,7 +100,7 @@ noncomputable instance {N M : ℕ} [NeZero N] [NeZero M] : Coe
 --   CoeTC ((β → NNReal) × (α ≃ β)) (α → NNReal) where
 --   coe := fun (⟨p, e⟩ : (β → NNReal) × (α ≃ β)) => p ∘ e
 
--- Component Structures for IsEntropyFunction
+-- Component Structures for HasRotaEntropyProperties
 -- H maps (α → NNReal) to NNReal.
 
 structure IsEntropyNormalized
@@ -158,10 +158,10 @@ structure IsEntropyMaxUniform
 
 /--
 **Axiomatic Entropy Function.**
-`IsEntropyFunction H_func` means `H_func` assigns `NNReal` to finite probability distributions,
+`HasRotaEntropyProperties H_func` means `H_func` assigns `NNReal` to finite probability distributions,
 satisfying normalization, symmetry, continuity, conditional additivity, zero invariance, and maximality at uniform.
 -/
-structure IsEntropyFunction -- This is the new definition
+structure HasRotaEntropyProperties -- This is the new definition
   (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
   : Prop
   extends IsEntropyZeroInvariance H_func,

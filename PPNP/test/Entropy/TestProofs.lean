@@ -4,7 +4,7 @@ import Mathlib.Tactic.NormNum -- For evaluating numerals
 open PPNP.Entropy.RET Real Nat
 
 -- Assume the existence of an entropy function H satisfying the properties
-variable {H : ∀ {n : ℕ}, (Fin n → NNReal) → Real} (hH : IsEntropyFunction H)
+variable {H : ∀ {n : ℕ}, (Fin n → NNReal) → Real} (hH : HasRotaEntropyProperties H)
 
 -- Test lemma for f₀(1) = 0 from Basic.lean
 example : f₀ H 1 = 0 :=

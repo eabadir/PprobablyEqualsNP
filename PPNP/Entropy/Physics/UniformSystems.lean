@@ -70,7 +70,7 @@ lemma stdShannonEntropyLn_canonicalUniform_eq_log_k (k : ℕ) (hk_pos : k > 0) :
 
 theorem H_canonical_uniform_eq_C_shannon
     (H_func : ∀ {α_aux : Type} [Fintype α_aux], (α_aux → NNReal) → NNReal)
-    (hH_axioms : IsEntropyFunction H_func)
+    (hH_axioms : HasRotaEntropyProperties H_func)
     (k : ℕ) (hk_pos : k > 0) :
     -- Removed 'let p_unif_k := canonicalUniformDist k hk_pos' from the statement
     (H_func (canonicalUniformDist k hk_pos) : ℝ) = (C_constant_real hH_axioms) * stdShannonEntropyLn (canonicalUniformDist k hk_pos) := by
@@ -115,7 +115,7 @@ lemma p_sys_eq_canonical_comp_equiv
 lemma H_sys_eq_H_canonical_nnreal_of_comp
     {Ω_sys : Type} [Fintype Ω_sys]
     (H_func : ∀ {α_aux : Type} [Fintype α_aux], (α_aux → NNReal) → NNReal)
-    (hH_axioms : IsEntropyFunction H_func)
+    (hH_axioms : HasRotaEntropyProperties H_func)
     (p_sys_arg : Ω_sys → NNReal)
     (k : ℕ) (hk_pos : k > 0)
     (e_sys_to_fin_k : Ω_sys ≃ Fin k)
@@ -152,7 +152,7 @@ lemma stdShannon_sys_eq_stdShannon_canonical
 theorem H_physical_dist_eq_C_shannon_if_uniform_and_equiv
     {Ω_sys : Type} [Fintype Ω_sys]
     (H_func : ∀ {α_aux : Type} [Fintype α_aux], (α_aux → NNReal) → NNReal)
-    (hH_axioms : IsEntropyFunction H_func)
+    (hH_axioms : HasRotaEntropyProperties H_func)
     (p_sys : Ω_sys → NNReal)
     -- Condition 1: Ω_sys has a known cardinality k > 0
     (k : ℕ) (hk_pos : k > 0) (_h_card_Ω_eq_k : Fintype.card Ω_sys = k)

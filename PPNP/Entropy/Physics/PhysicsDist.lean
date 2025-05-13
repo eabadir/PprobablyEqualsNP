@@ -54,7 +54,7 @@ Consequently, leveraging the proofs in UniformSystems.lean allowing the additivi
 
 -- For clarity, let's alias these
 -- noncomputable def H_axiom := PPNP.Entropy.Physics.Common.H_physical_system -- Removed this alias
-def hH_axioms_proof := PPNP.Entropy.Physics.Common.H_physical_system_is_IsEntropyFunction
+def hH_axioms_proof := PPNP.Entropy.Physics.Common.H_physical_system_has_Rota_entropy_properties
 noncomputable def C_axiom_val : ℝ := PPNP.Entropy.RET.C_constant_real hH_axioms_proof
 
 -- Define an enum for the type of statistical system
@@ -123,7 +123,7 @@ theorem axiomatic_entropy_BE_eq_C_shannon (params : SystemParams)
 
   -- 2. This directly matches the statement of H_BE_from_Multiset_eq_C_shannon
   --    Need to ensure the C_axiom_val here is the same as the one used in that theorem.
-  --    `H_BE_from_Multiset_eq_C_shannon` uses `C_constant_real PPNP.Entropy.Physics.Common.H_physical_system_is_IsEntropyFunction`
+  --    `H_BE_from_Multiset_eq_C_shannon` uses `C_constant_real PPNP.Entropy.Physics.Common.H_physical_system_has_Rota_entropy_properties`
   --    Our `C_axiom_val` is defined identically.
   --    `axiomatic_entropy_of_stat_system` now directly uses `PPNP.Entropy.Physics.Common.H_physical_system`.
   exact PPNP.Entropy.Physics.BE.H_BE_from_Multiset_eq_C_shannon params.N params.M h_domain_valid

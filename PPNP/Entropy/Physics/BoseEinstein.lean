@@ -240,7 +240,7 @@ where `k_card` is the cardinality of the state space.
 -/
 lemma H_p_BE_fin_eq_f_H_card (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0)
     (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal)
-    (hH_axioms : IsEntropyFunction H_func) :
+    (hH_axioms : HasRotaEntropyProperties H_func) :
     (H_func (p_UD_fin N M) : ℝ) = (f0 hH_axioms (Fintype.card (OmegaUD N M)) : ℝ) := by
   let k_card := Fintype.card (OmegaUD N M)
   have hk_card_pos : k_card > 0 := card_omega_BE_pos N M h_domain_valid
@@ -274,12 +274,12 @@ lemma H_p_BE_fin_eq_f_H_card (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0)
 
 theorem H_BE_from_Multiset_eq_C_shannon (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
     eval_H_phys_system_on_fin_dist_to_real (p_UD_fin N M) =
-      C_constant_real PPNP.Entropy.Physics.Common.H_physical_system_is_IsEntropyFunction *
+      C_constant_real PPNP.Entropy.Physics.Common.H_physical_system_has_Rota_entropy_properties *
       stdShannonEntropyLn (p_UD_fin N M) := by
   let k_card := Fintype.card (OmegaUD N M)
   have hk_card_pos : k_card > 0 := card_omega_BE_pos N M h_domain_valid
 
-  let H_is_entropy_proof_fq := PPNP.Entropy.Physics.Common.H_physical_system_is_IsEntropyFunction
+  let H_is_entropy_proof_fq := PPNP.Entropy.Physics.Common.H_physical_system_has_Rota_entropy_properties
 
   have h1 : eval_H_phys_system_on_fin_dist_to_real (p_UD_fin N M) =
               (f0 H_is_entropy_proof_fq k_card : ℝ) := by
