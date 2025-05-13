@@ -1,7 +1,7 @@
 const filePaths = [
   //Readme files
-  { path: "./PPNP/Entropy/", includeFile: true, outputFile: "leancode.txt" },
-  // { path: "./temp/leanprover-community.github.io/mathlib4_docs/Mathlib/Analysis/SpecialFunctions", includeFile: true, outputFile: "docs.txt" },
+  { path: "./temp/include/", includeFile: true, outputFile: "pkg.txt" },
+
 ];
 const fs = require('fs');
 const path = require('path');

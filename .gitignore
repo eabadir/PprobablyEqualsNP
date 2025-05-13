@@ -1,3 +1,7 @@
 /.lake
-filePackager.js
 temp/
+*.gz
+*.out
+*.fls
+*.aux
+*.log
