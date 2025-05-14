@@ -30,10 +30,14 @@ abbrev DecisionProblem := Lang
 
 /-!
 =================================================================
-Section 0: Foundational Assumptions and Definitions for this File
+Section 0: Foundational Role of Rota's Entropy Theorem RET
 =================================================================
 
-This section clarifies how we are instantiating the abstract
+RET is proven in Entropy.RET and is a foundational to everything else presented here -
+it is a formal and rigorous definition of Entropy, ALL ENTROPY, and finally gives us a
+way to establish complete congruence between Shannon Entropy with physical entropy.
+
+This section clarifies how we utilize are instantiating the abstract
 `PhysicsShannonEntropyDecisionProblem` for the purpose of this proof.
 We use Bose-Einstein statistics as our concrete example of a physical system
 whose entropy properties are analyzed.
@@ -45,13 +49,8 @@ whose entropy properties are analyzed.
 -- model, is proportional to `stdShannonEntropyLn`.
 
 -- This axiom states that our abstract `H_physical_system` (representing true physical entropy)
--- indeed possesses Rota's foundational properties. This is currently an axiom but targeted
--- for replacement by proving these properties for a concrete definition (e.g. scaled Shannon).
--- NOTE: If you've renamed `IsEntropyFunction` to `HasRotaEntropyProperties` globally,
--- this type should match:
--- axiom H_physical_system_has_Rota_properties : HasRotaEntropyProperties H_physical_system
-
--- For the purpose of this file, we define a specific instance of a decision problem
+-- indeed possesses Rota's foundational properties. This is currently an axiom for the general case,
+-- but we define a specific instance of a decision problem, proved by Rota's Entropy Theorem,
 -- related to Bose-Einstein systems. The details of the problem (e.g. "is entropy > k?")
 -- are abstracted by `DecisionProblem`. The crucial link is its connection to Shannon Entropy.
 def BoseEinsteinDecisionProblem : DecisionProblem := PhysicsShannonEntropyDecisionProblem
