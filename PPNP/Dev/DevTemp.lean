@@ -5,220 +5,357 @@ import Mathlib.Tactic.Sat.FromLRAT
 import Mathlib.Data.Fintype.Card
 import Mathlib.Data.Finset.Powerset
 import Mathlib.Data.Finset.Card
-import Mathlib.Combinatorics.SimpleGraph.Basic -- For Fintype (Fin n) if needed, though usually direct
-import Mathlib.Logic.Equiv.Defs -- For Equiv
+-- import Mathlib.Combinatorics.SimpleGraph.Basic -- For Fintype (Fin n) if needed, though usually direct
+-- import Mathlib.Logic.Equiv.Defs -- For Equivimport Mathlib.Analysis.SpecialFunctions.Log.Basic -- For Real.log
+-- import Mathlib.Analysis.SpecialFunctions.Log.Base -- For Real.logb
+-- import Mathlib.Data.Fintype.Card -- For Fintype.card
+-- import Mathlib.Data.Fin.Basic -- For Fin
+-- import Mathlib.Algebra.BigOperators.Basic -- For ∑
+-- import Mathlib.Data.Nat.Log -- For Nat.log
+-- import Mathlib.Tactic.Linarith -- For linarith
+-- import Mathlib.Data.Nat.Choose.Basic -- For multichoose (if needed directly beyond BE file)
+-- import Mathlib.Data.List.Basic -- For List
+-- import Mathlib.Data.Vector -- For Vector
 
-import PPNP.Complexity.Program
-import PPNP.Common.Basic
--- import PPNP.Entropy.Common
--- import PPNP.Entropy.Physics.Common
--- import PPNP.Entropy.RET
--- import PPNP.Entropy.Physics.UniformSystems
+-- Assuming PPNP project structure exists:
+import PPNP.Entropy.Common
+import PPNP.Entropy.RET
+import PPNP.Entropy.Physics.BoseEinstein -- For card_omega_be_pos if testing with BE example
 
-namespace PPNP.Entropy.Physics.PhysicsDist
+/-!
+====================================================================================================
+Section 0.6: Lean 4 Setup & Conventions (Conceptual Placeholder)
+====================================================================================================
+This section in the actual README would detail common imports and project conventions.
+For this combined draft, necessary imports are added as needed.
+-/
 
-open Multiset NNReal Finset Function -- Added Function for comp_apply
+open Real Finset Nat PPNP.Entropy.Common PPNP.Entropy.RET List
 
-open Multiset NNReal
-open PPNP.Common
-open PPNP.Complexity.Program
--- open PPNP.Entropy.Common
--- open PPNP.Entropy.Physics.Common
--- open PPNP.Entropy.Physics.UniformSystems
--- open PPNP.Entropy.RET
+universe u v
 
+set_option linter.unusedVariables false -- For stubs with unused parameters
 
-open Std.Sat -- For CNF, Literal, Clause, etc.
-open Sat
-open Finset
+/-!
+====================================================================================================
+Section 1.2: Key Lean Constructs for RUE (Rota's Uniqueness of Entropy)
+====================================================================================================
+These constructs are foundational for defining and proving RUE.
+Many are already defined in PPNP.Entropy.Common and PPNP.Entropy.RET.
+We list them here for completeness and add any planned ones.
+-/
 
-variable {V : Type u} [Fintype V] [DecidableEq V]
+-- From PPNP.Entropy.Common (Status: Defined)
+-- structure HasRotaEntropyProperties ...
+-- def stdShannonEntropyLn ...
 
-theorem card_subtype_eq_card_filter : Fintype.card {x : α // p x} = (univ.filter p).card :=
-  Fintype.card_of_subtype (univ.filter p) (by simp)
+-- From PPNP.Entropy.RET (Status: Defined)
+-- noncomputable def f0 ...
+-- noncomputable def C_constant_real ...
+-- theorem RotaUniformTheorem_formula_with_C_constant ...
 
--- Assuming Std.Sat.Literal α is α × Bool (true for positive polarity)
--- and Std.Sat.Literal.negate l is (l.1, !l.2)
+-- Planned Theorem for RUE General Case
+theorem RUE_General_Theorem
+    (H_func : ∀ {α : Type u} [Fintype α], (α → NNReal) → NNReal)
+    (h_H_func_is_rota : HasRotaEntropyProperties H_func)
+    {Ω : Type u} [Fintype Ω] (P_dist : Ω → NNReal) (h_P_dist_sums_to_1 : ∑ ω, P_dist ω = 1) :
+    (H_func P_dist : ℝ) = (C_constant_real h_H_func_is_rota) * (stdShannonEntropyLn P_dist) := by
+  sorry -- Status: Planned (Needs Proof based on RotaUniformTheorem and Rota's full argument)
 
--- Local definition for Literal.eval if not provided by Std.Sat or if its definition is opaque.
--- This definition aligns with the common interpretation.
-@[local simp]
-def LocalLiteralEval (l : Std.Sat.Literal V) (assignment : V → Bool) : Bool :=
-  assignment l.1 = l.2
+/-!
+====================================================================================================
+Section 2.2: Key Lean Constructs for SCT Bridge & Equivalent i.i.d. Sources
+====================================================================================================
+These constructs link Rota-Shannon entropy to the concept of i.i.d. sources via SCT.
+-/
 
-def Clause (V : Type u) := List (Std.Sat.Literal V)
--- Local definition for Clause.eval if not provided by Std.Sat or if its definition is opaque.
+-- Axiom for Shannon Coding Theorem
+/--
+Axiomatic statement of Shannon's Coding Theorem (SCT).
+It asserts that for any probability distribution P over a finite alphabet α,
+there exists an optimal average code length (in bits) for encoding symbols
+drawn i.i.d. from P, and this length is approximately the Shannon entropy of P (base 2).
+The "≈" would be formalized using limits for block codes in a full version.
+-/
+axiom shannon_coding_theorem_sct_axiom
+    {α : Type u} [Fintype α] (P : α → NNReal) (hP_sums_to_1 : ∑ x, P x = 1) :
+    ∃ (L_avg_bits : ℝ), L_avg_bits ≥ 0 ∧
+      -- For simplicity, we state it as equality for the ideal optimal code.
+      -- A more nuanced version would use inequalities or limits.
+      L_avg_bits = (stdShannonEntropyLn P) / (Real.log 2) -- Shannon entropy in bits
+      -- Status: Axiom (To be added, e.g. in PPNP.Entropy.SCT)
 
-def LocalClauseEval (cl : Clause V) (assignment : V → Bool) : Bool :=
-  List.any cl (fun l => LocalLiteralEval l assignment)
-
--- Local definition for CNF.eval if not provided by Std.Sat or if its definition is opaque.
-def LocalCNFEval (cnf : Std.Sat.CNF V) (assignment : V → Bool) : Bool :=
-  List.all cnf (fun cl => LocalClauseEval cl assignment)
-
--- We will use these local definitions for now. If Std.Sat provides them with the same semantics,
--- these local versions can be removed and Std.Sat's versions used directly.
--- The proofs below will rely on these specific semantics (e.g., List.any/all).
--- Definition of at_most_k_CNF using Std.Sat.Literal
-noncomputable def at_most_k_CNF_def (k : ℕ) : CNF V :=
-  if _h_card_V_le_k : Fintype.card V ≤ k then
-    []
+-- Helper Definition for Shannon entropy of a uniform i.i.d. source
+/--
+Calculates `stdShannonEntropyLn` for a uniform distribution over `k` outcomes.
+This represents the Shannon entropy (natural log) of an i.i.d. source
+producing one of `k` symbols with equal probability.
+-/
+noncomputable def IIDSourceShannonEntropy_Uniform (k : ℕ) : ℝ :=
+  if hk_pos : k > 0 then
+    let α_k := Fin k
+    -- The following proof term for h_card_pos_α_k was adapted from
+    -- PPNP.Entropy.Common.Fintype_card_fin_pos
+    have h_card_pos_α_k : 0 < Fintype.card α_k := by { simp only [card_fin]; exact hk_pos; }
+    stdShannonEntropyLn (uniformDist h_card_pos_α_k)
   else
-    let subsets_k_plus_1 := univ (α := V).powerset.filter (fun s => s.card = k + 1)
-    subsets_k_plus_1.toList.map (fun s => s.toList.map (fun v => (v, false))) -- (v, false) is the negative literal ¬v
+    0
+-- Status: Defined (New, based on previous draft)
 
--- Helper: Clause.eval is true iff there exists a literal in it that evaluates to true.
-lemma local_clause_eval_iff_exists_literal_eval_true (cl : Clause V) (assignment : V → Bool) :
-    LocalClauseEval cl assignment ↔ ∃ l ∈ cl, LocalLiteralEval l assignment := by
-  simp [LocalClauseEval, List.any_eq_true]
+-- Foundational Lemma (Proof for Item 2 of the plan)
+/--
+Proves that `IIDSourceShannonEntropy_Uniform k` is equal to `Real.log k`.
+-/
+lemma iid_source_shannon_entropy_uniform_eq_log_k (k : ℕ) (hk_pos : k > 0) :
+    IIDSourceShannonEntropy_Uniform k = Real.log k := by
+  simp only [IIDSourceShannonEntropy_Uniform, dif_pos hk_pos]
+  -- The body of the `if` is stdShannonEntropyLn (uniformDist (Fin k based positive card proof))
+  -- This uses stdShannonEntropyLn_uniform_eq_log_card from PPNP.Entropy.Common
+  have h_card_pos_fin_k : 0 < Fintype.card (Fin k) := by { simp only [card_fin]; exact hk_pos; }
+  rw [stdShannonEntropyLn_uniform_eq_log_card h_card_pos_fin_k]
+  -- Goal is now: Real.log (Fintype.card (Fin k)) = Real.log k
+  rw [card_fin k] -- Fintype.card (Fin k) = k
+  rfl
+-- Status: Proved (New, based on previous draft)
 
--- -- Helper: CNF.eval is true iff all its clauses evaluate to true.
--- lemma local_cnf_eval_iff_forall_clauses_eval_true (cnf : CNF V) (assignment : V → Bool) :
---     LocalCNFEval cnf assignment ↔ ∀ cl ∈ cnf, LocalClauseEval cl assignment := by
---   simp [LocalCNFEval, List.all_iff_forall]
+-- Theorem for existence of equivalent i.i.d. source (Uniform Case)
+/--
+For a Rota-compliant system exhibiting a UNIFORM probability distribution over `k` outcomes,
+there exists (by construction) an i.i.d. source (uniform over `k` symbols)
+such that the Rota-entropy of the system is proportional to the Shannon entropy of this source.
+-/
+theorem exists_equivalent_iid_source_for_uniform_distribution
+    (H_func : ∀ {α_aux : Type u} [Fintype α_aux], (α_aux → NNReal) → NNReal)
+    (h_H_func_is_rota : HasRotaEntropyProperties H_func) (k : ℕ) (hk_pos : k > 0) :
+    ∃ (SourceAlphabet : Type u) [Fintype SourceAlphabet] (P_source : SourceAlphabet → NNReal)
+      (h_is_uniform_k_src : P_source = uniformDist (Fintype.card_fin_pos hk_pos) ∧ Fintype.card SourceAlphabet = k)
+      (h_P_source_sums_to_1 : ∑ s, P_source s = 1),
+        (f0 H_func h_H_func_is_rota k : ℝ) =
+          (C_constant_real h_H_func_is_rota) * (stdShannonEntropyLn P_source) := by
+  -- 1. Define the source alphabet and PMF for the i.i.d. source.
+  use Fin k
+  infer_instance -- Fintype (Fin k)
+  let P_uniform_k_source := uniformDist (Fintype.card_fin_pos hk_pos)
+  use P_uniform_k_source
 
-
-
-
--- Lemmata for direction -> (CNF eval true => card_true <= k)
-section ImpliesLe
-
-variable (k : ℕ) (assignment : V → Bool)
-variable (h_k_lt_card_V : k < Fintype.card V) -- k < |V|
-variable (h_card_true_gt_k : Fintype.card { v : V // assignment v = true } > k)
-
-lemma exists_k_plus_1_subset_of_true_vars :
-    ∃ (s : Finset V), s.card = k + 1 ∧ ∀ v ∈ s, assignment v = true := by
-  let S_true_finset := univ.filter (fun v => assignment v = true)
-  have h_S_true_card : S_true_finset.card = Fintype.card { v : V // assignment v = true } :=
-    (Fintype.card_subtype_eq_card_filter univ (fun v => assignment v = true)).symm
-  rw [h_S_true_card] at h_card_true_gt_k
-  have h_k_plus_1_le_S_true_card : k + 1 ≤ S_true_finset.card := Nat.succ_le_of_lt h_card_true_gt_k
-  obtain ⟨s, hs_subset_S_true, hs_card⟩ :=
-    Finset.exists_subset_card_eq h_k_plus_1_le_S_true_card -- s is a subset of S_true_finset
-  use s
+  -- 2. Prove the properties of this chosen source.
   constructor
-  · exact hs_card
-  · intro v hv_in_s
-    exact (mem_filter.mp (hs_subset_S_true hv_in_s)).2
-
-lemma k_plus_1_set_forms_clause_in_at_most_k_CNF (s : Finset V) (hs_card : s.card = k + 1) :
-    (s.toList.map (fun v => (v, false))) ∈ (at_most_k_CNF_def k : CNF V) := by
-  simp only [at_most_k_CNF_def, h_k_lt_card_V, dite_false] -- Use `dite_false` as h_k_lt_card_V means ¬(Fintype.card V ≤ k)
-  apply List.mem_map_of_mem
-  · simp only [mem_toList, mem_filter, univ_powerset_self, Finset.mem_univ, true_and]
-    exact hs_card
-
-lemma clause_from_k_plus_1_true_vars_evals_false (s : Finset V) -- (hs_card : s.card = k + 1) -- Not strictly needed for this lemma if s is just a set of vars
-    (h_all_vars_true : ∀ v ∈ s, assignment v = true) :
-    ¬ LocalClauseEval (s.toList.map (fun v => (v, false))) assignment := by
-  rw [local_clause_eval_iff_exists_literal_eval_true]
-  push_neg -- After push_neg, goal is: ∀ l ∈ (s.toList.map (fun v => (v,false))), ¬LocalLiteralEval l assignment
-  intro l hl_in_clause_list
-  simp only [LocalLiteralEval] -- Unfold local eval
-  -- l is of the form (v, false) where v ∈ s.toList
-  rw [List.mem_map] at hl_in_clause_list
-  obtain ⟨v_orig, hv_orig_in_s_toList, heq_l⟩ := hl_in_clause_list
-  rw [←heq_l] -- l is now (v_orig, false)
-  -- Goal: ¬ (assignment v_orig = false)
-  rw [Bool.eq_false_iff_not] -- Goal: ¬ ¬ (assignment v_orig)  which is (assignment v_orig)
-  have hv_orig_in_s : v_orig ∈ s := List.mem_toFinset.mp hv_orig_in_s_toList
-  exact h_all_vars_true v_orig hv_orig_in_s
-
-end ImpliesLe
-
-
--- Lemmata for direction <- (card_true <= k => CNF eval true)
-section LeImplies
-
-variable (k : ℕ) (assignment : V → Bool)
-variable (h_k_lt_card_V : k < Fintype.card V)
-variable (h_card_true_le_k : Fintype.card { v : V // assignment v = true } ≤ k)
-
-lemma at_least_one_var_false_in_k_plus_1_set (s : Finset V) (hs_card : s.card = k + 1) :
-    ∃ v ∈ s, ¬(assignment v) := by
-  by_contra h_all_true_in_s_contra
-  push_neg at h_all_true_in_s_contra -- h_all_true_in_s_contra : ∀ v ∈ s, assignment v = true
-  let S_true_finset := univ.filter (fun v => assignment v = true)
-  have h_S_true_card : S_true_finset.card = Fintype.card { v : V // assignment v = true } :=
-    (Fintype.card_subtype_eq_card_filter univ (fun v => assignment v = true)).symm
-
-  have h_s_subset_S_true : s ⊆ S_true_finset := by
-    intro v hv_in_s
-    simp only [mem_filter, mem_univ, true_and, h_all_true_in_s_contra v hv_in_s]
-  have card_s_le_card_S_true := Finset.card_le_of_subset h_s_subset_S_true
-  rw [hs_card, h_S_true_card] at card_s_le_card_S_true
-  -- card_s_le_card_S_true is k+1 <= Fintype.card { v // assignment v = true }
-  linarith -- {h_card_true_le_k, card_s_le_card_S_true} should be a contradiction (k+1 <= X and X <= k)
-
-lemma clause_from_k_plus_1_set_evals_true_if_one_var_false (s_finset : Finset V) -- Finset for clarity
-    (h_exists_false_in_finset : ∃ v ∈ s_finset, ¬(assignment v)) :
-    LocalClauseEval (s_finset.toList.map (fun v => (v, false))) assignment := by
-  rw [local_clause_eval_iff_exists_literal_eval_true]
-  obtain ⟨v_false, hv_false_mem_s_finset, h_assign_v_false_is_not_true⟩ := h_exists_false_in_finset
-  -- We need to show ∃ l ∈ s_finset.toList.map (fun v => (v,false)), LocalLiteralEval l assignment
-  -- Our target literal l is (v_false, false)
-  use (v_false, false)
+  · -- Prove h_is_uniform_k_src
+    constructor
+    · rfl -- P_source is definitionally P_uniform_k_source
+    · exact card_fin k -- Fintype.card (Fin k) = k
   constructor
-  · apply List.mem_map_of_mem -- Show (v_false, false) is in the list of literals
-    exact List.mem_toFinset.mpr hv_false_mem_s_finset -- v_false is in s_finset.toList
-  · simp [LocalLiteralEval, Bool.eq_false_iff_not]
-    exact h_assign_v_false_is_not_true
+  · -- Prove h_P_source_sums_to_1
+    exact sum_uniformDist (Fintype.card_fin_pos hk_pos)
 
-end LeImplies
+  -- 3. Prove the main equality.
+  -- LHS is (f0 H_func h_H_func_is_rota k : ℝ)
+  -- RHS is (C_constant_real h_H_func_is_rota) * stdShannonEntropyLn P_uniform_k_source
 
--- Reassembling the main proof for at_most_k_CNF
-lemma eval_at_most_k_CNF_def_iff (k : ℕ) (assignment : V → Bool) :
-    LocalCNFEval (at_most_k_CNF_def k : CNF V) assignment ↔ Fintype.card { v // assignment v = true } ≤ k := by
-  simp only [at_most_k_CNF_def]
-  by_cases h_card_V_le_k : Fintype.card V ≤ k
-  · -- Case 1: Fintype.card V ≤ k. CNF is [], which is true.
-    -- And Fintype.card { v // assignment v = true } ≤ Fintype.card V ≤ k is true.
-    simp only [h_card_V_le_k, dite_true, local_cnf_eval_iff_forall_clauses_eval_true]
-    rw [List.forall_mem_nil] -- forall P x, x ∈ [] → P x is true
-    exact le_trans (Fintype.card_subtype_le _) h_card_V_le_k
-  · -- Case 2: k < Fintype.card V.
-    simp only [h_card_V_le_k, dite_false, local_cnf_eval_iff_forall_clauses_eval_true]
-    have h_k_lt_card_V : k < Fintype.card V := Nat.lt_of_not_le h_card_V_le_k
+  -- By RotaUniformTheorem: (f0 H_func _ k : ℝ) = C_const * Real.log k
+  have h_f0_eq_C_log_k := (RotaUniformTheorem_formula_with_C_constant h_H_func_is_rota).right k hk_pos
+  rw [h_f0_eq_C_log_k]
+  -- Goal is now: (C_const * Real.log k) = C_const * stdShannonEntropyLn P_uniform_k_source
 
-    apply Iff.intro
-    · -- Direction -> (CNF eval true => card_true <= k)
-      intro h_all_clauses_eval_true
-      by_contra h_card_true_gt_k_local
-      -- h_card_true_gt_k_local is Fintype.card {v // assignment v = true} > k
-      push_neg at h_card_true_gt_k_local -- if it was a negation
+  -- We need to show: Real.log k = stdShannonEntropyLn P_uniform_k_source
+  -- P_uniform_k_source is uniformDist over Fin k.
+  -- Use stdShannonEntropyLn_uniform_eq_log_card.
+  have h_card_pos_fin_k : 0 < card (Fin k) := Fintype.card_fin_pos hk_pos
+  rw [stdShannonEntropyLn_uniform_eq_log_card h_card_pos_fin_k]
+  -- Goal is now: Real.log k = Real.log (card (Fin k))
+  rw [card_fin k] -- card (Fin k) = k
+  -- Goal is Real.log k = Real.log k
+  rfl
+-- Status: Proved (Based on previous draft, uses RotaUniformTheorem)
 
-      obtain ⟨s_true_subset, hs_card, hs_all_true⟩ :=
-        exists_k_plus_1_subset_of_true_vars k assignment h_k_lt_card_V h_card_true_gt_k_local
-      let clause_of_s := s_true_subset.toList.map (fun v => (v, false))
+-- Planned Theorem for existence of equivalent i.i.d. source (General Case)
+theorem exists_equivalent_iid_source_general
+    (H_func : ∀ {α : Type u} [Fintype α], (α → NNReal) → NNReal)
+    (h_H_func_is_rota : HasRotaEntropyProperties H_func)
+    {Ω : Type u} [Fintype Ω] (P_dist : Ω → NNReal) (h_P_dist_sums_to_1 : ∑ ω, P_dist ω = 1) :
+    ∃ (SourceAlphabet : Type u) [Fintype SourceAlphabet] (P_source : SourceAlphabet → NNReal)
+      (h_P_source_is_P_dist : SourceAlphabet = Ω ∧ HEq P_source P_dist) -- Source mimics P_dist
+      (h_P_source_sums_to_1 : ∑ s, P_source s = 1),
+        (H_func P_dist : ℝ) = (C_constant_real h_H_func_is_rota) * (stdShannonEntropyLn P_source) := by
+  sorry -- Status: Planned (Needs RUE_General_Theorem)
 
-      have h_clause_s_in_CNF_list : clause_of_s ∈
-        (((univ (α := V)).powerset.filter (fun s_iter => s_iter.card = k + 1)).toList.map
-          (fun s_iter => s_iter.toList.map (fun v => (v, false)))) :=
-        k_plus_1_set_forms_clause_in_at_most_k_CNF k h_k_lt_card_V s_true_subset hs_card
 
-      have h_clause_s_should_eval_true : LocalClauseEval clause_of_s assignment :=
-         h_all_clauses_eval_true clause_of_s h_clause_s_in_CNF_list
+/-!
+====================================================================================================
+Section 3.2: Key Lean Constructs for RECT (Computational Model)
+====================================================================================================
+These define our simple computational model for linking entropy to complexity.
+-/
 
-      have h_clause_s_actually_evals_false : ¬ LocalClauseEval clause_of_s assignment :=
-        clause_from_k_plus_1_true_vars_evals_false k assignment s_true_subset hs_all_true
-      exact h_clause_s_actually_evals_false h_clause_s_should_eval_true
+/-- A single binary choice/tape symbol. -/
+def ComputerInstruction := Bool
+-- Status: Defined (New)
 
-    · -- Direction <- (card_true <= k => CNF eval true)
-      intro h_card_true_le_k_local
-      intro clause_C h_C_in_generated_list_of_clauses
-      -- clause_C is of the form s.toList.map (fun v => (v, false)) where s.card = k+1
-      obtain ⟨s_finset_source, hs_filter_props, hs_C_eq_representation⟩ :=
-        List.mem_map.mp h_C_in_generated_list_of_clauses
-      rw [←hs_C_eq_representation] -- Now clause_C is s_finset_source.toList.map (fun v => (v, false))
+/-- Sequence of binary choices forming the input tape for a program. -/
+def ComputerTape := List ComputerInstruction
+-- Status: Defined (New)
 
-      simp only [mem_filter, univ_powerset_self, mem_univ, true_and] at hs_filter_props
-      have hs_card : s_finset_source.card = k + 1 := hs_filter_props.2
+-- Abstract representation of a system's state.
+-- Using Nat as a placeholder; could be a more complex structure like Vector or a custom inductive type.
+structure SystemState := (id : Nat)
+-- Status: Defined (New)
 
-      obtain ⟨v_false, hv_false_in_s_finset, h_assign_v_false_is_not_true⟩ :=
-        at_least_one_var_false_in_k_plus_1_set k assignment h_k_lt_card_V h_card_true_le_k_local s_finset_source hs_card
+/--
+A ClassicalComputerProgram is defined by an initial state and a tape of i.i.d. binary choices
+that drives its deterministic evolution.
+-/
+structure ClassicalComputerProgram :=
+  (initial_state : SystemState)
+  (tape : ComputerTape)
+-- Status: Defined (New)
 
-      apply clause_from_k_plus_1_set_evals_true_if_one_var_false (s_finset_source)
-      use v_false; constructor
-      · exact hv_false_in_s_finset
-      · exact h_assign_v_false_is_not_true
+/--
+The computational complexity of a ClassicalComputerProgram is defined as the number
+of i.i.d. binary choices it processes, i.e., the length of its input tape.
+This equates one fundamental choice with one unit of complexity.
+-/
+@[simp]
+def ClassicalComputerProgram.complexity (prog : ClassicalComputerProgram) : ℕ :=
+  prog.tape.length
+-- Status: Defined (New)
+
+/--
+Calculates the Shannon entropy (natural log) associated with choosing one specific
+m-bit tape from the 2^m equiprobable possibilities.
+This is H(uniform_dist_over_all_tapes_of_length_m).
+-/
+noncomputable def ShannonEntropyOfBinaryTapeChoice (m_bits : ℕ) : ℝ :=
+  if hm_pos : m_bits > 0 then
+    Real.log (2^m_bits : ℝ) -- Explicitly cast 2^m_bits to Real for Real.log
+                           -- Note: 2^m_bits can be very large, Real might not be ideal for huge m.
+                           -- However, log (2^m) = m log 2, so it simplifies.
+  else
+    0
+-- Status: Defined (New)
+
+-- Foundational Lemma (Proof for Item 2 of the plan)
+/--
+Proves that `ShannonEntropyOfBinaryTapeChoice m_bits` = `m_bits * Real.log 2`.
+-/
+lemma shannon_entropy_of_binary_tape_choice_eq_m_log2 (m_bits : ℕ) (hm_pos : m_bits > 0) :
+    ShannonEntropyOfBinaryTapeChoice m_bits = (m_bits : ℝ) * Real.log 2 := by
+  simp only [ShannonEntropyOfBinaryTapeChoice, dif_pos hm_pos]
+  -- Need to ensure 2^m_bits is cast correctly and Real.log_pow can be applied.
+  have two_r_pos : (2 : ℝ) > 0 := by norm_num
+  rw [Real.log_pow (2 : ℝ) m_bits]
+  rfl
+-- Status: Proved (New)
+
+-- Theorem: Complexity of i.i.d. binary tape program IS its Shannon Entropy (base 2)
+/--
+For an i.i.d. binary source producing an m-bit tape, a `ClassicalComputerProgram`
+exists whose `complexity` (tape length m) is equal to the Shannon Entropy (base 2)
+of selecting that specific m-bit tape.
+-/
+theorem complexity_of_iid_binary_tape_program_is_shannon_entropy_base2 (m_bits : ℕ) :
+    ∃ (prog : ClassicalComputerProgram) (h_tape_len : prog.tape.length = m_bits),
+      (ClassicalComputerProgram.complexity prog : ℝ) = -- Complexity is 'm'
+      (ShannonEntropyOfBinaryTapeChoice m_bits) / Real.log 2 -- Shannon Entropy in bits is 'm'
+      := by
+  -- 1. Construct the program.
+  let example_initial_state : SystemState := { id := 0 }
+  let example_tape : ComputerTape := List.replicate m_bits true -- Content doesn't matter for length
+  let prog_exists : ClassicalComputerProgram := { initial_state := example_initial_state, tape := example_tape }
+  have h_prog_tape_len_is_mbits : prog_exists.tape.length = m_bits := by simp [length_replicate]
+  use prog_exists
+  use h_prog_tape_len_is_mbits
+
+  -- 2. Prove the equality.
+  simp only [ClassicalComputerProgram.complexity, h_prog_tape_len_is_mbits, Nat.cast_inj]
+  -- Goal is: (m_bits : ℝ) = (ShannonEntropyOfBinaryTapeChoice m_bits) / Real.log 2
+  by_cases h_m_bits_zero : m_bits = 0
+  · rw [h_m_bits_zero]
+    simp [ShannonEntropyOfBinaryTapeChoice, div_eq_zero_iff]
+    exact Or.inl rfl -- 0 = 0
+  · have h_m_bits_pos : m_bits > 0 := Nat.pos_of_ne_zero h_m_bits_zero
+    rw [shannon_entropy_of_binary_tape_choice_eq_m_log2 m_bits h_m_bits_pos]
+    -- Goal: (m_bits : ℝ) = ( (m_bits : ℝ) * Real.log 2 ) / Real.log 2
+    have h_log2_ne_zero : Real.log 2 ≠ 0 :=
+      Real.log_ne_zero_of_ne_one (by norm_num : (2:ℝ) ≠ 1) (by norm_num : (2:ℝ) > 0)
+    rw [mul_div_cancel_right₀ _ h_log2_ne_zero]
+    rfl
+-- Status: Proved (New)
+
+-- Planned RECT Theorem for Uniform Physical Systems
+theorem RECT_Uniform_Theorem
+    (H_func : ∀ {α : Type u} [Fintype α], (α → NNReal) → NNReal)
+    (h_H_func_is_rota : HasRotaEntropyProperties H_func) (k : ℕ) (hk_pos : k > 0) :
+    ∃ (prog : ClassicalComputerProgram)
+      (h_prog_simulates_k_outcomes_tape_len : ClassicalComputerProgram.complexity prog = Nat.ceil (Real.logb 2 k))
+      (h_prog_simulates_k_outcomes_prop : Prop), -- "prog's eval maps distinct tapes to distinct k outcomes"
+        -- Rota Entropy of the k-uniform system (base 2)
+        ( (f0 H_func h_H_func_is_rota k : ℝ) /
+          ((C_constant_real h_H_func_is_rota) / (1 / Real.log 2)) ) -- C_H scaled for base 2
+        -- is equal to the complexity of the simulating program (if k is power of 2)
+        -- or approximately equal (due to ceil for tape length)
+        ≈ (ClassicalComputerProgram.complexity prog : ℝ)
+        ∧ h_prog_simulates_k_outcomes_prop := by
+  sorry -- Status: Planned (Combines above constructs)
+        -- Needs careful handling of C_constant_real scaling and log_base 2 conversion.
+        -- Also, logb 2 k might not be an integer, so tape length will be ceil(logb 2 k).
+        -- The "≈" would capture this.
+
+-- Planned RECT Theorem for General Physical Systems
+theorem RECT_General_Theorem
+    (H_func : ∀ {α : Type u} [Fintype α], (α → NNReal) → NNReal)
+    (h_H_func_is_rota : HasRotaEntropyProperties H_func)
+    {Ω : Type u} [Fintype Ω] (P_dist : Ω → NNReal) (h_P_dist_sums_to_1 : ∑ ω, P_dist ω = 1) :
+    ∃ (prog : ClassicalComputerProgram)
+      (h_prog_complexity_matches_entropy : Prop) -- prog.complexity ≈ H_base2(P_dist)
+      (h_prog_simulates_P_dist_prop : Prop), -- "prog's eval samples from P_dist given random tape"
+        -- Rota Entropy of the system (base 2)
+        ( (H_func P_dist : ℝ) /
+          ((C_constant_real h_H_func_is_rota) / (1 / Real.log 2)) )
+        ≈ (ClassicalComputerProgram.complexity prog : ℝ) -- Assuming complexity related to avg tape length
+        ∧ h_prog_simulates_P_dist_prop ∧ h_prog_complexity_matches_entropy := by
+  sorry -- Status: Planned (Needs RUE_General_Theorem and more complex prog model for non-uniform)
+
+/-!
+====================================================================================================
+Section for Verifiability Constructs (from COMPLEXITY_README.md ideas)
+====================================================================================================
+These would be part of PPNP.Complexity.Core, PPNP.Complexity.SB_Verifier etc.
+Stubbed here for completeness of the README's argument flow.
+-/
+
+-- Placeholder for SB_Instance, num_encoding_vars_for_sb, SB_Verifier, HasCNFCertificate,
+-- SB_Verifier_has_CNF_certificate, IsInP_ComputerProgram_Axiom, SB_Verifier_is_in_P.
+-- These would be defined as per the COMPLEXITY_README.md plan.
+-- Their 'Status' would be 'Defined (Conceptual)' or 'Planned' for proofs.
+
+def SB_Instance_TMP := Nat × Nat -- Placeholder (N_balls, M_boxes)
+def SB_Verifier_TMP (inst : SB_Instance_TMP) (cert : ComputerTape) : Bool := sorry
+axiom SB_Verifier_has_CNF_certificate_TMP (inst : SB_Instance_TMP) : Prop
+axiom SB_Verifier_is_in_P_TMP (inst : SB_Instance_TMP) : Prop
+
+
+-- Example usage with Bose-Einstein
+-- This connects the abstract 'k' in RECT_Uniform_Theorem to a concrete physical system.
+lemma RECT_applied_to_Bose_Einstein
+    (H_phys : ∀ {α_aux : Type u} [Fintype α_aux], (α_aux → NNReal) → NNReal)
+    (h_H_phys_is_rota : HasRotaEntropyProperties H_phys)
+    (K_boxes N_particles : ℕ)
+    (h_domain_valid : K_boxes ≠ 0 ∨ N_particles = 0) :
+    let k_BE_microstates := multichoose K_boxes N_particles
+    ∃ (prog_sim_BE : ClassicalComputerProgram)
+      (h_prog_tape_len : prog_sim_BE.tape.length = Nat.ceil (Real.logb 2 k_BE_microstates))
+      (h_prog_sim_prop : Prop),
+        "RotaEntropy_base2(BE_System K_boxes N_particles) ≈ prog_sim_BE.complexity"
+        ∧ h_prog_sim_prop := by
+  let k_BE_microstates := multichoose K_boxes N_particles
+  have hk_BE_pos : k_BE_microstates > 0 := by
+    rw [←PPNP.Entropy.Physics.BoseEinstein.card_omega_be]
+    exact PPNP.Entropy.Physics.BoseEinstein.card_omega_BE_pos K_boxes N_particles h_domain_valid
+  -- Apply RECT_Uniform_Theorem
+  rcases RECT_Uniform_Theorem H_phys h_H_phys_is_rota k_BE_microstates hk_BE_pos
+    with ⟨prog, h_prog_len_eq_ceil_logk, h_prog_sim_k_prop, h_rota_eq_approx_compl, h_prog_sim_k_main_prop⟩
+  use prog
+  use h_prog_len_eq_ceil_logk
+  use h_prog_sim_k_main_prop -- This was the h_prog_simulates_k_outcomes_prop
+  exact h_rota_eq_approx_compl
+-- Status: Sketch (Relies on RECT_Uniform_Theorem being fully proved and scaled)

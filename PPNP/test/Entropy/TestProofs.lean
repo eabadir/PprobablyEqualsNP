@@ -1,10 +1,14 @@
+import PPNP.Entropy.Common
 import PPNP.Entropy.RET
 import Mathlib.Tactic.NormNum -- For evaluating numerals
 
-open PPNP.Entropy.RET Real Nat
+open PPNP.Entropy.RET Real Nat PPNP.Entropy.Common
 
 -- Assume the existence of an entropy function H satisfying the properties
-variable {H : ∀ {n : ℕ}, (Fin n → NNReal) → Real} (hH : HasRotaEntropyProperties H)
+variable {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} (hH : PPNP.Entropy.Common.HasRotaEntropyProperties H)
+
+def f₀ (H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) (n : ℕ) : NNReal :=
+  if n = 0 then 0 else H (uniformDist (by norm_num : n > 0))
 
 -- Test lemma for f₀(1) = 0 from Basic.lean
 example : f₀ H 1 = 0 :=
