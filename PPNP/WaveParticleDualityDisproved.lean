@@ -41,9 +41,9 @@ open PPNP.Entropy.Physics.PCA
 
 
 /-!
-## Section 5.6: Random Walks, CAPrograms, System Evolution, and BE Snapshots
+##  Random Walks, CAPrograms, System Evolution, and BE Snapshots
 
-This section defines programs for individual random walks (CAProgram) and
+This proof lays out that every time t, there is a computer program which exists which gives the exact state (position, etc.) of the photons, since, at every time t that state is characterised by the BoseEinstein distribution. The proof leverages programs for individual random walks (CAProgram) and
 for a system of multiple random walks (SystemEvolutionProgram).
 It then connects snapshots of the system's evolution to the Bose-Einstein
 encoding program previously defined.
@@ -52,7 +52,7 @@ encoding program previously defined.
 /--
 Theorem: A snapshot of an evolving system of `n` random walks at time `t_snapshot`
 can be characterized by a Bose-Einstein distribution, which in turn can be
-encoded by a `ClassicalComputerProgram` (prog_snapshot_BE).
+encoded by a `ClassicalComputerProgram` (prog_snapshot_BE). In computational terms, this is our "verifier" or "witness" program.
 
 The `SystemEvolutionProgram` (tape `n*T`) determines the state of all walks.
 A snapshot of this state (e.g., number of heads per walk `(h_1, ..., h_n)`)

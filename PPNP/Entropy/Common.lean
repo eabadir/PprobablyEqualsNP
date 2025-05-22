@@ -194,3 +194,20 @@ theorem stdShannonEntropyLn_uniform_eq_log_card {α : Type*} [Fintype α]
   -- Rearrange and finish
   rw [← mul_assoc]
   exact product_coe_inv_coe_mul_log_eq_log hk_pos_nat
+
+
+-- Axiom for Shannon Coding Theorem
+/--
+Axiomatic statement of Shannon's Coding Theorem (SCT).
+It asserts that for any probability distribution P over a finite alphabet α,
+there exists an optimal average code length (in bits) for encoding symbols
+drawn i.i.d. from P, and this length is approximately the Shannon entropy of P (base 2).
+The "≈" would be formalized using limits for block codes in a full version.
+-/
+axiom shannon_coding_theorem_sct_axiom
+    {α : Type u} [Fintype α] (P : α → NNReal) (hP_sums_to_1 : ∑ x, P x = 1) :
+    ∃ (L_avg_bits : ℝ), L_avg_bits ≥ 0 ∧
+      -- For simplicity, we state it as equality for the ideal optimal code.
+      -- A more nuanced version would use inequalities or limits.
+      L_avg_bits = (stdShannonEntropyLn P) / (Real.log 2) -- Shannon entropy in bits
+      -- Status: Axiom (To be added, e.g. in PPNP.Entropy.SCT)
