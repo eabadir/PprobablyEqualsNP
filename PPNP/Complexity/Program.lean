@@ -48,9 +48,7 @@ structure SB_Instance where
   (N_balls : ℕ)
   (M_boxes : ℕ)
 
--- For context, as discussed in Plan 2, Sec 2.3 (not directly used by the boolean verifier)
--- def UDMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
--- def SymFin (M_boxes N_balls : ℕ) := Sym (Fin M_boxes) N_balls
+
 
 
 /-!
@@ -325,3 +323,281 @@ theorem existence_and_complexity_of_program_for_iid_binary_source (m_bits : ℕ)
       · norm_num -- Proves (2 : ℝ) ≠ 1
     rw [mul_div_cancel_right₀ _ h_log_two_ne_zero] -- Cancels (Real.log 2)
     -- Goal: (↑m_bits : ℝ) = (↑m_bits : ℝ)
+
+
+
+
+
+/-!
+## Section 5.3: IID Binary Source and its Relation to ComputerProgram Complexity
+
+This section defines an IID Binary Source that produces a sequence of fair, independent
+binary choices, and relates its information content (via SCT) to the complexity
+(tape length) of a ClassicalComputerProgram that represents one specific output sequence
+from such a source. The length also corresponds to the Shannon entropy (in bits)
+of a uniform distribution over all possible output sequences of that length.
+-/
+
+/--
+Represents an IID (Independent and Identically Distributed) Fair Binary Source.
+Such a source produces a sequence of bits, where each bit is 'true' with probability 0.5
+and 'false' with probability 0.5, independently of other bits.
+The 'num_choices' parameter indicates the length of the binary sequence produced.
+-/
+structure IIDFairBinarySource where
+  num_choices : ℕ
+
+/--
+The Shannon entropy (in bits) of a single choice from an IIDFairBinarySource.
+For a fair binary choice (p=0.5), H_bits(choice) = 1 bit.
+Formally: - (0.5 * Real.logb 2 0.5 + (1-0.5) * Real.logb 2 (1-0.5)) = 1.
+-/
+noncomputable def ShannonEntropyPerChoice_IIDFairBinarySource (_source : IIDFairBinarySource) : ℕ  :=
+  1
+
+/--
+According to Shannon's Source Coding Theorem, the minimum average number of bits
+required to encode `s.num_choices` symbols from an IIDFairBinarySource is
+`s.num_choices * ShannonEntropyPerChoice_IIDFairBinarySource s`.
+This defines the "SCT optimal tape length".
+-/
+noncomputable def SCTOptimalTapeLength (s : IIDFairBinarySource) : ℕ  :=
+  (s.num_choices : ℕ ) * ShannonEntropyPerChoice_IIDFairBinarySource s
+
+/--
+Theorem: For an IIDFairBinarySource producing `m_bits` choices, there exists
+a ClassicalComputerProgram whose tape represents one specific outcome of these choices.
+The complexity (tape length) of this program is equal to the SCTOptimalTapeLength
+for encoding that sequence.
+-/
+theorem iid_source_tape_length_eq_sct_length (m_bits : ℕ) :
+    ∃ (src : IIDFairBinarySource) (prog : ClassicalComputerProgram)
+      (_h_src_choices : src.num_choices = m_bits)
+      (_h_prog_tape_len : prog.tape.length = src.num_choices),
+        (ClassicalComputerProgram.complexity prog : ℝ) = SCTOptimalTapeLength src := by
+  -- 1. Define the IIDFairBinarySource
+  let source_model : IIDFairBinarySource := { num_choices := m_bits }
+  use source_model
+
+  -- 2. Define the ClassicalComputerProgram (using a specific tape of the correct length)
+  let initial_st_example : SystemState := { val := 0 }
+  let example_tape : ComputerTape := List.replicate m_bits true -- Content doesn't matter for length
+  let existing_prog : ClassicalComputerProgram :=
+    { initial_state := initial_st_example, tape := example_tape }
+  use existing_prog
+
+  -- 3. Prove the hypothesis linking source choices to m_bits
+  have h_src_choices_eq_m_bits : source_model.num_choices = m_bits := by simp [source_model]
+  use h_src_choices_eq_m_bits
+
+  -- 4. Prove the hypothesis linking program tape length to source choices
+  have h_prog_tape_len_eq_src_choices : existing_prog.tape.length = source_model.num_choices := by
+    exact by
+      -- Goal: existing_prog.tape.length = source_model.num_choices
+      -- Goal: (List.replicate m_bits true).length = m_bits
+      rw [List.length_replicate]
+      -- Goal: m_bits = m_bits
+
+  use h_prog_tape_len_eq_src_choices
+
+  -- 5. Main Goal: (ClassicalComputerProgram.complexity existing_prog : ℝ) = SCTOptimalTapeLength source_model
+  simp only [ClassicalComputerProgram.complexity, SCTOptimalTapeLength, ShannonEntropyPerChoice_IIDFairBinarySource]
+  -- Goal is now: (existing_prog.tape.length : ℝ) = (source_model.num_choices : ℝ) * 1.0
+  rw [mul_one]
+  -- Goal is now: (existing_prog.tape.length : ℝ) = (source_model.num_choices : ℝ)
+  rw [h_prog_tape_len_eq_src_choices]
+  -- Goal is now: (source_model.num_choices : ℝ) = (source_model.num_choices : ℝ)
+
+
+/--
+Theorem: The SCTOptimalTapeLength for an IIDFairBinarySource producing `num_choices` bits
+is equal to the Shannon entropy (in bits) of a uniform distribution over all $2^{num_choices}$
+possible tapes of that length. This connects the SCT-based length to the notion of
+the tape representing one "microstate" from an ensemble of equiprobable microstates (tapes).
+-/
+theorem sct_optimal_tape_length_eq_entropy_of_uniform_tape_dist (src : IIDFairBinarySource) :
+    SCTOptimalTapeLength src = (ShannonEntropyOfTapeChoice src.num_choices) / Real.log 2 := by
+  simp only [SCTOptimalTapeLength, ShannonEntropyPerChoice_IIDFairBinarySource, mul_one]
+  -- Goal: (src.num_choices : ℝ) = ShannonEntropyOfTapeChoice src.num_choices / Real.log 2
+
+  -- This was proven implicitly by `existence_and_complexity_of_program_for_iid_binary_source` logic.
+  -- We re-prove it here for clarity with the current goal structure.
+  by_cases hm_eq_zero : src.num_choices = 0
+  · -- Case: src.num_choices = 0
+    rw [hm_eq_zero]
+    rw [shannon_entropy_of_tape_choice_zero_div_log_two_eq_zero] -- Handles the 0 case for tape choice entropy
+    simp only [Nat.cast_zero] -- (↑0 : ℝ) = 0
+  · -- Case: src.num_choices > 0
+    have hm_pos : src.num_choices > 0 := Nat.pos_of_ne_zero hm_eq_zero
+    rw [shannon_entropy_of_tape_choice_eq_m_log2 src.num_choices hm_pos] -- Substitute definition of tape choice entropy
+    -- Goal: (src.num_choices : ℝ) = (↑(src.num_choices : ℝ) * Real.log 2) / Real.log 2
+    have h_log_two_ne_zero : Real.log 2 ≠ 0 := by
+      apply Real.log_ne_zero_of_pos_of_ne_one
+      · norm_num -- Proves 0 < (2 : ℝ)
+      · norm_num -- Proves (2 : ℝ) ≠ 1
+    rw [mul_div_cancel_right₀ _ h_log_two_ne_zero] -- Cancels (Real.log 2)
+    -- Goal: (src.num_choices : ℝ) = (src.num_choices : ℝ)
+
+/-!
+## Section 5.4: Modeling Any ComputerProgram with an IID Binary Source
+
+This section establishes that any ClassicalComputerProgram, characterized by its tape,
+can be considered as a specific output from an IIDFairBinarySource. The number of
+choices made by the source corresponds to the program's tape length (complexity),
+and this complexity aligns with the SCTOptimalTapeLength for such a source.
+-/
+
+/--
+Theorem: Any `ClassicalComputerProgram` can be modeled by an `IIDFairBinarySource`.
+This means that for any given program, we can define an IID fair binary source
+whose number of choices matches the program's tape length. The program's complexity
+(tape length) is then equal to the SCTOptimalTapeLength for that source.
+This also means the program's complexity is equivalent to the Shannon entropy (in bits)
+of a uniform distribution over all possible tapes of that length.
+-/
+theorem program_modeled_by_iid_source (prog : ClassicalComputerProgram) :
+    ∃ (src : IIDFairBinarySource),
+      src.num_choices = prog.tape.length ∧
+      (ClassicalComputerProgram.complexity prog : ℝ) = SCTOptimalTapeLength src ∧
+      SCTOptimalTapeLength src = (ShannonEntropyOfTapeChoice src.num_choices) / Real.log 2 := by
+  -- 1. Let L be the length of the program's tape.
+  let L := prog.tape.length
+
+  -- 2. Define an IIDFairBinarySource with num_choices = L.
+  let source_model : IIDFairBinarySource := { num_choices := L }
+  use source_model
+
+  -- 3. Prove the first part of the conjunction: src.num_choices = prog.tape.length
+  have h_choices_eq_tape_length : source_model.num_choices = prog.tape.length := by
+    simp [source_model, L]
+
+  -- 4. Prove the second part: (prog.complexity : ℝ) = SCTOptimalTapeLength src
+  have h_complexity_eq_sct_length : (ClassicalComputerProgram.complexity prog : ℝ) = SCTOptimalTapeLength source_model := by
+    simp only [ClassicalComputerProgram.complexity, SCTOptimalTapeLength, ShannonEntropyPerChoice_IIDFairBinarySource, mul_one]
+    -- Goal: (prog.tape.length : ℝ) = (source_model.num_choices : ℝ)
+    rw [h_choices_eq_tape_length] -- Substitute source_model.num_choices with prog.tape.length
+    -- Goal: (prog.tape.length : ℝ) = (prog.tape.length : ℝ)
+
+
+  -- 5. Prove the third part: SCTOptimalTapeLength src = (ShannonEntropyOfTapeChoice src.num_choices) / Real.log 2
+  -- This is the statement of `sct_optimal_tape_length_eq_entropy_of_uniform_tape_dist`
+  have h_sct_eq_entropy_choice : SCTOptimalTapeLength source_model = (ShannonEntropyOfTapeChoice source_model.num_choices) / Real.log 2 := by
+    exact sct_optimal_tape_length_eq_entropy_of_uniform_tape_dist source_model
+
+  -- 6. Combine the proofs for the conjunction
+  exact ⟨h_choices_eq_tape_length, h_complexity_eq_sct_length, h_sct_eq_entropy_choice⟩
+
+
+/-!
+## Section 5.6: Random Walks, CAPrograms, System Evolution, and BE Snapshots
+
+This section defines programs for individual random walks (CAProgram) and
+for a system of multiple random walks (SystemEvolutionProgram).
+It then connects snapshots of the system's evolution to the Bose-Einstein
+encoding program previously defined.
+-/
+
+/-- State of a single 1D random walk: current position and time.
+    Position can be Integer to allow negative values.
+    Alternatively, if only counting 'up' steps, position can be Nat.
+    For simplicity here, let's track number of 'up' steps (heads). -/
+structure PathRandomWalkState where
+  time : ℕ
+  up_steps : ℕ -- Number of heads/up-steps
+  -- invariant: up_steps ≤ time
+
+/-- A sequence of states representing the path of a random walk. -/
+def RandomWalkPath := List PathRandomWalkState
+
+/--
+A CAProgram models the evolution of a single 1D random walk for `T_steps`.
+Its tape consists of `T_steps` binary choices (e.g., head/tail).
+-/
+structure CAProgram where
+  T_steps : ℕ
+  tape : ComputerTape -- Expected length T_steps
+  -- invariant: tape.length = T_steps (can be enforced in constructor or checked)
+
+/--
+Axiom: Evaluates a CAProgram to produce the path of a single random walk.
+The initial state is assumed to be (time=0, up_steps=0).
+-/
+axiom CAProgram.eval (prog : CAProgram) (_h_tape_len : prog.tape.length = prog.T_steps) : RandomWalkPath
+
+def CAProgram.complexity (prog : CAProgram) : ℕ := prog.tape.length
+
+/--
+The SystemEvolutionProgram models the evolution of `num_walks` independent
+1D random walks, each for `T_steps_per_walk`.
+Its tape consists of `num_walks * T_steps_per_walk` binary choices.
+-/
+structure SystemEvolutionProgram where
+  num_walks : ℕ
+  T_steps_per_walk : ℕ
+  system_tape : ComputerTape -- Expected length num_walks * T_steps_per_walk
+
+/--
+Axiom: Evaluates a SystemEvolutionProgram to produce a list of paths,
+one for each of the `num_walks` random walks.
+Assumes tapes are ordered/demuxed correctly.
+-/
+axiom SystemEvolutionProgram.eval (prog : SystemEvolutionProgram)
+  (_h_tape_len : prog.system_tape.length = prog.num_walks * prog.T_steps_per_walk)
+  : List RandomWalkPath -- List of n paths, each path is a List PathRandomWalkState
+
+def SystemEvolutionProgram.complexity (prog : SystemEvolutionProgram) : ℕ := prog.system_tape.length
+
+/--
+Theorem: For any number of steps `T`, there exists a `CAProgram`
+to model a random walk of that length.
+Its complexity is `T`, and it can be modeled by an IID source of `T` choices.
+-/
+theorem existence_of_CAProgram (T_val : ℕ) :
+    ∃ (ca_prog : CAProgram) (src : IIDFairBinarySource),
+      ca_prog.T_steps = T_val ∧
+      ca_prog.tape.length = T_val ∧
+      CAProgram.complexity ca_prog = T_val ∧
+      src.num_choices = T_val ∧
+      (CAProgram.complexity ca_prog : ℝ) = SCTOptimalTapeLength src := by
+  let example_tape_ca := List.replicate T_val true
+  let prog : CAProgram := { T_steps := T_val, tape := example_tape_ca }
+  let iid_src : IIDFairBinarySource := { num_choices := T_val }
+  use prog
+  use iid_src
+  simp [example_tape_ca, prog, iid_src, CAProgram.complexity, List.length_replicate, SCTOptimalTapeLength, ShannonEntropyPerChoice_IIDFairBinarySource, mul_one]
+
+
+
+/--
+Theorem: For `n` walks each of `T` steps, there exists a `SystemEvolutionProgram`.
+Its complexity is `n*T`, and it can be modeled by an IID source of `n*T` choices.
+-/
+theorem existence_of_SystemEvolutionProgram (n_walks_val : ℕ) (T_steps_val : ℕ) :
+    ∃ (sys_prog : SystemEvolutionProgram) (src : IIDFairBinarySource),
+      sys_prog.num_walks = n_walks_val ∧
+      sys_prog.T_steps_per_walk = T_steps_val ∧
+      sys_prog.system_tape.length = n_walks_val * T_steps_val ∧
+      SystemEvolutionProgram.complexity sys_prog = n_walks_val * T_steps_val ∧
+      src.num_choices = n_walks_val * T_steps_val ∧
+      (SystemEvolutionProgram.complexity sys_prog : ℝ) = SCTOptimalTapeLength src := by
+  let total_tape_len := n_walks_val * T_steps_val
+  let example_tape_sys := List.replicate total_tape_len true
+  let prog : SystemEvolutionProgram :=
+    { num_walks := n_walks_val, T_steps_per_walk := T_steps_val, system_tape := example_tape_sys }
+  let iid_src : IIDFairBinarySource := { num_choices := total_tape_len }
+  use prog
+  use iid_src
+  simp [total_tape_len, example_tape_sys, prog, iid_src, SystemEvolutionProgram.complexity, List.length_replicate, SCTOptimalTapeLength, ShannonEntropyPerChoice_IIDFairBinarySource, mul_one]
+
+
+/-!
+Helper function to extract the total number of up-steps from a list of paths
+at a specific snapshot time. Returns 0 if time is out of bounds for any path or paths are empty.
+(A more robust implementation would handle errors or use Options).
+-/
+noncomputable def getTotalUpStepsAtSnapshot (paths : List RandomWalkPath) (snapshot_time : ℕ) : ℕ :=
+  paths.foldl (fun acc path =>
+    match List.get? path snapshot_time with -- Changed from path[snapshot_time]?
+    | some (state : PathRandomWalkState) => acc + state.up_steps
+    | none => acc -- Or handle error: for simplicity, just adds 0 if time is invalid for a path
+  ) 0
