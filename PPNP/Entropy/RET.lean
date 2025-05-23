@@ -917,3 +917,27 @@ theorem RotaUniformTheorem {H : ∀ {α : Type} [Fintype α], (α → NNReal) �
     ∃ C ≥ 0, ∀ (n : ℕ) (_hn_pos : n > 0), (f0 hH_axioms n : ℝ) = C * Real.log n := by
   use C_constant_real hH_axioms
   exact RotaUniformTheorem_formula_with_C_constant hH_axioms
+
+/--
+The `EntropyFunction` type encapsulates a function `H_func` that calculates
+an entropy value (as NNReal) for a given probability distribution `p` over a
+finite type `α`. Crucially, it bundles proof `props` that `H_func`
+satisfies `HasRotaEntropyProperties`.
+-/
+structure EntropyFunction where
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal)
+  (props : HasRotaEntropyProperties H_func)
+
+/--
+A helper to evaluate an EntropyFunction and get a Real value.
+-/
+noncomputable def evalEntropyFunction {ef : EntropyFunction}
+    {α : Type} [Fintype α] (p : α → NNReal) : ℝ :=
+  (ef.H_func p : ℝ)
+
+/--
+The Rota-Khinchin constant associated with an EntropyFunction.
+This is derived from its `H_func` and `props`.
+-/
+noncomputable def C_constant_of_EntropyFunction (ef : EntropyFunction) : ℝ :=
+  C_constant_real ef.props
