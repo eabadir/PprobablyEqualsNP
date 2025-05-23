@@ -762,3 +762,11 @@ lemma rearrange_ratio_equality {a b c d : ℝ} (hb : b ≠ 0) (_hd : d ≠ 0)
   rw [← div_mul_eq_mul_div] at h_ratio
   -- h_ratio: a = (b / d) * c
   exact h_ratio
+
+-- Helper to convert Real.log k to NNReal, assuming k ≥ 1 (so log k ≥ 0)
+noncomputable def RealLogNatToNNReal (k : ℕ) (hk_ge1 : k ≥ 1) : NNReal :=
+  ⟨Real.log (k : ℝ), by
+    apply Real.log_nonneg
+    rw [Nat.one_le_cast]
+    exact hk_ge1
+  ⟩

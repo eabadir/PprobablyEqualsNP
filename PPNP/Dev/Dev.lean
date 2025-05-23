@@ -34,96 +34,200 @@ open PPNP.Entropy.Common
 open PPNP.Entropy.Physics.Common
 open PPNP.Entropy.Physics.UniformSystems
 open PPNP.Entropy.Physics.PhysicsDist
-open PPNP.Entropy.RET
 open PPNP.Entropy.Physics.BE
 open PPNP.Entropy.Physics.PCA
+open PPNP.Entropy.RET
+
+-- In PPNP.Entropy.RET.lean
+
+open PPNP.Entropy.Common
+
+-- In PPNP.Entropy.Physics.Common.lean or in RET.lean if it's general enough
 
 
 
-/-!
-## Section 5.6: Random Walks, CAPrograms, System Evolution, and BE Snapshots
+noncomputable def f0_of_concrete_H (H_conc : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal)
+    (n : ℕ) : NNReal :=
+  if hn_pos : n > 0 then
+    let α_n := Fin n
+    have h_card_pos : 0 < Fintype.card α_n := by simp [α_n, hn_pos]
+    H_conc (uniformDist h_card_pos) -- uniformDist requires proof of sum to 1 for its input,
+                                    -- but it's about the output of uniformDist itself.
+  else
+    0
 
-This section defines programs for individual random walks (CAProgram) and
-for a system of multiple random walks (SystemEvolutionProgram).
-It then connects snapshots of the system's evolution to the Bose-Einstein
-encoding program previously defined.
--/
+-- Alias for convenience
+noncomputable def f0_H_physical_concrete (n : ℕ) : NNReal :=
+  f0_of_concrete_H H_physical_system n
+
 
 /--
-Theorem: A snapshot of an evolving system of `n` random walks at time `t_snapshot`
-can be characterized by a Bose-Einstein distribution, which in turn can be
-encoded by a `ClassicalComputerProgram` (prog_snapshot_BE).
-
-The `SystemEvolutionProgram` (tape `n*T`) determines the state of all walks.
-A snapshot of this state (e.g., number of heads per walk `(h_1, ..., h_n)`)
-can be viewed as a BE microstate.
-`encoding_BE_system_by_program` shows that *this specific BE microstate* can be
-encoded by a program `prog_snapshot_BE` whose tape length is `ceil(log2(num_BE_microstates))`.
-The length of `prog_snapshot_BE.tape` is generally different from `SystemEvolutionProgram.tape.length`.
+Helper lemma to replace the deprecated `Fintype.card_fin_pos`.
+Given `n > 0`, proves `0 < Fintype.card (Fin n)`.
 -/
-theorem system_snapshot_encodable_by_BE_program
-    (sys_prog_eval_output : List RandomWalkPath) -- Output from SystemEvolutionProgram.eval
-    (n_walks : ℕ) (t_snapshot : ℕ)
-    (_h_paths_len : sys_prog_eval_output.length = n_walks)
-    (_h_paths_non_empty_and_time_valid : n_walks > 0 → -- Avoids BE with N=0 if n_walks is 0
-      ∀ path ∈ sys_prog_eval_output, t_snapshot < path.length) :
-    -- Define N_BE and M_BE for the BE system at t_snapshot
-    let N_BE := n_walks
-    let M_BE := getTotalUpStepsAtSnapshot sys_prog_eval_output t_snapshot
-    -- Condition for BE system to be valid (N_BE > 0 or M_BE = 0)
-    if _h_N_BE_pos_or_M_BE_zero : N_BE > 0 ∨ M_BE = 0 then
-        ∃ (prog_snapshot_BE : ClassicalComputerProgram) (src_BE : IIDFairBinarySource)
-          (prog_BE_tape_len_nat : ℕ)
-          (be_params : PPNP.Entropy.Physics.PhysicsDist.SystemParams)
-          (_h_be_params_match : be_params.N = N_BE ∧ be_params.M = M_BE)
-          (_h_axiomatic_entropy_BE :
-            H_physical_system (p_UD_fin be_params.N be_params.M) =
-              C_constant_real H_physical_system_has_Rota_entropy_properties * stdShannonEntropyLn (p_UD_fin be_params.N be_params.M)),
-          prog_snapshot_BE.tape.length = prog_BE_tape_len_nat ∧
-          src_BE.num_choices = prog_BE_tape_len_nat ∧
-          (ClassicalComputerProgram.complexity prog_snapshot_BE : ℝ) = (prog_BE_tape_len_nat : ℝ) ∧
-          (prog_BE_tape_len_nat : ℝ) = SCTOptimalTapeLength src_BE
-    else
-        True -- If BE parameters are not valid (e.g. N_BE=0 and M_BE > 0), the BE encoding doesn't apply in this form.
-        := by
-  let N_BE_val := n_walks
-  let M_BE_val := getTotalUpStepsAtSnapshot sys_prog_eval_output t_snapshot
+theorem f0_H_physical_concrete_is_C_log_n (n : ℕ) (hn_ge1 : n ≥ 1) :
+    (f0_H_physical_concrete n : ℝ) = (C_physical_NNReal : ℝ) * Real.log (n : ℝ) := by
+  have hn_pos : n > 0 := one_le_iff_pos.mp hn_ge1
+  simp only [f0_H_physical_concrete, f0_of_concrete_H, dif_pos hn_pos, H_physical_system]
+  -- H_physical_system's first if: k=Fintype.card (Fin n) = n. This is not 0.
+  simp only [Fintype.card_fin, dif_neg (Nat.ne_of_gt hn_pos)]
+  -- H_physical_system's second if: p = uniformDist (Fintype.card_fin_pos hn_pos)
+  -- The input `p` *is* `uniformDist (by simp; exact hn_pos)`. So the `if` is true.
+  -- Need to show `uniformDist (Fintype.card_fin_pos hn_pos)` is equal to `uniformDist (by simp; exact hn_pos)`
+  -- This holds by proof irrelevance for the positivity argument.
+  -- More directly, `H_physical_system` receives `uniformDist (...)` as `p`.
+  simp [dif_pos rfl] -- p is indeed the uniformDist it's compared against
+  -- Now we are in the H_physical_system_uniform_only_calc branch
+  simp only [H_physical_system_uniform_only_calc]
+  if hn_eq_1 : n = 1 then
+    simp [hn_eq_1, Real.log_one, mul_zero, NNReal.coe_zero]
+  else
+    have hn_ne_1_proof : n ≠ 1 := hn_eq_1
+    simp [hn_ne_1_proof, RealLogNatToNNReal, NNReal.coe_mul, Real.log_nonneg (Nat.one_le_cast.mpr hn_ge1)]
+    -- Goal is (C_physical_NNReal : ℝ) * Real.log (n:ℝ) = (C_physical_NNReal : ℝ) * Real.log (n:ℝ)
 
-  -- If the condition for BE validity is met, proceed with the encoding proof
-  by_cases h_N_BE_pos_or_M_BE_zero_cond : N_BE_val > 0 ∨ M_BE_val = 0
-  · -- The BE system is valid, apply the existing theorem
-    rw [dif_pos h_N_BE_pos_or_M_BE_zero_cond]
-    let be_sys_params : PPNP.Entropy.Physics.PhysicsDist.SystemParams := { N := N_BE_val, M := M_BE_val }
+-- Ensure PPNP.Entropy.Common contains the original Fintype_card_fin_pos:
+-- lemma Fintype_card_fin_pos {k : ℕ} (hk_pos : k > 0) : 0 < Fintype.card (Fin k) := by
+--   simp only [Fintype.card_fin]; exact hk_pos
 
-    -- Create a hypothesis with the exact type expected by encoding_BE_system_by_program
-    have h_valid_for_call : be_sys_params.N ≠ 0 ∨ be_sys_params.M = 0 := by
-      -- Given: h_N_BE_pos_or_M_BE_zero_cond : N_BE_val > 0 ∨ M_BE_val = 0
-      -- Given: be_sys_params.N is N_BE_val and be_sys_params.M is M_BE_val
-      -- Goal: N_BE_val ≠ 0 ∨ M_BE_val = 0
-      cases h_N_BE_pos_or_M_BE_zero_cond with
-      | inl hN_pos => -- Case: N_BE_val > 0
-        exact Or.inl (Nat.ne_of_gt hN_pos) -- Nat.ne_of_gt converts N_BE_val > 0 to N_BE_val ≠ 0
-      | inr hM_zero => -- Case: M_BE_val = 0
-        exact Or.inr hM_zero
+-- In PPNP.Entropy.Physics.Common.lean or your proof file:
+-- In PPNP.Entropy.Common.lean or similar
+-- In PPNP.Entropy.Common.lean (or ensure accessible)
+noncomputable def uniformDistOnFin (k : ℕ) (hk_pos : k > 0) : Fin k → NNReal :=
+  uniformDist (α := Fin k) (by simp only [Fintype.card_fin]; exact hk_pos)
 
-    -- Now call the existing `encoding_BE_system_by_program` theorem
-    -- It provides: ∃ (prog : ClassicalComputerProgram) (src : IIDFairBinarySource)
-    --                (prog_tape_len_nat : ℕ)
-    --                (_h_axiomatic_entropy_BE : H_phys ... = C * stdShannon...),
-    --                prog.tape.length = prog_tape_len_nat ∧ ...
-    rcases encoding_BE_system_by_program be_sys_params h_valid_for_call with
-      ⟨prog_be, src_be, tape_len_be, h_ax_ent_be, h_tape_eq, h_src_eq, h_compl_eq, h_len_eq_sct⟩
 
-    use prog_be
-    use src_be
-    use tape_len_be
-    use be_sys_params
-    --use by { constructor; exact rfl; exact rfl; } -- Proof for _h_be_params_match
-    --use h_ax_ent_be
-    -- The rest of the goals match the output of encoding_BE_system_by_program
-    --exact ⟨h_tape_eq, h_src_eq, h_compl_eq, h_len_eq_sct⟩
 
-  · -- The BE system is not valid (e.g. N_BE_val=0 and M_BE_val > 0), the `if` condition is false.
-    -- The goal is `True` in this branch.
-    rw [dif_neg h_N_BE_pos_or_M_BE_zero_cond]
-    trivial
+lemma p_BE_fin_is_uniformDist_precise (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+  let k_card_val := Fintype.card (OmegaUD N M)
+  have hk_card_val_pos_direct : k_card_val > 0 := card_omega_BE_pos N M h_domain_valid
+  let P_target : 0 < Fintype.card (Fin k_card_val) := by {
+    simp only [Fintype.card_fin]
+    exact hk_card_val_pos_direct
+  }
+  p_UD_fin N M = uniformDist (α := Fin k_card_val) P_target := by
+    let k_card_val_in_proof := Fintype.card (OmegaUD N M)
+    have hk_card_val_pos_direct_in_proof : k_card_val_in_proof > 0 := card_omega_BE_pos N M h_domain_valid
+    funext i
+    -- Unfold LHS to expose the 'if' from uniformProb
+    unfold p_UD_fin uniformProb
+    -- LHS: if _hn : Fintype.card (OmegaUD N M) > 0 then (↑(Fintype.card (OmegaUD N M)))⁻¹ else 0
+    -- which is: if _hn : k_card_val_in_proof > 0 then (↑k_card_val_in_proof)⁻¹ else 0
+
+    -- Simplify the 'if' using the known positivity
+    rw [dif_pos hk_card_val_pos_direct_in_proof]
+    -- LHS is now: (↑k_card_val_in_proof)⁻¹
+
+    -- Unfold RHS
+    unfold uniformDist
+    -- RHS: (λ (_x : Fin k_card_val) => (↑(Fintype.card (Fin k_card_val)))⁻¹) i
+    -- which simplifies to (↑(Fintype.card (Fin k_card_val)))⁻¹
+    -- where k_card_val is from the outer scope (definitionally k_card_val_in_proof)
+
+    -- Simplify Fintype.card (Fin k_card_val) to k_card_val
+    simp only [Fintype.card_fin]
+    -- RHS is now: (↑k_card_val)⁻¹
+    -- Goal: (↑k_card_val_in_proof)⁻¹ = (↑k_card_val)⁻¹
+    -- Since k_card_val_in_proof is definitionally equal to k_card_val (from outer scope)
+
+-- Place this lemma preferably near p_BE_fin_is_uniformDist_precise or in a common helper file for BE.
+lemma p_BE_fin_is_H_physical_system_uniform_input (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    -- The let bindings for k_card_, hk_card_pos_, and H_sys_internal_pos_proof are moved into the proof block.
+    -- The lemma statement now directly uses their definitions.
+    p_UD_fin N M = uniformDist (α := Fin (Fintype.card (OmegaUD N M))) (by {
+      simp only [Fintype.card_fin]
+      exact card_omega_BE_pos N M h_domain_valid -- This was the definition of hk_card_pos_
+    }) := by
+  let k_card_ := Fintype.card (OmegaUD N M)
+  have hk_card_pos_ : k_card_ > 0 := card_omega_BE_pos N M h_domain_valid
+  funext i
+  simp [p_UD_fin, uniformProb, uniformDist, Fintype.card_fin, k_card_, if_pos hk_card_pos_]
+
+-- Place this before H_physical_system_is_rota_uniform
+-- It might go into PPNP.Entropy.Physics.BE or a common file that BE and Common use.
+lemma eval_H_physical_system_on_p_UD_fin (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    H_physical_system (p_UD_fin N M) =
+      H_physical_system_uniform_only_calc
+        (Fintype.card (OmegaUD N M))
+        (Nat.one_le_of_lt (card_omega_BE_pos N M h_domain_valid)) := by
+  let k_card_ := Fintype.card (OmegaUD N M)
+  have hk_card_pos_ : k_card_ > 0 := card_omega_BE_pos N M h_domain_valid
+  -- have _hk_card_ge1_ : k_card_ ≥ 1 := Nat.one_le_of_lt hk_card_pos_ -- For the target RHS
+
+  -- Unfold H_physical_system and simplify Fintype.card (Fin n) to n generally.
+  simp only [H_physical_system, Fintype.card_fin]
+
+  -- First `if` condition in H_physical_system: k_alpha = 0 (which became k_card_ = 0 after Fintype.card_fin)
+  -- We use hk_card_pos_ (0 < k_card_) to show k_card_ ≠ 0.
+  rw [dif_neg (Nat.ne_of_gt hk_card_pos_)]
+
+  -- Now in the 'else' branch of the first 'if'.
+  -- The expression involves a second 'if' checking if p_UD_fin is the uniformDist.
+  -- Use p_BE_fin_is_H_physical_system_uniform_input to resolve this.
+  -- This lemma states: p_UD_fin N M = uniformDist (α := Fin k_card_) (proof of 0 < k_card_)
+  -- The simp will substitute p_UD_fin N M and simplify the equality condition of the if.
+  -- The proofs of 0 < k_card_ will be definitionally equal due to proof irrelevance.
+  simp only [p_BE_fin_is_H_physical_system_uniform_input N M h_domain_valid]
+
+  -- The expression should now be:
+  -- H_physical_system_uniform_only_calc k_card_ (Nat.one_le_of_lt P_internal) = H_physical_system_uniform_only_calc k_card_ (Nat.one_le_of_lt hk_card_pos_)
+  -- This holds by definitional equality because `P_internal` (which is `Nat.pos_of_ne_zero (Nat.ne_of_gt hk_card_pos_)`) is definitionally equal to `hk_card_pos_`.
+  -- `simp only []` or `rfl` should close this. Using `simp only []` for robustness.
+  rfl
+
+-- Helper lemma (can go near other BE related lemmas or in a common place)
+lemma stdShannon_of_p_UD_fin_when_k_is_1 (N M : ℕ) (h_k_is_1 : Fintype.card (OmegaUD N M) = 1) :
+    stdShannonEntropyLn (p_UD_fin N M) = 0 := by
+  -- Let k_card_ be Fintype.card (OmegaUD N M). We know k_card_ = 1 by h_k_is_1.
+  -- The type of p_UD_fin N M is Fin k_card_ → NNReal.
+  -- We want to show that for any x in its domain, (p_UD_fin N M x) is 1.
+  -- Since k_card_ = 1, the domain Fin k_card_ is Fin 1.
+  -- There's only one element in Fin 1, let's call it ` एकमात्र_el : Fin k_card_` (the unique element).
+  -- (More formally, ` एकमात्र_el := (0 : Fin 1).cast (by rw ←h_k_is_1)` or similar if needed)
+
+  -- Unfold stdShannonEntropyLn
+  unfold stdShannonEntropyLn
+  -- Goal: ∑ (x : Fin (Fintype.card (OmegaUD N M))), negMulLog ((p_UD_fin N M x) : ℝ) = 0
+
+  -- Since Fintype.card (OmegaUD N M) = 1, the sum is over a singleton set (Fin 1).
+  -- Use Finset.sum_eq_single_of_mem or rewrite the sum over Fin 1 directly.
+  -- Fintype.card (Fin 1) = 1. Finset.univ for Fin 1 is {(0 : Fin 1)}.
+  conv_lhs =>
+    arg 1 -- The sum itself
+    simp [h_k_is_1] -- Replace Fintype.card (OmegaUD N M) with 1 in the type
+    -- Now summation is over Finset.univ (α := Fin 1)
+
+  -- Goal is now: negMulLog ((p_UD_fin N M (0 : Fin 1)) : ℝ) = 0
+  -- (The (0 : Fin 1) is the default element picked by Finset.sum_singleton if not specified)
+  -- We need to evaluate p_UD_fin N M (0 : Fin 1)
+  -- p_UD_fin N M is (fun _ => uniformProb (Fintype.card (OmegaUD N M)))
+  -- Substitute h_k_is_1 for Fintype.card (OmegaUD N M)
+  simp [p_UD_fin, h_k_is_1, uniformProb, inv_one, NNReal.coe_one, negMulLog_one]
+  -- uniformProb 1 simplifies to 1.
+  -- Then negMulLog ((1 : NNReal) : ℝ) is negMulLog 1.0 which is 0.
+
+theorem H_physical_system_is_rota_uniform (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    (H_physical_system (p_UD_fin N M) : ℝ) =
+      (C_physical_NNReal : ℝ) * stdShannonEntropyLn (p_UD_fin N M) := by
+  let k_card_ := Fintype.card (OmegaUD N M)
+  have hk_card_ge1_ : k_card_ ≥ 1 := Nat.one_le_of_lt (card_omega_BE_pos N M h_domain_valid)
+
+  rw [eval_H_physical_system_on_p_UD_fin N M h_domain_valid]
+  rw [H_physical_system_uniform_only_calc]
+
+  if hk_eq_1 : k_card_ = 1 then
+    rw [dif_pos hk_eq_1]
+    simp only [NNReal.coe_zero] -- LHS is (0 : ℝ)
+    -- Use the new helper lemma for the RHS
+    rw [stdShannon_of_p_UD_fin_when_k_is_1 N M hk_eq_1]
+    simp only [mul_zero]
+  else
+    rw [dif_neg hk_eq_1]
+    simp only [PPNP.Common.RealLogNatToNNReal, NNReal.coe_mul, (Real.log_nonneg (Nat.one_le_cast.mpr hk_card_ge1_))]
+    have h_shannon_eq_log_k : stdShannonEntropyLn (p_UD_fin N M) = Real.log (k_card_ : ℝ) := by
+      rw [p_BE_fin_is_H_physical_system_uniform_input N M h_domain_valid]
+      rw [stdShannonEntropyLn_uniform_eq_log_card]
+      simp only [Fintype.card_fin]
+      rfl
+    rw [h_shannon_eq_log_k]
+    rfl
