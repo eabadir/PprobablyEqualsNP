@@ -727,3 +727,164 @@ lemma uniformProb_product_uniformProb_is_uniformProb
   /- 4 ▸ finish by rewriting inside the inverse and using commutativity -/
   rw [mul_comm] --`mul_comm` is a lemma that rewrites `a * b = b * a`
   simp [hn, hm, mul_comm, nnreal_coe_nat_mul n m]  -- evaluates the `if`s and rewrites `↑n * ↑m`
+
+
+
+lemma stdShannon_of_p_UD_fin_when_k_is_1 (N M : ℕ) (h_k_is_1 : Fintype.card (OmegaUD N M) = 1) :
+    stdShannonEntropyLn (p_UD_fin N M) = 0 := by
+  -- Let k_card_ be Fintype.card (OmegaUD N M). We know k_card_ = 1 by h_k_is_1.
+  -- The type of p_UD_fin N M is Fin k_card_ → NNReal.
+  -- We want to show that for any x in its domain, (p_UD_fin N M x) is 1.
+  -- Since k_card_ = 1, the domain Fin k_card_ is Fin 1.
+  -- There's only one element in Fin 1, let's call it ` एकमात्र_el : Fin k_card_` (the unique element).
+  -- (More formally, ` एकमात्र_el := (0 : Fin 1).cast (by rw ←h_k_is_1)` or similar if needed)
+
+  -- Unfold stdShannonEntropyLn
+  unfold stdShannonEntropyLn
+  -- Goal: ∑ (x : Fin (Fintype.card (OmegaUD N M))), negMulLog ((p_UD_fin N M x) : ℝ) = 0
+
+  -- Since Fintype.card (OmegaUD N M) = 1, the sum is over a singleton set (Fin 1).
+  -- Use Finset.sum_eq_single_of_mem or rewrite the sum over Fin 1 directly.
+  -- Fintype.card (Fin 1) = 1. Finset.univ for Fin 1 is {(0 : Fin 1)}.
+  conv_lhs =>
+    arg 1 -- The sum itself
+    simp [h_k_is_1] -- Replace Fintype.card (OmegaUD N M) with 1 in the type
+    -- Now summation is over Finset.univ (α := Fin 1)
+
+  -- Goal is now: negMulLog ((p_UD_fin N M (0 : Fin 1)) : ℝ) = 0
+  -- (The (0 : Fin 1) is the default element picked by Finset.sum_singleton if not specified)
+  -- We need to evaluate p_UD_fin N M (0 : Fin 1)
+  -- p_UD_fin N M is (fun _ => uniformProb (Fintype.card (OmegaUD N M)))
+  -- Substitute h_k_is_1 for Fintype.card (OmegaUD N M)
+  simp [p_UD_fin, h_k_is_1, uniformProb, inv_one, NNReal.coe_one, Real.negMulLog_one]
+  -- uniformProb 1 simplifies to 1.
+  -- Then negMulLog ((1 : NNReal) : ℝ) is negMulLog 1.0 which is 0.
+
+/--
+Calculates the cardinality of the Bose-Einstein state space `OmegaUD N M`.
+This is the number of ways to distribute `M` indistinguishable particles into `N`
+distinguishable energy states, which is given by the multichoose function `Nat.multichoose N M`.
+This corresponds to the "stars and bars" formula `(N + M - 1) choose M`.
+The proof relies on the equivalence `mbStateEquivMultiset` between `OmegaUD N M`
+and `SymFin N M` (multisets of size `M` over `Fin N`), and the known cardinality
+of `SymFin N M` from Mathlib (`Sym.card_fintype`).
+-/
+lemma card_omega_be (N M : ℕ) :
+    Fintype.card (OmegaUD N M) = Nat.multichoose N M := by
+  rw [Fintype.card_congr (udStateEquivMultiset N M)]
+  -- Goal is now: Fintype.card (SymFin N M) = Nat.multichoose N M
+  -- SymFin N M is defined as Sym (Fin N) M.
+  -- Sym.card_fintype states: Fintype.card (Sym α k) = Nat.multichoose (Fintype.card α) k
+  rw [Sym.card_sym_eq_multichoose (Fin N) M]
+  -- Goal is now: Nat.multichoose (Fintype.card (Fin N)) M = Nat.multichoose N M
+  rw [Fintype.card_fin N]
+  -- Goal is now: Nat.multichoose N M = Nat.multichoose N M, which is true by reflexivity.
+
+
+/-- `Nat.multichoose` is positive exactly when we can really place
+    `k` indistinguishable balls into `n` labelled boxes – i.e.
+    either we have at least one box (`n ≠ 0`) or there is nothing
+    to place (`k = 0`). -/
+lemma multichoose_pos_iff (n k : ℕ) :
+    0 < Nat.multichoose n k ↔ (n ≠ 0 ∨ k = 0) := by
+  -- split on the trivial `k = 0` case
+  by_cases hk : k = 0
+  · subst hk
+    simp [Nat.multichoose_zero_right]  -- `1 > 0`
+  · have hkpos : 0 < k := Nat.pos_of_ne_zero hk
+    -- now analyse `n`
+    cases n with
+    | zero =>
+        -- `n = 0`, `k > 0`  ⇒  multichoose vanishes
+        have h0 : Nat.multichoose 0 k = 0 := by
+          -- stars‑&‑bars gives a too‑large binomial coefficient
+          have hlt : k - 1 < k := Nat.pred_lt (Nat.ne_of_gt hkpos)
+          rw [Nat.multichoose_eq]
+          rw [Nat.zero_add]
+          exact (Nat.choose_eq_zero_of_lt hlt)
+        simp [h0, hk]
+    | succ n' =>
+        -- `n = n'.succ`, `k > 0`  ⇒  multichoose positive
+        have hle : k ≤ n' + k := by
+          simpa [add_comm] using Nat.le_add_left k n'
+        have : 0 < (n' + k).choose k := Nat.choose_pos hle
+        simpa [Nat.multichoose_eq, Nat.succ_eq_add_one,
+               add_comm, add_left_comm, add_assoc, hk] using this
+
+lemma card_omega_BE_pos (N M : ℕ) (h : N ≠ 0 ∨ M = 0) :
+    0 < Fintype.card (OmegaUD N M) := by
+  -- the heavy lifting is `multichoose_pos_iff`
+  simpa [card_omega_be, multichoose_pos_iff] using h
+
+
+lemma p_BE_fin_is_H_physical_system_uniform_input (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    -- The let bindings for k_card_, hk_card_pos_, and H_sys_internal_pos_proof are moved into the proof block.
+    -- The lemma statement now directly uses their definitions.
+    p_UD_fin N M = uniformDist (α := Fin (Fintype.card (OmegaUD N M))) (by {
+      simp only [Fintype.card_fin]
+      exact card_omega_BE_pos N M h_domain_valid -- This was the definition of hk_card_pos_
+    }) := by
+  let k_card_ := Fintype.card (OmegaUD N M)
+  have hk_card_pos_ : k_card_ > 0 := card_omega_BE_pos N M h_domain_valid
+  funext i
+  simp [p_UD_fin, uniformProb, uniformDist, Fintype.card_fin, k_card_, if_pos hk_card_pos_]
+
+
+
+lemma eval_H_physical_system_on_p_UD_fin (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    H_physical_system (p_UD_fin N M) =
+      H_physical_system_uniform_only_calc
+        (Fintype.card (OmegaUD N M))
+        (Nat.one_le_of_lt (card_omega_BE_pos N M h_domain_valid)) := by
+  let k_card_ := Fintype.card (OmegaUD N M)
+  have hk_card_pos_ : k_card_ > 0 := card_omega_BE_pos N M h_domain_valid
+  -- have _hk_card_ge1_ : k_card_ ≥ 1 := Nat.one_le_of_lt hk_card_pos_ -- For the target RHS
+
+  -- Unfold H_physical_system and simplify Fintype.card (Fin n) to n generally.
+  simp only [H_physical_system, Fintype.card_fin]
+
+  -- First `if` condition in H_physical_system: k_alpha = 0 (which became k_card_ = 0 after Fintype.card_fin)
+  -- We use hk_card_pos_ (0 < k_card_) to show k_card_ ≠ 0.
+  rw [dif_neg (Nat.ne_of_gt hk_card_pos_)]
+
+  -- Now in the 'else' branch of the first 'if'.
+  -- The expression involves a second 'if' checking if p_UD_fin is the uniformDist.
+  -- Use p_BE_fin_is_H_physical_system_uniform_input to resolve this.
+  -- This lemma states: p_UD_fin N M = uniformDist (α := Fin k_card_) (proof of 0 < k_card_)
+  -- The simp will substitute p_UD_fin N M and simplify the equality condition of the if.
+  -- The proofs of 0 < k_card_ will be definitionally equal due to proof irrelevance.
+  simp only [p_BE_fin_is_H_physical_system_uniform_input N M h_domain_valid]
+
+  -- The expression should now be:
+  -- H_physical_system_uniform_only_calc k_card_ (Nat.one_le_of_lt P_internal) = H_physical_system_uniform_only_calc k_card_ (Nat.one_le_of_lt hk_card_pos_)
+  -- This holds by definitional equality because `P_internal` (which is `Nat.pos_of_ne_zero (Nat.ne_of_gt hk_card_pos_)`) is definitionally equal to `hk_card_pos_`.
+  -- `simp only []` or `rfl` should close this. Using `simp only []` for robustness.
+  rfl
+
+
+
+theorem H_physical_system_is_rota_uniform (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
+    (H_physical_system (p_UD_fin N M) : ℝ) =
+      (C_physical_NNReal : ℝ) * stdShannonEntropyLn (p_UD_fin N M) := by
+  let k_card_ := Fintype.card (OmegaUD N M)
+  have hk_card_ge1_ : k_card_ ≥ 1 := Nat.one_le_of_lt (card_omega_BE_pos N M h_domain_valid)
+
+  rw [eval_H_physical_system_on_p_UD_fin N M h_domain_valid]
+  rw [H_physical_system_uniform_only_calc]
+
+  if hk_eq_1 : k_card_ = 1 then
+    rw [dif_pos hk_eq_1]
+    simp only [NNReal.coe_zero] -- LHS is (0 : ℝ)
+    -- Use the new helper lemma for the RHS
+    rw [stdShannon_of_p_UD_fin_when_k_is_1 N M hk_eq_1]
+    simp only [mul_zero]
+  else
+    rw [dif_neg hk_eq_1]
+    simp only [PPNP.Common.RealLogNatToNNReal, NNReal.coe_mul, (Real.log_nonneg (Nat.one_le_cast.mpr hk_card_ge1_))]
+    have h_shannon_eq_log_k : stdShannonEntropyLn (p_UD_fin N M) = Real.log (k_card_ : ℝ) := by
+      rw [p_BE_fin_is_H_physical_system_uniform_input N M h_domain_valid]
+      rw [stdShannonEntropyLn_uniform_eq_log_card]
+      simp only [Fintype.card_fin]
+      rfl
+    rw [h_shannon_eq_log_k]
+    rfl

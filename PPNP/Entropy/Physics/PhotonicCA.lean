@@ -43,6 +43,7 @@ This file contains theorems and lemmas related to the encoding of Bose-Einstein 
 -/
 namespace PPNP.Entropy.Physics.PCA
 
+
 /-!
 ## Section 5.5: Encoding Bose-Einstein Distribution with a ComputerProgram
 
@@ -50,44 +51,45 @@ This section demonstrates that a Bose-Einstein (BE) statistical distribution can
 encoded by a ClassicalComputerProgram. The complexity of this program (its tape length)
 corresponds to the number of bits required to specify a particular microstate of the
 BE system. This number of bits is the Shannon entropy of the BE distribution (in bits).
-Rota's Entropy Theorem characterizes the axiomatic entropy of this BE distribution
-as C_axiom_val * (Shannon entropy in nats).
+The entropy of this BE system is characterized by `C_physical_NNReal * (Shannon entropy of BE in nats)`.
 -/
 
 /--
 Theorem: A Bose-Einstein system can be encoded by a `ClassicalComputerProgram`.
 The length of the program's tape (its complexity) is the number of bits needed
 to specify a single microstate of the BE system. This quantity is derived from
-the Shannon entropy of the BE distribution (in bits). The axiomatic entropy of
-this BE system is given by `C_axiom_val * (Shannon entropy of BE in nats)`,
-as per Rota's Uniform Theorem.
+the Shannon entropy of the BE distribution (in bits). The entropy of
+this BE system is given by `C_physical_NNReal * (Shannon entropy of BE in nats)`.
 
 The phrase "ComputerProgram with C*ShannonEntropy" is interpreted as:
 A computer program encodes the choice of a microstate from a distribution
-whose axiomatic entropy value is `C*ShannonEntropy_nats`. The program's tape
+whose entropy value is `C*ShannonEntropy_nats`. The program's tape
 length will be the number of bits for that choice.
 -/
-theorem encoding_BE_system_by_program
+theorem encoding_BE_system_by_program -- This is the theorem from your PhotonicCA.lean
     (params : PPNP.Entropy.Physics.PhysicsDist.SystemParams)
     (h_valid_BE : params.N ≠ 0 ∨ params.M = 0) :
     ∃ (prog : ClassicalComputerProgram) (src : IIDFairBinarySource)
       (prog_tape_len_nat : ℕ)
+      -- MINIMAL CHANGE STARTS HERE --
       (_h_axiomatic_entropy_BE : -- Characterization of the BE system's axiomatic entropy
-        H_physical_system (p_UD_fin params.N params.M) =
-          C_constant_real H_physical_system_has_Rota_entropy_properties * stdShannonEntropyLn (p_UD_fin params.N params.M)),
+        (H_physical_system (p_UD_fin params.N params.M) : ℝ) = -- Ensure LHS is Real
+          (C_physical_NNReal : ℝ) * stdShannonEntropyLn (p_UD_fin params.N params.M)),
+      -- MINIMAL CHANGE ENDS HERE --
       -- Properties of the encoding program and source:
       prog.tape.length = prog_tape_len_nat ∧
       src.num_choices = prog_tape_len_nat ∧
       (ClassicalComputerProgram.complexity prog : ℝ) = (prog_tape_len_nat : ℝ) ∧
-      (prog_tape_len_nat : ℝ) = SCTOptimalTapeLength src := by
+      (prog_tape_len_nat : ℝ) = (SCTOptimalTapeLength src : ℝ) := by -- Coerced SCTOptimalTapeLength
 
   -- 1. Determine the number of microstates in the BE system.
   let k_card := Fintype.card (OmegaUD params.N params.M)
-  have hk_card_pos : k_card > 0 := card_omega_BE_pos params.N params.M h_valid_BE
+  have hk_card_pos : k_card > 0 := UniformSystems.card_omega_BE_pos params.N params.M h_valid_BE
 
   -- 2. Calculate Shannon entropy of the BE distribution in nats and bits.
   let shannon_entropy_nats_BE : ℝ := stdShannonEntropyLn (p_UD_fin params.N params.M)
   have h_shannon_nats_BE_eq_log_k_card : shannon_entropy_nats_BE = Real.log (k_card : ℝ) := by
+    -- This proof block is from your PhotonicCA.lean
     simp [shannon_entropy_nats_BE, -- Unfolds shannon_entropy_nats_BE
           p_BE_fin_is_uniformDist params.N params.M h_valid_BE,
           stdShannonEntropyLn_uniform_eq_log_card (Fintype_card_fin_pos hk_card_pos),
@@ -95,32 +97,28 @@ theorem encoding_BE_system_by_program
 
   let shannon_entropy_bits_BE : ℝ := shannon_entropy_nats_BE / Real.log 2
   have h_shannon_bits_BE_eq_logb_k_card : shannon_entropy_bits_BE = Real.logb 2 (k_card : ℝ) := by
-    simp [shannon_entropy_bits_BE, h_shannon_nats_BE_eq_log_k_card, Real.logb]
+    -- This proof block is from your PhotonicCA.lean
+    simp [shannon_entropy_bits_BE, h_shannon_nats_BE_eq_log_k_card, Real.logb] -- Assuming Real.logb unfolds correctly
 
   -- 3. Determine the tape length for the program (number of bits to encode one microstate).
-  -- If k_card is 1, logb 2 1 = 0 bits. Tape length is 0.
-  -- Otherwise, Nat.ceil(logb 2 k_card).
   let prog_tape_len_nat_val : ℕ :=
     if h_k_card_le_1 : k_card ≤ 1 then
       0
     else
       Nat.ceil shannon_entropy_bits_BE
 
-  have h_prog_tape_len_nonneg_real : (prog_tape_len_nat_val : ℝ) ≥ 0 := Nat.cast_nonneg _
-
-  -- Justification for prog_tape_len_nat_val definition:
-  -- If k_card = 1 (since hk_card_pos means k_card >= 1), then by h_k_card_le_1, it's 0.
-  --   shannon_entropy_bits_BE = logb 2 1 = 0. Nat.ceil 0 = 0. Matches.
-  -- If k_card > 1, then shannon_entropy_bits_BE = logb 2 k_card > 0. Nat.ceil is appropriate.
+  -- have h_prog_tape_len_nonneg_real : (prog_tape_len_nat_val : ℝ) ≥ 0 := Nat.cast_nonneg _ -- This line was in my version, not explicitly in yours, can be omitted if not needed by tactics later
 
   -- 4. Axiomatic entropy characterization (Rota's Theorem for this BE system)
+  -- MINIMAL CHANGE STARTS HERE for the proof of the hypothesis
   have h_axiomatic_entropy_BE_stmt :
-      H_physical_system (p_UD_fin params.N params.M) =
-      C_constant_real H_physical_system_has_Rota_entropy_properties * shannon_entropy_nats_BE := by
-    exact H_BE_from_Multiset_eq_C_shannon params.N params.M h_valid_BE
+      (H_physical_system (p_UD_fin params.N params.M) : ℝ) =
+      (C_physical_NNReal : ℝ) * shannon_entropy_nats_BE := by
+    -- Use the direct proof: H_physical_system_is_rota_uniform
+    exact H_physical_system_is_rota_uniform params.N params.M h_valid_BE
+  -- MINIMAL CHANGE ENDS HERE for the proof of the hypothesis
 
   -- 5. Existence of the program and IID source.
-  --    Let an example tape be all 'true's, with the determined length.
   let example_tape : ComputerTape := List.replicate prog_tape_len_nat_val true
   let prog_exists : ClassicalComputerProgram :=
     { initial_state := { val := 0 }, tape := example_tape }
@@ -142,13 +140,5 @@ theorem encoding_BE_system_by_program
   constructor -- for (prog.complexity : ℝ) = (prog_tape_len_nat_val : ℝ)
   · simp [ClassicalComputerProgram.complexity, prog_exists, example_tape, List.length_replicate]
 
-  -- for (prog_tape_len_nat_val : ℝ) = SCTOptimalTapeLength src_exists
-  · simp [SCTOptimalTapeLength, ShannonEntropyPerChoice_IIDFairBinarySource, src_exists, mul_one]
-
--- At the top of Program.lean, ensure these are open if not already:
--- open PPNP.Entropy.Physics.BE -- for OmegaUD, card_omega_BE_pos, p_UD_fin
--- open PPNP.Entropy.RET -- for C_constant_real, H_physical_system_has_Rota_entropy_properties
--- open PPNP.Entropy.Physics.Common -- for H_physical_system
--- open PPNP.Entropy.Physics.UniformSystems -- for p_UD_fin_is_uniformDist etc.
--- open PPNP.Entropy.Common -- for stdShannonEntropyLn
--- open PPNP.Entropy.Physics.PhysicsDist -- for SystemParams
+  -- for (prog_tape_len_nat_val : ℝ) = (SCTOptimalTapeLength src_exists : ℝ)
+  · simp [SCTOptimalTapeLength, ShannonEntropyPerChoice_IIDFairBinarySource, src_exists, mul_one, Nat.cast_id] -- Added Nat.cast_id for robustness

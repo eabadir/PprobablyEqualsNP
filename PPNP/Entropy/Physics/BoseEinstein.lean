@@ -273,46 +273,8 @@ lemma H_p_BE_fin_eq_f_H_card (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0)
 
 
 theorem H_BE_from_Multiset_eq_C_shannon (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
-    eval_H_phys_system_on_fin_dist_to_real (p_UD_fin N M) =
-      C_constant_real PPNP.Entropy.Physics.Common.H_physical_system_has_Rota_entropy_properties *
+    (PPNP.Entropy.Physics.Common.H_physical_system (p_UD_fin N M) : ℝ) =
+      (PPNP.Entropy.Physics.Common.C_physical_NNReal : ℝ) *
       stdShannonEntropyLn (p_UD_fin N M) := by
-  let k_card := Fintype.card (OmegaUD N M)
-  have hk_card_pos : k_card > 0 := card_omega_BE_pos N M h_domain_valid
-
-  let H_is_entropy_proof_fq := PPNP.Entropy.Physics.Common.H_physical_system_has_Rota_entropy_properties
-
-  have h1 : eval_H_phys_system_on_fin_dist_to_real (p_UD_fin N M) =
-              (f0 H_is_entropy_proof_fq k_card : ℝ) := by
-    simp only [eval_H_phys_system_on_fin_dist_to_real]
-    exact H_p_BE_fin_eq_f_H_card N M h_domain_valid PPNP.Entropy.Physics.Common.H_physical_system H_is_entropy_proof_fq
-  rw [h1]
-
-  have h2_full := RotaUniformTheorem_formula_with_C_constant H_is_entropy_proof_fq
-  have h2_transform_f0 : (f0 H_is_entropy_proof_fq k_card : ℝ) =
-              C_constant_real H_is_entropy_proof_fq * Real.log k_card :=
-    h2_full.right k_card hk_card_pos
-  rw [h2_transform_f0]
-
-  have h_p_BE_fin_is_unif : p_UD_fin N M =
-      uniformDist (Fintype_card_fin_pos hk_card_pos) :=
-    p_BE_fin_is_uniformDist N M h_domain_valid
-
-  have h3_shannon_eq_log_k : stdShannonEntropyLn (p_UD_fin N M) = Real.log k_card := by
-    rw [h_p_BE_fin_is_unif]
-    -- LHS becomes: stdShannonEntropyLn (uniformDist (Fintype_card_fin_pos hk_card_pos))
-    -- We know from stdShannonEntropyLn_uniform_eq_log_card:
-    --   stdShannonEntropyLn (uniformDist (Fintype_card_fin_pos hk_card_pos)) = Real.log (Fintype.card (Fin k_card))
-    -- Goal is: Real.log k_card
-    -- So we need to show: Real.log (Fintype.card (Fin k_card)) = Real.log k_card
-    -- This follows if Fintype.card (Fin k_card) = k_card.
-
-    -- Apply stdShannonEntropyLn_uniform_eq_log_card first
-    rw [stdShannonEntropyLn_uniform_eq_log_card (Fintype_card_fin_pos hk_card_pos)]
-    -- Goal is now: Real.log (Fintype.card (Fin k_card)) = Real.log k_card
-
-    -- Now use the helper to change the argument of Real.log
-    rw [card_fin_eq_self k_card]
-    -- Goal is now: Real.log k_card = Real.log k_card
-
-
-  rw [h3_shannon_eq_log_k]
+  -- The proof is exactly what H_physical_system_is_rota_uniform does.
+  exact H_physical_system_is_rota_uniform N M h_domain_valid
