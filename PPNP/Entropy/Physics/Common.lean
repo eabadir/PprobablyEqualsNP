@@ -45,7 +45,7 @@ def UDMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
 
 
 -- This axiom states that the true entropy of physical systems behaves according to Rota's postulates.
-axiom H_physical_system_has_Rota_entropy_properties : HasRotaEntropyProperties H_physical_system
+--axiom H_physical_system_has_Rota_entropy_properties : HasRotaEntropyProperties H_physical_system
 
 /-- `Multiset.count` distributes over a `Finset` sum of multisets. -/
 @[simp] lemma Multiset.count_finset_sum
