@@ -149,6 +149,16 @@ structure IsEntropyZeroInvariance
                      else 0)
     H_func p_ext = H_func p_orig
 
+
+-- In PPNP.Entropy.Common.lean, add this structure:
+structure IsEntropyZeroOnEmptyDomain
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) : Prop where
+  apply_to_empty_domain : H_func Fin.elim0 = 0
+  -- Fin.elim0 here denotes the unique function Fin 0 → NNReal.
+  -- The specific instance H_func {α := Fin 0} [Fintype (Fin 0)] Fin.elim0 is used.
+
+
+
 structure IsEntropyMaxUniform
   (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) : Prop where -- Renamed H to H_func
   max_uniform :
@@ -157,19 +167,71 @@ structure IsEntropyMaxUniform
       H_func p ≤ H_func (uniformDist h_card_pos)
 
 /--
-**Axiomatic Entropy Function.**
+Generalized joint distribution (dependent pair distribution) over a sigma type.
+`P(⟨i,j⟩) = prior(i) * P_cond(i)(j)`.
+The type of `j` depends on `i` via `M_map i`.
+Requires `Fintype` instances for `Fin N` and `Fin (M_map i)`.
+Implicitly, `N > 0` if `prior` is on `Fin N` and non-trivial.
+If `M_map i = 0`, then `Fin (M_map i)` is empty, and no `j` exists for such `i`.
+The domain `(Σ i : Fin N, Fin (M_map i))` will not contain pairs `⟨i,j⟩` if `M_map i = 0`.
+-/
+noncomputable def DependentPairDistSigma {N : ℕ}
+    (prior : Fin N → NNReal) (M_map : Fin N → ℕ)
+    (P_cond : Π (i : Fin N), (Fin (M_map i) → NNReal)) :
+    (Σ i : Fin N, Fin (M_map i)) → NNReal :=
+  fun sigma_pair => -- sigma_pair is ⟨i, j⟩ where j : Fin (M_map i)
+    let i := sigma_pair.fst
+    let j := sigma_pair.snd
+    prior i * P_cond i j
+
+-- ... (IsEntropyNormalized, IsEntropySymmetric, IsEntropyContinuous)
+
+-- REMOVE/REPLACE old IsEntropyCondAdd
+-- structure IsEntropyCondAdd ...
+
+/--
+Axiom for conditional additivity of entropy, generalized for Sigma types.
+`H(P_joint) = H(P_prior) + ∑_i P_prior(i) * H(P_conditional_i)`.
+Preconditions:
+- `prior` must sum to 1.
+- For each `i` where `prior i > 0`:
+    - `M_map i` must be greater than 0 (so `Fin (M_map i)` is non-empty and `P_cond i` is on a non-empty type).
+    - `P_cond i` (the conditional distribution for that `i`) must sum to 1.
+If `prior i = 0`, the term `prior i * H_func (P_cond i)` is zero, so the properties of `P_cond i`
+(like summing to 1 or `M_map i > 0`) for that specific `i` do not affect the sum's value.
+However, `H_func (P_cond i)` still needs to be well-defined. If `M_map i = 0`, then `P_cond i`
+is a distribution on `Fin 0`. `H_func` applied to this should be `f0 H_func 0 = 0`.
+The axiom states the equality assuming these conditions are met by the caller.
+-/
+structure IsEntropyCondAddSigma
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) : Prop where -- Changed Type u to Type
+  cond_add_sigma :
+    ∀ {N : ℕ} [NeZero N] -- Ensures Fin N is non-empty, prior is on a meaningful domain
+      (prior   : Fin N → NNReal) (M_map : Fin N → ℕ)
+      (P_cond  : Π (i : Fin N), (Fin (M_map i) → NNReal))
+      (_hprior_sum_1    : ∑ i, prior i = 1)
+      (_hP_cond_props : ∀ i : Fin N, prior i > 0 → (M_map i > 0 ∧ ∑ j, P_cond i j = 1))
+      (_hH_P_cond_M_map_zero_is_zero : ∀ i : Fin N, M_map i = 0 →
+        @H_func (Fin (M_map i)) (Fin.fintype (M_map i)) (P_cond i) = 0),
+    H_func (DependentPairDistSigma prior M_map P_cond) =
+      H_func prior + ∑ i, prior i * H_func (P_cond i)
+
+/--
+**Axiomatic Entropy Function.** (Updated to use IsEntropyCondAddSigma)
 `HasRotaEntropyProperties H_func` means `H_func` assigns `NNReal` to finite probability distributions,
-satisfying normalization, symmetry, continuity, conditional additivity, zero invariance, and maximality at uniform.
+satisfying normalization, symmetry, continuity, conditional additivity (sigma version),
+zero invariance, and maximality at uniform.
 -/
 structure HasRotaEntropyProperties -- This is the new definition
-  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Changed Type u to Type
   : Prop
   extends IsEntropyZeroInvariance H_func,
           IsEntropyNormalized H_func,
           IsEntropySymmetric H_func,
           IsEntropyContinuous H_func,
-          IsEntropyCondAdd H_func,
-          IsEntropyMaxUniform H_func
+          IsEntropyCondAddSigma H_func, -- UPDATED
+          IsEntropyMaxUniform H_func,
+          IsEntropyZeroOnEmptyDomain H_func
 
 
 

@@ -44,6 +44,13 @@ lemma nnreal_coe_nat_mul (n m : ℕ) :
   simp [NNReal.coe_mul, Nat.cast_mul]   -- both sides become `↑n * ↑m` in `ℝ`
 
 
+/-- Replacement for Mathlib3 NNReal.nat_cast_ne_zero -/
+lemma nnreal_nat_cast_ne_zero {n : ℕ} (hn : n ≠ 0) :
+    (n : NNReal) ≠ 0 := by
+  -- The goal is `↑n ≠ 0` in `NNReal`
+  -- Use the fact that `↑n = 0` iff `n = 0`
+  simp [hn] -- This is the negation of the `Nat.cast` lemma
+
 
 
 /-- Shows that the product `(a * a⁻¹) * (b * b⁻¹)` equals `1 * 1`, given `a` and `b` are non-zero. -/
@@ -740,6 +747,7 @@ lemma div_bounds_from_mul_bounds {A B C D E : ℝ} (hC : C > 0) (hD : D > 0)
     -- Use div_le_div_iff which states (b / c ≤ e / d ↔ b * d ≤ e * c) given c > 0, d > 0
     rwa [div_le_div_iff₀ hC hD] -- Rewrites goal B / C ≤ E / D to B * D ≤ E * C and uses h_le2
 
+
 /--
 Helper: Rearranges the equality `a / b = c / d` to `a = (b / d) * c`,
 given denominators are non-zero.
@@ -770,3 +778,70 @@ noncomputable def RealLogNatToNNReal (k : ℕ) (hk_ge1 : k ≥ 1) : NNReal :=
     rw [Nat.one_le_cast]
     exact hk_ge1
   ⟩
+
+
+/-- Distributes division by a non-zero `NNReal` constant `d` out of a `Finset` sum. -/
+lemma NNReal.sum_div {α : Type*} [DecidableEq α] (s : Finset α) (f : α → NNReal) (d : NNReal) (_hd_ne_zero : d ≠ 0) :
+    (∑ i ∈ s, f i / d) = (∑ i ∈ s, f i) / d := by
+  -- Proof by induction on the Finset s
+  refine Finset.induction_on s ?base_case ?inductive_step
+  · -- Base case: s = ∅
+    simp only [Finset.sum_empty, zero_div]
+  · -- Inductive step: s = insert x t, where x ∉ t
+    intro x t hx_not_in_t ih_sum_div_t
+    simp only [Finset.sum_insert hx_not_in_t]
+    -- Goal: f x / d + ∑ (i : α) in t, f i / d = (f x + ∑ (i : α) in t, f i) / d
+    rw [ih_sum_div_t] -- Apply induction hypothesis to the sum over t
+    exact (div_add_div_same (f x) (∑ i ∈ t, f i) d)
+
+/--
+Constructs a probability distribution `P_rat : Fin n → NNReal` where each component
+`P_rat i` is a rational number `(a i) / N_den`.
+Requires `a i` to be natural numbers, `N_den` a positive natural number,
+and `∑ a i = N_den`.
+-/
+noncomputable def create_rational_dist (n : ℕ) (a : Fin n → ℕ) (N_den : ℕ)
+    (_h_sum_a_eq_N : ∑ i, a i = N_den) (_hN_den_pos : N_den > 0) : Fin n → NNReal :=
+  fun i => (a i : NNReal) / (N_den : NNReal)
+
+/--
+The distribution created by `create_rational_dist` sums to 1, confirming it's a
+valid probability distribution.
+-/
+lemma sum_create_rational_dist_eq_one (n : ℕ) (a : Fin n → ℕ) (N_den : ℕ)
+    (h_sum_a_eq_N : ∑ i, a i = N_den) (hN_den_pos : N_den > 0) :
+    ∑ i, (create_rational_dist n a N_den h_sum_a_eq_N hN_den_pos) i = 1 := by
+  -- Unfold the definition of create_rational_dist
+  simp_rw [create_rational_dist]
+  -- Goal: ∑ (i : Fin n), (a i : NNReal) / (N_den : NNReal) = 1
+
+  -- Need proof that (N_den : NNReal) ≠ 0 to use NNReal.sum_div
+  have hN_den_nnreal_ne_zero : (N_den : NNReal) ≠ 0 := by
+    simp [NNReal.coe_eq_zero, Nat.pos_iff_ne_zero] -- Goal is N_den ≠ 0 after this
+    let hN_den_pos_ne_zero : N_den ≠ 0 := Nat.ne_of_gt hN_den_pos
+    exact hN_den_pos_ne_zero -- This directly proves the goal N_den ≠ 0
+  -- Goal: ∑ (i : Fin n), (a i : NNReal) / (N_den : NNReal) = 1
+
+  -- Apply NNReal.sum_div
+  rw [NNReal.sum_div (Finset.univ : Finset (Fin n)) (fun i => (a i : NNReal)) (N_den : NNReal) hN_den_nnreal_ne_zero]
+  -- Goal after sum_div: (∑ i ∈ Finset.univ, (a i : NNReal)) / (N_den : NNReal) = 1
+
+  -- Rewrite the sum of NNReal casts using Nat.cast_sum.
+  -- Nat.cast_sum states: ((∑ i ∈ s, f i : ℕ) : NNReal) = ∑ i ∈ s, ((f i : ℕ) : NNReal)
+  -- We want to change the numerator from ∑ i ∈ Finset.univ, ((a i : ℕ) : NNReal)
+  -- to ((∑ i ∈ Finset.univ, (a i : ℕ)) : NNReal), so we use ← Nat.cast_sum.
+  rw [← Nat.cast_sum (Finset.univ : Finset (Fin n)) a]
+  -- Goal: (((∑ i ∈ Finset.univ, a i : ℕ) : NNReal)) / ((N_den : ℕ) : NNReal) = 1
+
+  -- Use the hypothesis h_sum_a_eq_N.
+  -- h_sum_a_eq_N is ∑ i, a i = N_den.
+  -- Since (∑ i, a i) is definitionally (∑ i ∈ Finset.univ, a i), this rewrite works.
+  rw [h_sum_a_eq_N]
+  -- Goal: (((N_den : ℕ) : NNReal)) / ((N_den : ℕ) : NNReal) = 1
+
+  simp [hN_den_nnreal_ne_zero]
+  -- Goal: 1 = 1 (which is true by reflexivity)
+
+-- We will stop here for this step as requested.
+-- The next steps would involve generalizing DependentPairDist and IsEntropyCondAdd,
+-- then proving `RUE_rational_formula_H_P_rat`.

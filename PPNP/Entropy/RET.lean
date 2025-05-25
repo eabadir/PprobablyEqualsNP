@@ -19,6 +19,7 @@ import Mathlib.Data.Nat.Log -- Nat.log
 import Mathlib.Algebra.Order.Floor.Defs -- Floor definitions
 import Mathlib.Tactic.Linarith -- Inequality solver
 import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
+import Mathlib.Logic.Equiv.Defs -- For Equiv
 
 import PPNP.Common.Basic
 import PPNP.Entropy.Common
@@ -26,7 +27,7 @@ import PPNP.Entropy.Common
 
 namespace PPNP.Entropy.RET
 
-open BigOperators Fin Real Topology NNReal Filter Nat
+open Nat Real NNReal Multiset NNReal Fin Set Finset Filter Function BigOperators Topology     -- Added Function for comp_apply
 open PPNP.Common
 open PPNP.Entropy.Common
 
@@ -223,23 +224,50 @@ lemma sum_weighted_constant {β : Type*} [Fintype β]
     (∑ i, w i * C_val) = C_val := by
   rw [← Finset.sum_mul, h_w_sum_1, one_mul]
 
--- New derivation (replaces logic of old prop4_additivity_product)
+
 /--
-If P(j|i) = q_const(j), then H(joint) = H(prior) + H(q_const).
+If P(j|i) = q_const(j) (i.e., conditional is independent of prior index i),
+then H(joint) = H(prior) + H(q_const).
+This uses the generalized `cond_add_sigma`.
+The joint distribution is on `(Σ i : Fin N, Fin M)`, which is equiv to `Fin (N*M)`.
 -/
 lemma cond_add_for_independent_distributions
-    {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
+    {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Changed Type u to Type
     (hH_axioms : HasRotaEntropyProperties H_func)
-    {N M : ℕ} [NeZero N] [NeZero M]
+    {N M : ℕ} [NeZero N] [NeZero M] -- NeZero M implies M > 0
     (prior : Fin N → NNReal) (q_const : Fin M → NNReal)
     (hprior_sum_1 : ∑ i, prior i = 1) (hq_const_sum_1 : ∑ j, q_const j = 1) :
-    H_func (dependentPairDist_of_independent prior q_const)
-      = H_func prior + H_func (α := Fin M) q_const := by
-  simp only [dependentPairDist_of_independent]
-  rw [hH_axioms.cond_add prior (fun _ => q_const) (fun _ => hq_const_sum_1) hprior_sum_1]
-  rw [sum_weighted_constant hprior_sum_1]
+    -- The LHS H_func is applied to a distribution on (Σ i : Fin N, Fin M).
+    -- By symmetry, this should be equal to H_func of the equivalent distribution on Fin (N*M).
+    -- Let's state the theorem for H_func on the sigma type first.
+    H_func (DependentPairDistSigma prior (fun _ => M) (fun _ => q_const)) =
+      H_func prior + H_func q_const := by
+  -- Check preconditions for hH_axioms.cond_add_sigma
+  have hP_cond_props_for_sigma : ∀ i : Fin N, prior i > 0 → ((fun (_ : Fin N) => M) i > 0 ∧ ∑ j, (fun (_ : Fin N) => q_const) i j = 1) := by
+    intro i_idx _h_prior_i_pos
+    constructor
+    · -- Prove M > 0
+      simp only [gt_iff_lt] -- M_map i is M
+      exact NeZero.pos M   -- From [NeZero M] instance
+    · -- Prove ∑ j, q_const j = 1
+      exact hq_const_sum_1
 
+  have hH_P_cond_M_map_zero_is_zero_for_sigma : ∀ i : Fin N, (fun (_ : Fin N) => M) i = 0 → H_func ((fun (_ : Fin N) => q_const) i) = 0 := by
+    intro i_idx h_M_eq_0
+    -- M_map i is M. So h_M_eq_0 is M = 0.
+    -- This contradicts [NeZero M] which implies M > 0.
+    have h_M_ne_zero : M ≠ 0 := NeZero.ne M
+    exfalso
+    exact h_M_ne_zero h_M_eq_0
 
+  -- Apply the generalized conditional additivity axiom
+  rw [hH_axioms.cond_add_sigma prior (fun _ => M) (fun _ => q_const) hprior_sum_1 hP_cond_props_for_sigma hH_P_cond_M_map_zero_is_zero_for_sigma]
+  -- Goal: H_func prior + (∑ i, prior i * H_func q_const) = H_func prior + H_func q_const
+  -- Need to show (∑ i, prior i * H_func q_const) = H_func q_const
+  rw [add_left_cancel_iff] -- Cancels H_func prior from both sides using a standard iff lemma
+  -- Goal: (∑ i, prior i * H_func q_const) = H_func q_const
+  -- This is sum_weighted_constant from PPNP.Entropy.RET (already proven)
+  exact sum_weighted_constant hprior_sum_1
 -- This helper can be local to f0_mul_eq_add_f0 proof or kept if generally useful
 -- noncomputable def DependentPairDist_of_independent_helper -- From Phase 2, might not be needed if  is direct.
 --   {N M : ℕ} (hN_pos : N > 0) (hM_pos : M > 0) :
@@ -289,69 +317,109 @@ lemma joint_uniform_is_flat_uniform
 
 
 
+
 /--
 Property: `f0 H (n*m) = f0 H n + f0 H m` for `n, m > 0`.
-This is derived from the conditional additivity axiom for independent distributions.
+Derived from the generalized conditional additivity axiom.
 Output is `NNReal`.
 -/
 theorem f0_mul_eq_add_f0 {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
     (hH_axioms : HasRotaEntropyProperties H) {n m : ℕ} (hn_pos : n > 0) (hm_pos : m > 0) :
     f0 hH_axioms (n * m) = f0 hH_axioms n + f0 hH_axioms m := by
-  -- Step 1: Handle positivity and unfold f0
   have hnm_pos : n * m > 0 := Nat.mul_pos hn_pos hm_pos
-  simp only [f0, dif_pos hn_pos, dif_pos hm_pos, dif_pos hnm_pos]
-  -- Goal: f hH_axioms hnm_pos = f hH_axioms hn_pos + f hH_axioms hm_pos
+  haveI hN_ne_zero : NeZero n := NeZero.of_pos hn_pos
+  haveI hM_ne_zero : NeZero m := NeZero.of_pos hm_pos
+  haveI hNM_ne_zero : NeZero (n*m) := NeZero.of_pos hnm_pos -- Added for inv_inj later
 
-  -- Step 2: Define the uniform distributions involved
-  -- For f hH_axioms hn_pos (uniform on Fin n)
-  let card_n_pos_proof : 0 < Fintype.card (Fin n) := by simp [hn_pos]
-  let unif_n_dist := uniformDist card_n_pos_proof
+  -- Define distributions explicitly to control unfolding
+  let P_n := uniformDist (Fintype_card_fin_pos hn_pos)
+  let P_m := uniformDist (Fintype_card_fin_pos hm_pos)
+  let P_nm := uniformDist (Fintype_card_fin_pos hnm_pos)
+  let M_map_const_m (_ : Fin n) : ℕ := m
+  let P_cond_const_P_m (_ : Fin n) : Fin m → NNReal := P_m
 
-  -- For f hH_axioms hm_pos (uniform on Fin m)
-  let card_m_pos_proof : 0 < Fintype.card (Fin m) := by simp [hm_pos]
-  let unif_m_dist := uniformDist card_m_pos_proof
+  have h_sum_P_n : ∑ i, P_n i = 1 := sum_uniformDist (Fintype_card_fin_pos hn_pos)
+  have h_sum_P_m : ∑ j, P_m j = 1 := sum_uniformDist (Fintype_card_fin_pos hm_pos)
 
-  -- For f hH_axioms hnm_pos (uniform on Fin (n*m))
-  let card_nm_pos_proof : 0 < Fintype.card (Fin (n*m)) := by simp [hnm_pos]
-  let unif_nm_dist := uniformDist card_nm_pos_proof
 
-  -- Step 3: Rewrite the goal in terms of H applied to these distributions
-  -- LHS: H (α := Fin (n*m)) unif_nm_dist
-  -- RHS: H (α := Fin n) unif_n_dist + H (α := Fin m) unif_m_dist
-  change H (α := Fin (n*m)) unif_nm_dist = H (α := Fin n) unif_n_dist + H (α := Fin m) unif_m_dist
+  -- Unfold each `f0 … k` to `H (uniformDist …)`.
+  simp [f0, hn_pos, hm_pos, hnm_pos] at *
 
-  -- Step 4: Apply conditional additivity for independent distributions
-  -- Need sum = 1 proofs for unif_n_dist and unif_m_dist
-  have h_sum_unif_n : (∑ i, unif_n_dist i) = 1 := sum_uniformDist card_n_pos_proof
-  have h_sum_unif_m : (∑ i, unif_m_dist i) = 1 := sum_uniformDist card_m_pos_proof
+  ----------------------------------------------------------------
+  -- 1.  Additivity for independent distributions
+  ----------------------------------------------------------------
+  have h_indep :
+      H (DependentPairDistSigma P_n M_map_const_m P_cond_const_P_m) =
+        H P_n + H P_m := by
+    simpa using
+      (cond_add_for_independent_distributions hH_axioms P_n P_m
+          h_sum_P_n h_sum_P_m)
 
-  -- Create local NeZero instances required by cond_add_for_independent_distributions
-  haveI : NeZero n := NeZero.of_pos hn_pos
-  haveI : NeZero m := NeZero.of_pos hm_pos
+  ----------------------------------------------------------------
+  -- 2.  Relate the joint uniform distribution to `P_nm`
+  ----------------------------------------------------------------
+  -- Define U_sigma, the uniform distribution on the Sigma type (Σ i : Fin n, Fin m)
+  let U_sigma := uniformDist (α := (Σ i : Fin n, Fin m)) (by {
+        simp only [Fintype.card_sigma, Fintype.card_fin, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+        exact hnm_pos
+      })
 
-  have h_add_indep :
-      H (dependentPairDist_of_independent unif_n_dist unif_m_dist) =
-        H (α := Fin n) unif_n_dist + H (α := Fin m) unif_m_dist :=
-    cond_add_for_independent_distributions hH_axioms unif_n_dist unif_m_dist h_sum_unif_n h_sum_unif_m
+  -- Prove DependentPairDistSigma P_n M_map_const_m P_cond_const_P_m is U_sigma
+  have h_dep_pair_dist_eq_U_sigma : DependentPairDistSigma P_n M_map_const_m P_cond_const_P_m = U_sigma := by {
+    funext x_sig; rcases x_sig with ⟨i_idx, j_idx⟩;
+    -- LHS DependentPairDistSigma ... x_sig evaluates to (↑n)⁻¹ * (↑m)⁻¹
+    conv_lhs =>
+      simp only [DependentPairDistSigma, P_n, P_m, M_map_const_m, P_cond_const_P_m,
+                 uniformDist, Fintype.card_fin]
+    -- RHS U_sigma x_sig evaluates to (↑(Fintype.card (Σ _ : Fin n, Fin m)))⁻¹ which is (↑(n*m))⁻¹
+    conv_rhs =>
+      simp only [U_sigma, uniformDist, Fintype.card_sigma, Fintype.card_fin, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+    -- Goal: (↑n)⁻¹ * (↑m)⁻¹ = (↑(n*m))⁻¹
+    have hn_ne : (n : NNReal) ≠ 0 := by exact_mod_cast (Nat.ne_of_gt hn_pos)
+    have hm_ne : (m : NNReal) ≠ 0 := by exact_mod_cast (Nat.ne_of_gt hm_pos)
+    simpa [Nat.cast_mul] using
+      (nnreal_inv_mul_inv_eq_inv_mul (a := (n : NNReal)) (b := (m : NNReal)) hn_ne hm_ne)
+  }
 
-  -- Step 5: Rewrite the RHS of the main goal using h_add_indep
-  rw [← h_add_indep]
-  -- Goal: H (α := Fin (n*m)) unif_nm_dist = H (dependentPairDist_of_independent unif_n_dist unif_m_dist)
+  -- Define the equivalence.
+  let e_final_for_symmetry : (Σ i : Fin n, Fin m) ≃ Fin (n * m) :=
+    (Equiv.sigmaEquivProd (Fin n) (Fin m)).trans finProdFinEquiv
 
-  -- Step 6: Prove that unif_nm_dist is the same as the joint distribution
-  -- This uses the helper lemma joint_uniform_is_flat_uniform
-  have h_dist_eq : dependentPairDist_of_independent unif_n_dist unif_m_dist = unif_nm_dist := by
-    -- We need to match the statement of joint_uniform_is_flat_uniform
-    -- joint_uniform_is_flat_uniform states:
-    --   (dependentPairDist_of_independent unif_N unif_M) = unif_NM
-    -- Here, our unif_n_dist and unif_m_dist are already defined correctly.
-    -- The equality is direct from the lemma.
-    exact joint_uniform_is_flat_uniform hn_pos hm_pos
+  have sum_U_sigma_is_1 : ∑ x, U_sigma x = 1 := by {
+    simp [U_sigma]; -- unfolds U_sigma to uniformDist definitionally
+    apply sum_uniformDist; -- sum_uniformDist requires proof of card > 0, which is in U_sigma's def
+  }
 
-  -- Step 7: Apply the distribution equality to the goal
-  rw [h_dist_eq]
-  -- Goal: H (α := Fin (n*m)) unif_nm_dist = H (α := Fin (n*m)) unif_nm_dist (by rfl)
+  -- Prove that (U_sigma ∘ e_final_for_symmetry.symm) = P_nm
+  have h_comp_eq_P_nm : (U_sigma ∘ e_final_for_symmetry.symm) = P_nm := by {
+    funext y_fin_nm; -- y_fin_nm : Fin (n*m)
+    simp only [comp_apply, U_sigma, P_nm, uniformDist]
+    -- Goal after unfolding:
+    -- (↑(Fintype.card ((i : Fin n) × Fin m)))⁻¹ = (↑(Fintype.card (Fin (n*m))))⁻¹
+    simp [inv_eq_iff_eq_inv ] -- this proves the equality, DON'T CHANGE IT!!!
+  }
 
+  ----------------------------------------------------------------
+  -- 3.  Chain the equalities
+  ----------------------------------------------------------------
+  -- Symmetry axiom: `H U_sigma = H (U_sigma ∘ e_final_for_symmetry.symm)`.
+  have h_sym :
+      H U_sigma = H (U_sigma ∘ e_final_for_symmetry.symm) := by
+    -- `symmetry` gives the equality in the opposite direction, so we take `.symm`.
+    simpa using
+      (hH_axioms.symmetry U_sigma sum_U_sigma_is_1 e_final_for_symmetry.symm).symm
+
+  have : H P_nm = H P_n + H P_m := by
+    calc
+      H P_nm
+          = H (U_sigma ∘ e_final_for_symmetry.symm) := by
+            simpa [h_comp_eq_P_nm]
+      _ = H U_sigma := by
+            simpa [h_sym] using (Eq.symm h_sym)
+      _ = H (DependentPairDistSigma P_n M_map_const_m P_cond_const_P_m) := by
+            simpa [h_dep_pair_dist_eq_U_sigma]
+      _ = H P_n + H P_m := h_indep
+  simpa using this
 
 
 /-!

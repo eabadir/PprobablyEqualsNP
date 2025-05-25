@@ -199,20 +199,25 @@ i.e. a constant multiple of the Shannon entropy.  No real‐analysis, no measure
 
 This is exactly Rota’s Entropy Theorem—proved **entirely** within the realm of *integer combinatorics and partition refinements*.
 
-# Formalizing Physics Distributions
+# TODO
 
-## Three Disjoint Constraint Cases Describe All Physical Systems
-Let (N) boxes (states) and (M) balls (particles). A microstate is a way of allocating the (M) balls among the (N) boxes. There are exactly three—and only three—constraint families on how balls may occupy boxes. As further explained in accompanying documentation: Maxwell-Boltzmann (M-B) is the distinguishable balls case with no limit to box capacity, Fermi-Dirac (F-D) is indistinguishable balls with at most one ball per box, and Bose-Einstein (B-E) is indistinguishable balls with no limit to the balls per box.
+We next consider a set \( \{p_1, p_2, \ldots, p_n\} \) of positive rational numbers such that \( p_1 + p_2 + \ldots + p_n = 1 \). Let \( N \) be their common denominator, i.e., \( p_i = \frac{a_i}{N} \) for all \( i \), where each \( a_i \) is an integer and \( a_1 + a_2 + \ldots + a_n = N \). Let \( \sigma \) be a partition corresponding to the set of probabilities \( \{p_1, p_2, \ldots, p_n\} \). Let \( \pi \) be a partition obtained by breaking up the \( i \)-th block of \( \sigma \) into \( a_i \) parts. Then every block of \( \pi \) has probability \( \frac{1}{N} \). By definition of conditional entropy:
+\[
+H(\pi|\sigma) = -\sum_{i} P(\sigma_i) H(\pi|\sigma_i) = -\sum_{i} f(a_i) - C \sum_{i} p_i \log_2(a_i).
+\]
 
-# Starting with Bose-Einstein Statistics
-We start with the Bose-Einstein (B-E) statistics case, as it is considered the "most uncomputable" of the three cases in a discrete mathematical sense. In fact, B-E is thought to be so hard that the genesis of quantum computing benchmarking (Boson Sampling) is based on the B-E case. Boson Sampling, put forth by Scott Aaronson and Alex Arkhipov in 2011, essentially shows that the B-E case is so hard that it is NP-Sharp (a sort of NP-Complete for counting problems). One readily sees that if the B-E case, the hardest one, is proven to be a scaled form of Shannon Entropy then the other cases should follow easily.
+By property 4, on the other hand, we have:
+\[
+H(\pi|\sigma) = H(\pi) - H(\sigma) = f(N) - H(\sigma).
+\]
+Combining the two expressions for \( H(\pi|\sigma) \) gives us:
+\[
+H(\sigma) = -C \log_2(N) + C \sum_{i} p_i \log_2(a_i).
+\]
+By continuity (property 3), \( H \) must have this same formula for all sets \( \{p_1, p_2, \ldots, p_n\} \) on which it is defined. This completes the proof.
 
-Accordingly, the Entropy.Physics proof starts by formally defining the state space and probability distribution for Bose-Einstein (B-E) statistics within the Lean 4 theorem prover, leveraging the Mathlib4 library. The ultimate goal is to apply the previously proven Rota's Entropy Theorem (RET) to this distribution. 
-
-Formalizing concepts from statistical mechanics requires careful handling of combinatorial structures, type theory, and proof details. To manage this complexity effectively and ensure correctness, we employ a **four-phased approach**:
-
-1.  **Phase 1: Combinatorial Equivalence In Lean:** Establish the fundamental combinatorial structure. We define the B-E state space (`OmegaBE`, based on occupancy numbers) and show it's mathematically equivalent (via a Lean `Equiv`) to a standard combinatorial object: multisets of a fixed size (`SymFin`). This grounds the specific physical concept in a well-understood mathematical structure within Mathlib.
-2.  **Phase 2: Cardinality and Iteration:** Determine the size of the B-E state space using the equivalence established in Phase 1 and known results for multisets (the "stars and bars" formula, yielding binomial coefficients). We also formally declare `OmegaBE` as a `Fintype`, enabling iteration and summation over all possible B-E states, which is crucial for defining probabilities.
-3.  **Phase 3: Probability Distribution:** Define the B-E probability distribution (`p_BE`) assuming equiprobability of microstates (which corresponds to a uniform distribution over `OmegaBE`). Prove that this distribution is valid by showing the probabilities sum to 1 (normalization).
-4.  **Phase 4: RET Application:** Connect the formalized B-E distribution to the framework of Rota's Entropy Theorem. This involves potentially adapting the type of our distribution (`p_BE_fin`) and then applying the main theorem (`H_BE_eq_C_shannon`) to conclude that any valid entropy function `H` applied to `p_BE` is proportional to the standard Shannon entropy.
-5. **Phase 5: Generalization To the Three Disjoint Cases:** The RET.lean module formalized the partition theoretic key properties of entropy needed here to extend the results to ALL physical distributions. Specifically by the properties of additivity and conditional entropy,we can conclude that all entropy must be some linear combination of M-B,F-D,B-E and hence, by RET, the expected result all Entropy is a scaled form of Shannon Entropy. Achieving this result requires repeating for M-B and F-D the process 1 through 4 undertaken for B-E. Since B-E, M-B, and F-D are generally referenced with regard to a vast array of physical phenomenon, it is left as an excercise for an enterprising reader to formalize that the three disjoint cases are indeed disjoint and exhaustive.
+We leave it as an exercise to show that the above formula for entropy actually satisfies the five postulated properties. We conclude by giving an interpretation of independence of partitions in terms of conditional entropy. Intuitively, if \( \pi \) and \( \sigma \) are independent, then their joint entropy \( H(\pi \cap \sigma) \) is the sum of the individual entropies:
+\[
+H(\pi \cap \sigma) = H(\pi) + H(\sigma).
+\]
+In terms of conditional entropy, this says that \( H(\pi \cap \sigma) = H(\pi) \).
