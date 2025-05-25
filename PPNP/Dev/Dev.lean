@@ -251,3 +251,185 @@ lemma P_joint_sigma_is_uniform_for_rota
   -- Now the goal is: ↑(k.succ) / ↑N_den * P_cond_sigma_def_core (k.succ) j = (N_den)⁻¹
   -- This matches the micro-lemma directly.
   exact LHS_eval_when_ai_is_succ N_den k j hN_den_pos
+
+/--
+`H_func` applied to the joint distribution `DependentPairDistSigma P_rat a (P_cond_sigma_def a)`
+is `f0 hH_axioms N_den`.
+This means H_func of (uniform on Σ type of card N_den) equals H_func of (uniform on Fin N_den).
+-/
+lemma H_P_joint_sigma_for_rota_eq_f0_N_den {n : ℕ} [NeZero n]
+    (H_func : ∀ {α_aux : Type} [Fintype α_aux], (α_aux → NNReal) → NNReal)
+    (hH_axioms : HasRotaEntropyProperties H_func)
+    (a : Fin n → ℕ) (N_den : ℕ)
+    (h_sum_a_eq_N : ∑ k, a k = N_den) (hN_den_pos : N_den > 0)
+    (P_rat : Fin n → NNReal) (hP_rat_def : P_rat = create_rational_dist n a N_den h_sum_a_eq_N hN_den_pos) :
+    H_func (DependentPairDistSigma P_rat a (P_cond_sigma_def a)) =
+      f0 hH_axioms N_den := by
+
+  -- 1. Rewrite the argument of H_func on the LHS
+  rw [P_joint_sigma_is_uniform_for_rota a N_den h_sum_a_eq_N hN_den_pos P_rat hP_rat_def]
+  -- LHS is now: H_func (uniformDist (α := (Σ i, Fin (a i))) ...)
+
+  -- 2. Unfold f0 and f on the RHS
+  rw [f0, dif_pos hN_den_pos, f]
+  -- RHS is now: H_func (uniformDist (α := Fin N_den) ...)
+
+  -- Define the Sigma type for brevity
+  let SigmaType := (Σ i : Fin n, Fin (a i))
+
+  -- Define the uniform distributions
+  let U_sigma_domain_card_pos : 0 < Fintype.card SigmaType := by
+    rw [Fintype.card_sigma]    -- Converts Fintype.card (Σ i, Fin (a i)) to ∑ i, Fintype.card (Fin (a i))
+    simp_rw [Fintype.card_fin] -- Converts ∑ i, Fintype.card (Fin (a i)) to ∑ i, (a i)
+    rw [h_sum_a_eq_N]          -- Converts ∑ i, (a i) to N_den
+    exact hN_den_pos           -- Asserts 0 < N_den, which is given by hN_den_pos
+  -- Removed: let U_sigma := uniformDist U_sigma_domain_card_pos
+
+  let U_fin_Nden_domain_card_pos : 0 < Fintype.card (Fin N_den) := by
+    simp only [Fintype.card_fin]
+    exact hN_den_pos
+  -- Removed: let U_fin_Nden := uniformDist U_fin_Nden_domain_card_pos
+
+  -- Goal is now: H_func (uniformDist U_sigma_domain_card_pos) = H_func (uniformDist U_fin_Nden_domain_card_pos)
+
+  -- The equivalence:
+  let e_sigma_to_card_sigma : SigmaType ≃ Fin (Fintype.card SigmaType) :=
+    Fintype.equivFin SigmaType
+
+  have h_card_sigma_eq_N_den : Fintype.card SigmaType = N_den := by
+    rw [Fintype.card_sigma]
+    simp_rw [Fintype.card_fin]
+    rw [h_sum_a_eq_N]
+    -- Implicit rfl here as goal becomes N_den = N_den
+
+  let e_sigma_to_fin_Nden : SigmaType ≃ Fin N_den :=
+    e_sigma_to_card_sigma.trans (Equiv.cast (congrArg Fin h_card_sigma_eq_N_den))
+
+  -- Prove that (uniformDist U_sigma_domain_card_pos) = (uniformDist U_fin_Nden_domain_card_pos) ∘ e_sigma_to_fin_Nden
+  have h_dist_equality_with_comp :
+      (uniformDist U_sigma_domain_card_pos) = (uniformDist U_fin_Nden_domain_card_pos) ∘ e_sigma_to_fin_Nden := by
+    funext x_s
+    simp_rw [uniformDist, comp_apply]
+    -- LHS after simp: (↑(Fintype.card SigmaType))⁻¹
+    -- RHS after simp: (↑(Fintype.card (Fin N_den)))⁻¹
+    apply inv_inj.mpr
+    apply Nat.cast_inj.mpr
+    rw [h_card_sigma_eq_N_den] -- Converts Fintype.card SigmaType to N_den
+    rw [Fintype.card_fin]      -- Converts Fintype.card (Fin N_den) to N_den
+
+  -- Rewrite the LHS of the main goal
+  rw [h_dist_equality_with_comp]
+  -- Goal is now: H_func ((uniformDist U_fin_Nden_domain_card_pos) ∘ e_sigma_to_fin_Nden) = H_func (uniformDist U_fin_Nden_domain_card_pos)
+
+  -- Apply symmetry axiom
+  let P_target_dist := uniformDist U_fin_Nden_domain_card_pos
+  have h_sum_P_target_dist_eq_1 : ∑ y, P_target_dist y = 1 :=
+    sum_uniformDist U_fin_Nden_domain_card_pos
+
+  exact hH_axioms.symmetry P_target_dist h_sum_P_target_dist_eq_1 e_sigma_to_fin_Nden
+
+/--
+Rota's intermediate formula for rational probabilities:
+`H(P_rat) = f0(N_den) - ∑ (P_rat i) * f0(a i)`
+This is derived from the generalized conditional additivity axiom.
+-/
+lemma rota_rational_intermediate_formula {n : ℕ} [h_n_ne_zero : NeZero n]
+    (H_func : ∀ {α_aux : Type} [Fintype α_aux], (α_aux → NNReal) → NNReal) -- Changed Type u to Type
+    (hH_axioms : HasRotaEntropyProperties H_func)
+    (a : Fin n → ℕ) (N_den : ℕ)
+    (h_sum_a_eq_N : ∑ k, a k = N_den) (hN_den_pos : N_den > 0)
+    (P_rat_param : Fin n → NNReal) (hP_rat_def : P_rat_param = create_rational_dist n a N_den h_sum_a_eq_N hN_den_pos) : -- Renamed P_rat to P_rat_param to avoid clash with let
+    (H_func P_rat_param : ℝ) = (f0 hH_axioms N_den : ℝ) - ∑ i : Fin n, (P_rat_param i : ℝ) * (f0 hH_axioms (a i) : ℝ) := by
+
+  -- Define the components for cond_add_sigma
+  let P_prior_fn := P_rat_param -- P_rat_param is the input parameter
+  let M_map_fn := a
+  let P_cond_fn (i_idx : Fin n) := P_cond_sigma_def a i_idx
+
+  -- Premise 1: Sum of prior probabilities is 1
+  have hprior_sum_1 : ∑ i, P_prior_fn i = 1 := by
+    dsimp [P_prior_fn] -- Crucial: unfolds P_prior_fn to P_rat_param
+    rw [hP_rat_def]
+    exact sum_create_rational_dist_eq_one n a N_den h_sum_a_eq_N hN_den_pos
+
+  -- Premise 2: Properties of conditional distributions when prior is positive
+  have hP_cond_props : ∀ i_idx : Fin n, P_prior_fn i_idx > 0 → (M_map_fn i_idx > 0 ∧ ∑ j, P_cond_fn i_idx j = 1) := by
+    intro i_idx hP_prior_i_pos
+    dsimp [P_prior_fn] at hP_prior_i_pos
+    -- Derive positivity of `a i_idx` *once* so we can reuse it in both sub‑goals.
+    have hai_pos : a i_idx > 0 := by
+      -- unfold the definition of the prior probability at `i_idx`
+      rw [hP_rat_def] at hP_prior_i_pos
+      -- `create_rational_dist` is `(a i_idx : NNReal) / N_den`
+      simp only [create_rational_dist] at hP_prior_i_pos
+      -- Use positivity of the NNReal numerator
+      have hnum_ne_zero : (a i_idx : NNReal) ≠ 0 := by
+        have : (a i_idx : NNReal) / (N_den : NNReal) ≠ 0 :=
+          ne_of_gt hP_prior_i_pos
+        have hN_ne : (N_den : NNReal) ≠ 0 := by
+          exact_mod_cast (Nat.ne_of_gt hN_den_pos)
+        simpa [hN_ne] using (div_ne_zero_iff.mp this).1
+      have hnum_pos : 0 < (a i_idx : NNReal) := by
+        have : (a i_idx : NNReal) ≥ 0 := zero_le _
+        exact lt_of_le_of_ne this hnum_ne_zero.symm
+      exact (by exact_mod_cast hnum_pos)
+
+    constructor
+    · exact hai_pos
+    · exact sum_P_cond_sigma_def_eq_one_of_pos a i_idx hai_pos
+
+  -- Premise 3: H_func of conditional distribution is 0 if M_map i is 0
+  have hH_P_cond_M_map_zero :
+    ∀ i_idx : Fin n,
+      M_map_fn i_idx = 0 →
+      H_func (P_cond_fn i_idx) = 0 := by
+    intro i_idx h_M_map_fn_i_idx_eq_zero
+    -- Unfold P_cond_fn to expose P_cond_sigma_def
+    dsimp only [P_cond_fn]
+    -- Rewrite H_func application using H_func_P_cond_sigma_def_eq_f0
+    -- hH_axioms.toIsEntropyZeroOnEmptyDomain provides the required IsEntropyZeroOnEmptyDomain instance
+    rw [H_func_P_cond_sigma_def_eq_f0 H_func hH_axioms a i_idx (h0 := hH_axioms.toIsEntropyZeroOnEmptyDomain)]
+    -- Goal is now: f0 hH_axioms (a i_idx) = 0
+    -- Use the fact that M_map_fn i_idx = 0 implies a i_idx = 0
+    have h_ai_eq_zero : a i_idx = 0 := by
+      simpa [M_map_fn] using h_M_map_fn_i_idx_eq_zero
+    rw [h_ai_eq_zero]
+    -- Goal is now: f0 hH_axioms 0 = 0
+    -- Simplify f0 hH_axioms 0, which is 0 by definition of f0
+    simp [f0]
+
+  -- Apply IsEntropyCondAddSigma.cond_add_sigma
+  have h_cond_add_nnreal_stmt := hH_axioms.cond_add_sigma
+    P_prior_fn M_map_fn P_cond_fn
+    hprior_sum_1 hP_cond_props hH_P_cond_M_map_zero
+
+  -- Substitute known values into h_cond_add_nnreal_stmt (NNReal equation)
+  rw [H_P_joint_sigma_for_rota_eq_f0_N_den H_func hH_axioms a N_den h_sum_a_eq_N hN_den_pos P_rat_param hP_rat_def] at h_cond_add_nnreal_stmt
+  -- Unfold P_cond_fn and rewrite H_func(P_cond_fn i) to f0 hH_axioms (a i)
+  -- P_cond_fn i is P_cond_sigma_def a i
+  -- H_func_P_cond_sigma_def_eq_f0 requires h0, which is hH_axioms.toIsEntropyZeroOnEmptyDomain
+  simp_rw [P_cond_fn, fun i => H_func_P_cond_sigma_def_eq_f0 H_func hH_axioms a i (h0 := hH_axioms.toIsEntropyZeroOnEmptyDomain)] at h_cond_add_nnreal_stmt
+  -- h_cond_add_nnreal_stmt is now:
+  -- f0 hH_axioms N_den = H_func P_prior_fn + ∑ (i : Fin n), P_prior_fn i * f0 hH_axioms (a i)
+
+  -- Coerce to Real and rearrange
+  rw [eq_sub_iff_add_eq']
+  -- The goal is now of the form `TermC + TermA = TermB`
+  -- TermA = (↑(H_func P_rat_param) : ℝ)
+  -- TermC = (∑ i, (↑(P_rat_param i) : ℝ) * (↑(f0 hH_axioms (a i)) : ℝ))
+  -- TermB = (↑(f0 hH_axioms N_den) : ℝ)
+  -- The tactic state shows TermC + TermA = TermB.
+  calc
+    (∑ i, (↑(P_rat_param i) : ℝ) * (↑(f0 hH_axioms (a i)) : ℝ)) + (↑(H_func P_rat_param) : ℝ)
+    -- Step 1: Reorder terms to group H_func P_rat_param with the sum for NNReal operations
+    _ = (↑(H_func P_rat_param) : ℝ) + (∑ i, (↑(P_rat_param i) : ℝ) * (↑(f0 hH_axioms (a i)) : ℝ)) := by rw [add_comm]
+    -- Step 2: Move NNReal.coe outside of the product in each term of the sum
+    _ = (↑(H_func P_rat_param) : ℝ) + (∑ i, (↑(P_rat_param i * f0 hH_axioms (a i)) : ℝ)) := by simp_rw [NNReal.coe_mul]
+    -- Step 3: Move NNReal.coe outside of the sum
+    _ = (↑(H_func P_rat_param) : ℝ) + (↑(∑ i, P_rat_param i * f0 hH_axioms (a i)) : ℝ) := by rw [NNReal.coe_sum]
+    -- Step 4: Move NNReal.coe outside of the addition
+    _ = (↑( (H_func P_rat_param) + (∑ i, P_rat_param i * f0 hH_axioms (a i)) ) : ℝ) := by rw [NNReal.coe_add]
+    -- Step 5: Use the h_cond_add_nnreal_stmt (which is in NNReal)
+    -- h_cond_add_nnreal_stmt is: f0 hH_axioms N_den = H_func P_prior_fn + ∑ x, P_prior_fn x * f0 hH_axioms (a x)
+    -- P_prior_fn is definitionally P_rat_param.
+    _ = (↑(f0 hH_axioms N_den) : ℝ) := by rw [← h_cond_add_nnreal_stmt]
