@@ -109,9 +109,9 @@ structure IsEntropyNormalized
   normalized : ∀ (p : Fin 1 → NNReal), (∑ i, p i = 1) → H_func p = 0
 
 structure IsEntropySymmetric
-  (H_func : ∀ {α : Type u} [Fintype α], (α → NNReal) → NNReal) : Prop where
+  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) : Prop where
   symmetry :
-    ∀ {α β : Type u} [Fintype α] [Fintype β]
+    ∀ {α β : Type} [Fintype α] [Fintype β]
       (p_target : β → NNReal) (_hp : ∑ y, p_target y = 1)
       (e : α ≃ β),
       H_func (α := α) (fun x : α => p_target (e x)) =
