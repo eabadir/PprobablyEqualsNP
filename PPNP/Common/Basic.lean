@@ -51,6 +51,14 @@ lemma nnreal_nat_cast_ne_zero {n : ℕ} (hn : n ≠ 0) :
   -- Use the fact that `↑n = 0` iff `n = 0`
   simp [hn] -- This is the negation of the `Nat.cast` lemma
 
+/--
+Ensures `NNReal.coe_nat_ne_zero_iff_ne_zero` is available.
+The coercion of a natural number to `NNReal` is non-zero if and only if the natural number itself is non-zero.
+This relies on `NNReal.nat_cast_eq_zero` which states `(↑n : ℝ≥0) = 0 ↔ n = 0`.
+-/
+@[simp] lemma NNReal.coe_nat_ne_zero_iff_ne_zero {n : ℕ} : (n : NNReal) ≠ 0 ↔ n ≠ 0 := by
+  simp[natCast_eq_zero]
+
 
 
 /-- Shows that the product `(a * a⁻¹) * (b * b⁻¹)` equals `1 * 1`, given `a` and `b` are non-zero. -/
@@ -480,13 +488,14 @@ lemma logb_x_bounds_k {b k : ℕ} {x : ℝ} (hb : b ≥ 2) (hx : x ≥ 1)
   -- Prove the two required inequalities
   constructor
   · -- Prove logb b x - 1 < k
-    -- Use the upper power bound: x < b^(k+1)
+    -- Start from x < b^(k+1)
     have h_logb_lt_kp1 : Real.logb b x < (k + 1 : ℝ) := by
       apply logb_rpow_lt_k_plus_1 hb hx h_upper_pow
-    -- Rearrange using linarith
+    -- The rewrite is not needed as ↑(k + 1) is often automatically ↑k + 1
+    -- Subtract 1 from both sides using linarith
     linarith [h_logb_lt_kp1]
   · -- Prove k ≤ logb b x
-    -- Use the lower power bound: b^k ≤ x
+    -- Start from b^k ≤ x
     have h_k_le_logb : (k : ℝ) ≤ Real.logb b x := by
       apply k_le_logb_rpow hb hx h_lower_pow
     exact h_k_le_logb
@@ -612,6 +621,15 @@ lemma pos_of_one_le {n : ℕ} (h : 1 ≤ n) : 0 < n :=
 lemma logb_eq_log {b x : ℝ} :
     logb b x = log x / log b := by
   rw [logb]
+
+/--
+The logarithm of the inverse equals the negative of the logarithm.
+That is, for any positive real number `x`, we have `log(x⁻¹) = -log(x)`.
+-/
+lemma log_inv_eq_neg_log {x : ℝ} (_hx : 0 < x) :
+    Real.log (x⁻¹) = -Real.log x := by
+  -- Use the properties of logarithms
+  simp [Real.log_inv]
 
 lemma one_le_iff_pos {n : ℕ} : 1 ≤ n ↔ 0 < n := by
   simpa [Nat.pos_iff_ne_zero] using (Nat.one_le_iff_ne_zero (n:=n))  -- if you import `Nat.pos_iff_ne_zero`  [oai_citation:2‡Lean Community](https://leanprover-community.github.io/mathlib4_docs/Mathlib/Data/Fin/Basic.html?utm_source=chatgpt.com)
