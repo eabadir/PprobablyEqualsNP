@@ -66,7 +66,7 @@ A computer program encodes the choice of a microstate from a distribution
 whose entropy value is `C*ShannonEntropy_nats`. The program's tape
 length will be the number of bits for that choice.
 -/
-theorem encoding_BE_system_by_program -- This is the theorem from your PhotonicCA.lean
+theorem encoding_BE_system_by_program
     (params : PPNP.Entropy.Physics.PhysicsDist.SystemParams)
     (h_valid_BE : params.N ≠ 0 ∨ params.M = 0) :
     ∃ (prog : ClassicalComputerProgram) (src : IIDFairBinarySource)

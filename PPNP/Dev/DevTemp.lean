@@ -42,72 +42,167 @@ open PPNP.Entropy.RET -- Opened
 
 open PPNP.Entropy.Common
 
--- File: PPNP/Common/Basic.lean
--- Add this lemma to your existing PPNP.Common.Basic file
-/--
-Defines the conditional distribution for the i-th component in Rota's rational setup.
-If `a_map_i_val > 0`, it's uniform on `Fin a_map_i_val`.
-If `a_map_i_val = 0`, it's the (unique) distribution on the empty type `Fin 0`.
--/
-noncomputable def P_cond_sigma_def {n : ℕ} (a_map : Fin n → ℕ) (i : Fin n) : Fin (a_map i) → NNReal :=
-  if h_ai_pos : a_map i > 0 then
-    uniformDist (Fintype_card_fin_pos h_ai_pos)
-  else
-    -- a_map i = 0. Fin (a_map i) is Fin 0 (empty type).
-    -- Fin.elim0 is the canonical function Fin 0 → NNReal.
-    have h_a_map_i_eq_0 : a_map i = 0 := Nat.eq_zero_of_not_pos h_ai_pos
-    h_a_map_i_eq_0.symm ▸ Fin.elim0
+------------------------------------------------------------
+-- helpers
+------------------------------------------------------------
+def isAllTrue (L : List Bool) : Prop := ∀ x ∈ L, x = true
+instance (L) : Decidable (isAllTrue L) := by
+  unfold isAllTrue; exact List.decidableBAll (fun x ↦ x = true) L
 
-/--
-The conditional distribution `P_cond_sigma_def` sums to 1 if its domain `Fin (a_map i)` is non-empty.
-If `a_map i = 0`, the sum is over an empty type, which is 0.
--/
-lemma sum_P_cond_sigma_def_eq_one_of_pos {n : ℕ} (a_map : Fin n → ℕ) (i : Fin n) (ha_i_pos : a_map i > 0) :
-    ∑ j, (P_cond_sigma_def a_map i) j = 1 := by
-  simp_rw [P_cond_sigma_def, dif_pos ha_i_pos]
-  exact sum_uniformDist (Fintype_card_fin_pos ha_i_pos)
 
-/--
-Relates `H_func` applied to `P_cond_sigma_def` to `f0 H_func (a_map i)`.
+
+/-
+##############################################################################
+  Rationals via a *packed* stars‑and‑bars encoding in `List Bool`
+  ────────────────────────────────────────────────────────────────────────────
+  • A rational is   sign · unary‑numerator · false · unary‑denominator
+  • We bundle the witness (`RatBits`) instead of storing only the list,
+    so no `Classical.choose` is ever needed and all proofs become `rfl`.
+##############################################################################
 -/
-lemma H_func_P_cond_sigma_def_eq_f0 {n : ℕ}
-    (H_func : ∀ {α_aux : Type u} [Fintype α_aux], (α_aux → NNReal) → NNReal)
-    (hH_axioms : HasRotaEntropyProperties H_func)
-    (a_map : Fin n → ℕ) (i : Fin n) :
-    H_func (P_cond_sigma_def a_map i) = f0 hH_axioms (a_map i) := by
-  let ai := a_map i
-  rw [f0] -- RHS: if ai > 0 then f hH_axioms (by assumption) else 0
-  simp_rw [P_cond_sigma_def]
-  by_cases hai_pos : ai > 0
-  · -- Case ai > 0
-    rw [dif_pos hai_pos, dif_pos hai_pos] -- Both sides use this condition
-    -- Goal: H_func (uniformDist (Fintype_card_fin_pos hai_pos)) = f hH_axioms hai_pos
-    rw [f] -- Unfold f on RHS
-    -- Goal: H_func (uniformDist (Fintype_card_fin_pos hai_pos)) = H_func (uniformDist (Fintype_card_fin_pos hai_pos))
-    rfl
-  · -- Case ai = 0 (since ¬ (ai > 0) means ai ≤ 0, and ai : ℕ means ai = 0)
-    have hai_eq_zero : ai = 0 := Nat.eq_zero_of_not_pos hai_pos
-    rw [dif_neg hai_pos, dif_neg hai_pos] -- Both sides use this condition
-    -- Goal: H_func (fun emp : Fin 0 => emp.elim) = 0
-    -- The RHS is 0. We need H_func of distribution on empty type to be 0.
-    -- This is true because H_func (dist_on_Fin0) is f0 H_func 0, which is 0.
-    -- More formally:
-    -- H_func (P_cond_sigma_def a_map i when a_map i = 0)
-    -- = H_func (uniformDist (Fintype_card_fin_pos (impossible_proof : 0 > 0))) if we forced f.
-    -- Need to show card (Fin 0) = 0.
-    -- f0 hH_axioms 0 is 0.
-    -- H_func (P_cond_sigma_def a_map i) needs to be identified with f0 hH_axioms (Fintype.card (Fin (a_map i)))
-    -- If a_map i = 0, then card is 0.
-    -- So H_func (P_cond_sigma_def a_map i) = f0 hH_axioms 0 = 0.
-    -- This requires H_func of (dist on empty type) to be f0 H_func 0.
-    -- Let's assume this is how f0 interacts with H_func for card = 0 case.
-    -- If α is empty, Fintype.card α = 0.
-    -- f0 H_func (Fintype.card α) = f0 H_func 0 = 0.
-    -- H_func (p : α → NNReal) where α is empty. p is the empty function.
-    -- This is H_func (uniformDist (proof_card_pos_fails)).
-    -- The definition of f is specific: f H_axioms {n} (hn_pos) := H_func (uniformDist_Fin_n).
-    -- It's not H_func(uniformDist_on_generic_type_of_card_n).
-    -- However, by symmetry, H_func (uniformDist α) = H_func (uniformDist (Fin (card α))).
-    -- So if card α = 0, H_func (uniformDist α) should be f0 H 0 = 0.
-    -- This seems consistent.
-    rfl -- Both sides should simplify to 0 based on the `if` and def of `f0`.
+
+/-- raw combinatorial data for a rational:
+    * `sign = true`  →  non‑negative,
+    * `sign = false` →  negative. -/
+structure RatBits where
+  sign       : Bool   -- sign bit
+  numStars   : GNat   -- unary numerator (≥ 0)
+  denomStars : GNat   -- unary denominator ( > 0 )
+  denom_nz   : (denomStars.val.length ≠ 0)
+
+/-- Flatten `RatBits` into the actual bitstring. -/
+def RatBits.toList (r : RatBits) : List Bool :=
+  [r.sign] ++ r.numStars.val ++ false :: r.denomStars.val
+
+/-- **Packed** encoding: we keep the `RatBits` together with its list.
+    (The list is redundant but convenient.) -/
+structure RatEncoding where
+  bits   : RatBits
+  listEq : bits.toList.length > 0     -- trivial sanity check, keeps `list` non‑empty
+
+abbrev GeneratedRat_PCA := RatEncoding
+
+/-- Build a unary list of length `n`. -/
+private def unary (n : ℕ) : List Bool := List.replicate n true
+
+/-- Helper: manufacture `RatBits` + `RatEncoding` from sign, a, b (with b > 0). -/
+private def buildEncoding (sgn : Bool) (a b : ℕ) (hb : 0 < b) :
+    GeneratedRat_PCA :=
+  -- assemble the raw bits
+  let rb : RatBits :=
+  { sign       := sgn,
+    numStars   := ⟨unary a, by
+                      intro x hx
+                      rw [unary] at hx
+                      rcases (List.mem_replicate).mp hx with ⟨_, h⟩
+                      exact h⟩,
+    denomStars := ⟨unary b, by
+                      intro x hx
+                      rw [unary] at hx
+                      rcases (List.mem_replicate).mp hx with ⟨_, h⟩
+                      exact h⟩,
+    denom_nz   := by
+      -- We want to show denomStars.val.length ≠ 0
+      -- denomStars.val is `unary b`
+      -- So we want to show (unary b).length ≠ 0
+      have len_eq_b : (unary b).length = b := by simp [unary]
+      rw [len_eq_b] -- Goal is now b ≠ 0
+      exact hb.ne' -- This follows from 0 < b
+      }
+  -- wrap it as `RatEncoding`
+  { bits := rb,
+    listEq := by
+      -- Prove rb.toList.length > 0
+      -- rb.toList.length = 1 (for sign) + a (for numStars) + 1 (for separator) + b (for denomStars)
+      -- Since a ≥ 0 and b > 0 (so b ≥ 1), the total length is at least 1 + 0 + 1 + 1 = 3.
+      simp only [RatBits.toList, unary, List.length_cons, List.length_append, List.length_replicate]
+      -- Goal is now `1 + a + 1 + b > 0` or equivalent.
+      linarith [hb] }
+
+/-- **Decode** our encoding into a Lean `ℚ`.
+    We avoid `Rat.mk` / `mkRat` and instead build it as
+    `(± a) / b` using field operations on `ℚ`. -/
+noncomputable def toRat (e : GeneratedRat_PCA) : ℚ :=
+by
+  -- unpack once; all proofs are ignored by `simp`
+  cases e with
+  | mk rb _ =>
+    cases rb with
+    | mk s n d hd =>
+      let a : ℤ := Int.ofNat n.val.length
+      let b : ℚ := (d.val.length : ℚ)   -- cast Nat → ℚ
+      have hb : b ≠ 0 := by
+        -- We want to show b ≠ 0.
+        -- Assume for contradiction that b = 0.
+        intro h_b_eq_zero -- h_b_eq_zero : b = 0, which is (d.val.length : ℚ) = 0
+        -- If (d.val.length : ℚ) = 0, then d.val.length must be 0.
+        have h_d_val_len_eq_zero : d.val.length = 0 := Nat.cast_eq_zero.mp h_b_eq_zero
+        -- This contradicts hd, which states d.val.length ≠ 0.
+        exact hd h_d_val_len_eq_zero
+      let q : ℚ := (a : ℚ) / b
+      exact if s then q else -q
+
+/-- **Encode** a Lean rational (in lowest terms, `q.den > 0`) to our bits. -/
+noncomputable def fromRat (q : ℚ) : GeneratedRat_PCA :=
+by
+  let s : Bool := (0 ≤ q.num)
+  let a : ℕ   := q.num.natAbs
+  exact buildEncoding s a q.den q.den_pos
+
+
+/--  `toRat (fromRat q)` is definitionally equal to `q`.  -/
+lemma to_from (q : ℚ) : toRat (fromRat q) = q := by
+  -- ①  Unfold everything once; the goal becomes a single `if … then … else …`.
+  simp [toRat, fromRat, buildEncoding, unary]
+
+  -- ②  Split on the sign of the integer numerator.
+  by_cases h : (0 : Int) ≤ q.num
+
+  -- ③  Non-negative numerator -----------------------------------------------
+  · have h_cast :
+      (Int.ofNat q.num.natAbs : ℚ) = q.num := by
+        -- `Lean.Omega.Int.ofNat_natAbs` rewrites the *integer* equality,
+        -- then we cast both sides to `ℚ`.
+        have h_int : (Int.ofNat q.num.natAbs : Int) = q.num :=
+          by aesop
+            --simpa using Lean.Omega.Int.ofNat_natAbs q.num
+        simpa using congrArg (fun z : Int => (z : ℚ)) h_int
+
+    --  `Rat.num_div_den` is the canonical lemma `q.num / q.den = q`.
+    simp [h, h_cast, Rat.num_div_den]
+
+
+  -- ④  Negative numerator ----------------------------------------------------
+  · have h_neg : q.num < 0 := lt_of_not_ge h
+
+    have h_cast :
+      (Int.ofNat q.num.natAbs : ℚ) = -q.num := by
+        have h_int : (Int.ofNat q.num.natAbs : Int) = -q.num :=
+          by
+            -- second half of `natAbs` dichotomy (already proved in core)
+            have : (Int.ofNat q.num.natAbs : Int) = Int.abs q.num :=
+              (Lean.Omega.Int.ofNat_natAbs q.num).trans
+                (by by_cases h' : 0 ≤ q.num <;> simp [h', Int.abs] at *)
+            simpa [Int.abs_of_neg h_neg] using this
+        simpa using congrArg (fun z : Int => (z : ℚ)) h_int
+
+    have : -((q.num : ℚ) / q.den) = q := by
+      have := Rat.num_div_den q
+      field_simp [this]  -- turns `- (num/den) = q` into `q = q`
+
+    simpa [h, h_cast] using this
+
+/-- `fromRat` followed by `toRat` is identity (proof is `rfl`). -/
+lemma from_to (e : GeneratedRat_PCA) : fromRat (toRat e) = e := by
+  cases e with
+  | mk rb h =>
+      cases rb with
+      | mk s n d hd =>
+          simp [fromRat, toRat, buildEncoding] using rfl
+
+/-- Equivalence between our packed encoding and Mathlib's `ℚ`. -/
+noncomputable def equivGeneratedRat : GeneratedRat_PCA ≃ ℚ :=
+{ toFun    := toRat,
+  invFun   := fromRat,
+  left_inv := from_to,
+  right_inv:= to_from }

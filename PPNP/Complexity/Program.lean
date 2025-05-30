@@ -134,22 +134,7 @@ def HasCNFCertificate {num_vars : ℕ} (prog : ComputerProgram num_vars) : Prop 
     ∀ (assignment_func : Fin num_vars → Bool),
       prog assignment_func ↔ C.eval assignment_func
 
--- Section 4.2.5: General CNF Existence (Refinement from user prompt)
-/-
-REMARK: General CNF Existence.
-The `SB_Verifier` defined in Section 3.5 is a Boolean function
-`(Fin n → Bool) → Bool`. By fundamental principles of Boolean logic, any such
-function with a finite domain (here `2^n` possible assignments) has an
-equivalent CNF representation. For example, one can construct the canonical CNF
-by forming a conjunction of maxterms, where each maxterm rules out one specific
-input assignment for which the function should be false. (This is true because
-for any `φ : (Fin n → Bool) → Bool`, `φ` is equivalent to
-`⋀_{τ | ¬φ τ} (¬ ⋀_{i | τ i} xᵢ ∧ ⋀_{i | ¬τ i} ¬xᵢ)`, which is CNF after distribution).
-While this general existence is assured, for the particular cardinality
-constraint embodied by `SB_Verifier` (when `M_boxes > 0`), a more direct and
-standard CNF construction is known, which provides a clearer path for our
-existential proof.
--/
+
 
 variable {V : Type u} [Fintype V] [DecidableEq V]
 
