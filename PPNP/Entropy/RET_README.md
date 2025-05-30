@@ -199,25 +199,3 @@ i.e. a constant multiple of the Shannon entropy.  No real‐analysis, no measure
 
 This is exactly Rota’s Entropy Theorem—proved **entirely** within the realm of *integer combinatorics and partition refinements*.
 
-# TODO
-
-We next consider a set \( \{p_1, p_2, \ldots, p_n\} \) of positive rational numbers such that \( p_1 + p_2 + \ldots + p_n = 1 \). Let \( N \) be their common denominator, i.e., \( p_i = \frac{a_i}{N} \) for all \( i \), where each \( a_i \) is an integer and \( a_1 + a_2 + \ldots + a_n = N \). Let \( \sigma \) be a partition corresponding to the set of probabilities \( \{p_1, p_2, \ldots, p_n\} \). Let \( \pi \) be a partition obtained by breaking up the \( i \)-th block of \( \sigma \) into \( a_i \) parts. Then every block of \( \pi \) has probability \( \frac{1}{N} \). By definition of conditional entropy:
-\[
-H(\pi|\sigma) = -\sum_{i} P(\sigma_i) H(\pi|\sigma_i) = -\sum_{i} f(a_i) - C \sum_{i} p_i \log_2(a_i).
-\]
-
-By property 4, on the other hand, we have:
-\[
-H(\pi|\sigma) = H(\pi) - H(\sigma) = f(N) - H(\sigma).
-\]
-Combining the two expressions for \( H(\pi|\sigma) \) gives us:
-\[
-H(\sigma) = -C \log_2(N) + C \sum_{i} p_i \log_2(a_i).
-\]
-By continuity (property 3), \( H \) must have this same formula for all sets \( \{p_1, p_2, \ldots, p_n\} \) on which it is defined. This completes the proof.
-
-We leave it as an exercise to show that the above formula for entropy actually satisfies the five postulated properties. We conclude by giving an interpretation of independence of partitions in terms of conditional entropy. Intuitively, if \( \pi \) and \( \sigma \) are independent, then their joint entropy \( H(\pi \cap \sigma) \) is the sum of the individual entropies:
-\[
-H(\pi \cap \sigma) = H(\pi) + H(\sigma).
-\]
-In terms of conditional entropy, this says that \( H(\pi \cap \sigma) = H(\pi) \).
