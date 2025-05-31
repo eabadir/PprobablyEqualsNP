@@ -18,11 +18,13 @@ open PPNP.Common
 
 
 /-!
-# A Detailed Plan for a Lean 4 Existential Proof of CNF Representation for the Stars and Bars Problem
+# OUT OF DATE --- NEEDS TO BE UPDATED WITH NEW NumberTheory.Core.lean constructs per the ComputationalModelSketch.md
+
+A Detailed Plan for a Lean 4 Existential Proof of CNF Representation for the Stars and Bars Problem
 
 This file implements the plan outlined in "CNF And Stars And Bars In Lean 4" (Plan 2).
 
-## Structure of the Report (and this file)
+## Structure
 Section 2: Formal Lean 4 Representation of the Stars and Bars Problem (SB_Instance)
 Section 3: Boolean Encoding of Stars and Bars Solutions: The ComputerProgram Type
 Section 4: Existence of a Conjunctive Normal Form (CNF) Representation for Stars and Bars

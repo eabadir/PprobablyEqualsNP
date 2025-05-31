@@ -25,7 +25,7 @@ The title of the paper is a play on the famous "P vs NP" problem in computer sci
 
 ### 3. Explore and Run the Lean Code
 
-- The Lean formalization is in `PprobablyEqualsNP/PprobablyEqualsNP.lean`.
+- The Lean formalization is in `PPNP/Sketches/PprobablyEqualsNP.lean`.
 - Open this file in VS Code with the Lean 4 extension enabled.
 - You can step through the code, check proofs, and experiment with modifications.
 
