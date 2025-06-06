@@ -121,8 +121,11 @@ noncomputable def generatedIntPCAEquivInt : GeneratedInt_PCA ≃ ℤ :=
 
 
 /-! #############################################################
-     Reals as Boolean-valued functions on our emergent naturals
+     Reals as Boolean-valued *functions* on our emergent naturals
+     *Constructive Interpretation of functions* --
      ########################################################### -/
+
+
 
 /-- Emergent reals: the power set of `GNat`, i.e. characteristic
     functions `GNat → Bool`. -/

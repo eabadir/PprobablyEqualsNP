@@ -5,6 +5,7 @@ import Mathlib.Data.List.Basic
 import Mathlib.Data.Set.Defs
 import PPNP.Entropy.Physics.PhysicsDist -- Added
 import PPNP.Entropy.Common             -- Added
+import Std.Sat.CNF.Basic
 /- Complexity.lean -/
 namespace PPNP.Complexity.Basic
 /-!
@@ -31,6 +32,9 @@ open PPNP.Common
 
 open Classical
 
+open Std.Sat -- For CNF, Literal, Clause, etc.
+open Finset
+
 
 
 
@@ -45,6 +49,12 @@ axiom combineInput (input cert : Word) : Word
 axiom successWord : Word
 axiom compute (m : Machine) (w : Word) : Option Word
 axiom timeComplexity (m : Machine) (w : Word) : Nat
+
+/--
+A ComputerProgram takes an assignment of truth values to its `num_vars` variables
+and returns true if the input is "accepted", false otherwise.
+-/
+def ComputerProgram (num_vars : ℕ) := (Fin num_vars → Bool) → Bool
 
 -- Polynomial Time Definitions [Unchanged]
 def PolyTime (f : Nat → Nat) : Prop :=
@@ -69,6 +79,16 @@ def NP : Set Lang :=
 def PolyTimeReducible (L1 L2 : Lang) : Prop :=
   ∃ (f : Word → Word) (m : Machine), RunsInPolyTime m ∧
     (∀ w, compute m w = some (f w)) ∧ (∀ w, L1 w ↔ L2 (f w))
+
+
+/--
+A predicate asserting that a ComputerProgram `prog` has an equivalent CNF representation `C`.
+-/
+def HasCNFCertificate {num_vars : ℕ} (prog : ComputerProgram num_vars) : Prop :=
+  ∃ (C : CNF (Fin num_vars)),
+    ∀ (assignment_func : Fin num_vars → Bool),
+      prog assignment_func ↔ C.eval assignment_func
+
 
 infix:50 " <=p " => PolyTimeReducible
 

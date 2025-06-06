@@ -31,8 +31,8 @@ import Mathlib.Data.Rat.Defs
 import Mathlib.Data.Rat.Lemmas
 import Mathlib.Data.Real.Cardinality
 
---import PPNP.NumberTheory.Core
--- import PPNP.Complexity.Program -- Assuming not needed for f0_mul_eq_add_f0
+import PPNP.NumberTheory.Core
+import PPNP.Complexity.Program -- Assuming not needed for f0_mul_eq_add_f0
 --import PPNP.Entropy.Physics.PhysicsDist
 --import PPNP.Entropy.Physics.BoseEinstein
 --import PPNP.Entropy.Physics.PhotonicCA
@@ -55,160 +55,107 @@ namespace PPNP.Dev.code
 
 -- In PPNP.Entropy.RET.lean
 --open PPNP.NumberTheory.Core
-open List
+open List PPNP.Complexity.Program
 
-/-- The primordial source of infinite binary choices. -/
-structure IIDParticleSource where
+-- A ProgramTape is the fundamental data structure for a path/program.
+abbrev ProgramTape := List Bool
+
+-- Use the existing definitions from the file.
+-- To avoid conflicts, let's use the names from the file directly.
+abbrev ComputerProgram := ClassicalComputerProgram
+
+
+-- An IIDSource is an infinite stream of binary choices.
+structure IIDSource where
   stream : ℕ → Bool
 
-/-- A particle path is a finite list of boolean outcomes. -/
-abbrev ParticlePath := List Bool
-
-/-- Draws the first `t` choices from an IIDParticleSource to form a ParticlePath. -/
-def drawPath (src : IIDParticleSource) (t : ℕ) : ParticlePath :=
+-- A function to generate a finite tape from a source.
+def drawTape (src : IIDSource) (t : ℕ) : ProgramTape :=
   (List.finRange t).map (fun i => src.stream i)
 
-/-- Calculates the number of `true` choices (e.g., "up-steps") in a path. -/
-def numOnes (p_path : ParticlePath) : ℕ :=
-  p_path.count true -- as in your current code
+-- Standard Shannon Entropy (base 2) for a system of k equiprobable states.
+noncomputable def shannonEntropyOfSystem (k : ℕ) : ℝ :=
+  if k > 0 then Real.logb 2 k else 0
 
-/--
-Calculates the "position" of a particle after `t` steps,
-defined as (#trues - #falses).
+
+/-- Helper lemma to equate real power of 2 with a Nat exponent to the cast of Nat power of 2. -/
+lemma real_two_pow_nat_eq_cast_nat_pow_two (n : ℕ) : (2:ℝ) ^ n = ↑((2:ℕ) ^ n) := by
+  rw [Nat.cast_two.symm] -- Goal: (↑(2:ℕ):ℝ) ^ n = ↑((2:ℕ) ^ n)
+  exact (Nat.cast_pow 2 n).symm
+
+
+/-!
+### Mathematical Lemma (Corrected)
+
+This lemma proves that if you take the ceiling of the base-2 logarithm of k,
+that number of bits is sufficient to represent k states.
+This is the mathematical core of RECT.
 -/
-def particlePosition (p_path : ParticlePath) : ℤ :=
-  let ones := numOnes p_path
-  let path_len := p_path.length
-  let zeros := path_len - ones
-  (ones : ℤ) - (zeros : ℤ)
+lemma needed_bits_lemma (k : ℕ) (hk_pos : k > 0) :
+    k ≤ 2 ^ (Nat.ceil (Real.logb 2 k)) :=
+by
+  -- 1. Start with the property that x ≤ ⌈x⌉ for any x.
+  have h_le_ceil : Real.logb 2 k ≤ ↑(Nat.ceil (Real.logb 2 k)) :=
+    Nat.le_ceil _
 
-------------------------------------------------------------
--- 2.  Unary naturals = lists of all-true values
-------------------------------------------------------------
-def AllTrue (L : List Bool) : Prop := ∀ x ∈ L, x = true
+  -- 2. The function 2^x is monotone for real exponents when the base ≥ 1.
+  --    Apply this to both sides of the inequality.
+  have h_rpow_le : (2 : ℝ) ^ (Real.logb 2 k) ≤ (2 : ℝ) ^ (↑(Nat.ceil (Real.logb 2 k)) : ℝ) :=
+    (Real.rpow_le_rpow_of_exponent_le (by norm_num : 1 ≤ (2:ℝ)) h_le_ceil)
 
--- NEW: make the predicate decidable so that the generic
---      `[Encodable {x // p x}]` instance can fire.
-instance (L : List Bool) : Decidable (AllTrue L) := by
-  unfold AllTrue
-  exact List.decidableBAll (fun x => x = true) L
+  -- 3. Simplify the left-hand side: 2 ^ (logb 2 k) simplifies to k.
+  have h_k_real_pos : 0 < (k : ℝ) := Nat.cast_pos.mpr hk_pos
+  rw [Real.rpow_logb (by norm_num) (by norm_num) h_k_real_pos] at h_rpow_le
+  -- h_rpow_le is now: `↑k ≤ 2 ^ (↑(Nat.ceil (Real.logb 2 k)))` (with a real exponent)
 
-abbrev GeneratedNat_Unary := { L : List Bool // AllTrue L }
+  -- 4. Convert the real power (rpow) on the RHS to a natural number power (pow).
+  rw [Real.rpow_natCast] at h_rpow_le
+  -- h_rpow_le is now: `↑k ≤ (2:ℝ) ^ (Nat.ceil (Real.logb 2 k))` (HPow with ℕ exponent)
+  let L := Nat.ceil (Real.logb 2 k)
+  -- h_rpow_le is effectively `↑k ≤ (2:ℝ) ^ L`
 
-------------------------------------------------------------
--- 3.  Encodable instance now *does* synthesise
-------------------------------------------------------------
-example : Encodable GeneratedNat_Unary := inferInstance   -- compiles
+  -- 5. Rewrite (2:ℝ)^L to ↑(2^L) using the helper lemma.
+  rw [real_two_pow_nat_eq_cast_nat_pow_two L] at h_rpow_le
+  -- h_rpow_le is now: `↑k ≤ ↑(2 ^ L)`
 
-------------------------------------------------------------
--- 4.  Bijection with ℕ
-------------------------------------------------------------
-def toNat   (u : GeneratedNat_Unary) : ℕ := u.val.length
-
-def fromNat (n : ℕ) : GeneratedNat_Unary :=
-  ⟨List.replicate n true, by
-    intro x h_mem
-    rw [List.mem_replicate] at h_mem
-    exact h_mem.right⟩
-
-lemma left_inv  (n : ℕ) : toNat (fromNat n) = n := by
-  simp [toNat, fromNat]
-
-lemma right_inv (u : GeneratedNat_Unary) : fromNat (toNat u) = u := by
-  cases u with
-  | mk L hL =>
-      simp [toNat, fromNat, List.length_replicate, Subtype.ext]
-      exact (List.eq_replicate_of_mem hL).symm
-
-noncomputable def equivUnaryNat : GeneratedNat_Unary ≃ ℕ :=
-{ toFun    := toNat,
-  invFun   := fromNat,
-  left_inv := right_inv,
-  right_inv:= left_inv }
+  -- 6. Now the inequality is between two casted Nats, so `Nat.cast_le.mp` applies.
+  exact Nat.cast_le.mp h_rpow_le
 
 
-abbrev GNat := { L : List Bool // AllTrue L }
-def equivGNatToNat : GNat ≃ ℕ :=
-{ toFun    := toNat,
-  invFun   := fromNat,
-  left_inv := right_inv,
-  right_inv:= left_inv }
+/-!
+### The RECT Theorem (Full Proof)
 
-/--
-The type representing "emergent integers".
-Pairs an element from `GNat` (representing magnitude)
-with a `Bool` (representing sign: e.g., true for non-negative, false for negative).
-This definition directly uses GNat.
+This proof uses the constructive pattern from `Complexity.Program.lean` and
+the mathematical justification from our `needed_bits_lemma`.
 -/
-def GeneratedInt_PCA : Type := GNat × Bool
+theorem rect_program_for_entropy (k : ℕ) (hk_pos : k > 0) :
+    ∃ (prog : ComputerProgram), prog.complexity = Nat.ceil (shannonEntropyOfSystem k) :=
+by
+  -- Define the target complexity value in its simplified form.
+  let L_final := Nat.ceil (Real.logb 2 k)
 
--- To establish GeneratedInt_PCA ≃ ℤ:
--- 1. We have `GNat ≃ ℕ` (via equivGNatToNat).
--- 2. We need an equivalence `ℕ × Bool ≃ ℤ`. Mathlib provides `Int.equivNatProdBool : ℤ ≃ ℕ × Bool`. [1]
---    Its inverse is `Int.equivNatProdBool.symm : ℕ × Bool ≃ ℤ`.
--- 3. We construct the equivalence:
---    `GeneratedInt_PCA = GNat × Bool`
---    `≃ ℕ × Bool` (using `Equiv.prodCongr equivGNatToNat (Equiv.refl Bool)`) [3]
---    `≃ ℤ` (using `Int.equivNatProdBool.symm`)
-
-open Equiv
-
-------------------------------------------------------------
--- Emergent integers
-------------------------------------------------------------
-
-noncomputable def intEquivNatProdBool : ℤ ≃ ℕ × Bool :=
-  (Equiv.intEquivNat.trans (Equiv.boolProdNatEquivNat.symm)).trans (Equiv.prodComm ℕ Bool).symm   -- citations: ③,④,②
-
-noncomputable def generatedIntPCAEquivInt : GeneratedInt_PCA ≃ ℤ :=
-  (Equiv.prodCongr equivGNatToNat (Equiv.refl Bool)).trans intEquivNatProdBool.symm
+  -- Prove that the original expression for complexity equals L_final.
+  have h_complexity_eq_L_final : Nat.ceil (shannonEntropyOfSystem k) = L_final := by
+    unfold shannonEntropyOfSystem
+    rw [if_pos hk_pos]
+    -- Goal is: Nat.ceil (Real.logb 2 k) = Nat.ceil (Real.logb 2 k)
 
 
-/-! #############################################################
-     Rationals as stars-and-bars encodings in `List Bool`
-     ########################################################### -/
+  -- Construct a program with tape length L_final.
+  let example_tape := List.replicate L_final true
+  let initial_st_example : SystemState := { val := 0 }
+  let prog_exists : ComputerProgram :=
+    { initial_state := initial_st_example, tape := example_tape }
 
+  -- Prove that this program exists.
+  use prog_exists
 
-/-! #############################################################
-     Reals as Boolean-valued functions on our emergent naturals
-     ########################################################### -/
+  -- The goal is to prove:
+  -- ClassicalComputerProgram.complexity prog_exists = Nat.ceil (shannonEntropyOfSystem k)
 
-/-- Emergent reals: the power set of `GNat`, i.e. characteristic
-    functions `GNat → Bool`. -/
-abbrev GeneratedReal_PCA := GNat → Bool
+  -- Simplify the LHS of the goal.
+  simp only [ClassicalComputerProgram.complexity, prog_exists, example_tape, List.length_replicate]
+  -- Goal is now: L_final = Nat.ceil (shannonEntropyOfSystem k)
 
-namespace GeneratedReal_PCA
-
-/-- Transport along `GNat ≃ ℕ`, giving `(GNat → Bool) ≃ (ℕ → Bool)`. -/
-noncomputable def equivFunNat : GeneratedReal_PCA ≃ (ℕ → Bool) :=
-  Equiv.arrowCongr equivGNatToNat (Equiv.refl Bool)
-
-
-open Cardinal
-
-
-/-- The cardinality of `GeneratedReal_PCA` (functions from GNat to Bool) is \(2^{\aleph_0}\). -/
-lemma cardinal_eq_two_pow_aleph0 : Cardinal.mk GeneratedReal_PCA = 2 ^ Cardinal.aleph0 := by
-  calc
-    -- 1) By definition, GeneratedReal_PCA is GNat → Bool.
-    --    Using the equivalence equivFunNat : (GNat → Bool) ≃ (ℕ → Bool),
-    --    their cardinalities are equal.
-    Cardinal.mk GeneratedReal_PCA
-      = Cardinal.mk (ℕ → Bool)             := Cardinal.mk_congr equivFunNat
-    -- 2) The cardinality of a function space #(A → B) is #B ^ #A.
-    _ = Cardinal.mk Bool ^ Cardinal.mk ℕ   := by rw [Cardinal.power_def]
-    -- 3) The cardinality of Bool is 2, and the cardinality of ℕ is ℵ₀.
-    _ = 2 ^ Cardinal.aleph0                := by aesop
-/-- The emergent reals have exactly the same cardinality as ℝ (the continuum). -/
-
-noncomputable def equivGeneratedReal : GeneratedReal_PCA ≃ ℝ :=
-  -- 1) combine your two cardinality proofs into `#G = #ℝ`
-  have h : mk GeneratedReal_PCA = mk ℝ := by
-    calc
-      mk GeneratedReal_PCA = 2 ^ aleph0    := cardinal_eq_two_pow_aleph0
-      _                 = #ℝ              := (Cardinal.mk_real).symm
-  -- 2) use `Cardinal.eq` to get `Nonempty (G ≃ ℝ)`
-  Classical.choice (Cardinal.eq.1 h)
-
-
-end GeneratedReal_PCA
+  -- Use the proven equality.
+  exact h_complexity_eq_L_final.symm
