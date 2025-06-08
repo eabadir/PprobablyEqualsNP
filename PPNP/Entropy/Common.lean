@@ -60,9 +60,6 @@ lemma Fintype_card_fin_pos {k : ℕ} (hk_pos : k > 0) : 0 < Fintype.card (Fin k)
   simp only [Fintype.card_fin] -- Fintype.card (Fin k) is definitionally k
   exact hk_pos
 
-/-- Standard Shannon entropy of `p : α → NNReal`. Uses natural logarithm. -/
-noncomputable def stdShannonEntropyLn {α : Type*} [Fintype α] (p : α → NNReal) : Real :=
-  ∑ i : α, negMulLog (p i : Real)
 
 
 
@@ -233,6 +230,9 @@ structure HasRotaEntropyProperties -- This is the new definition
           IsEntropyMaxUniform H_func,
           IsEntropyZeroOnEmptyDomain H_func
 
+/-- Standard Shannon entropy of `p : α → NNReal`. Uses natural logarithm. -/
+noncomputable def stdShannonEntropyLn {α : Type*} [Fintype α] (p : α → NNReal) : Real :=
+  ∑ i : α, negMulLog (p i : Real)
 
 
 lemma product_coe_inv_coe_mul_log_eq_log {k : ℕ} (hk_pos_nat : k > 0) :
@@ -258,18 +258,45 @@ theorem stdShannonEntropyLn_uniform_eq_log_card {α : Type*} [Fintype α]
   exact product_coe_inv_coe_mul_log_eq_log hk_pos_nat
 
 
--- Axiom for Shannon Coding Theorem
-/--
-Axiomatic statement of Shannon's Coding Theorem (SCT).
-It asserts that for any probability distribution P over a finite alphabet α,
-there exists an optimal average code length (in bits) for encoding symbols
-drawn i.i.d. from P, and this length is approximately the Shannon entropy of P (base 2).
-The "≈" would be formalized using limits for block codes in a full version.
+
+/-- Helper lemma to equate real power of 2 with a Nat exponent to the cast of Nat power of 2. -/
+lemma real_two_pow_nat_eq_cast_nat_pow_two (n : ℕ) : (2:ℝ) ^ n = ↑((2:ℕ) ^ n) := by
+  rw [Nat.cast_two.symm] -- Goal: (↑(2:ℕ):ℝ) ^ n = ↑((2:ℕ) ^ n)
+  exact (Nat.cast_pow 2 n).symm
+
+
+
+/-!
+This lemma proves that if you take the ceiling of the base-2 logarithm of k,
+that number of bits is sufficient to represent k states.
+This is the mathematical core of RECT.
 -/
-axiom shannon_coding_theorem_sct_axiom
-    {α : Type u} [Fintype α] (P : α → NNReal) (hP_sums_to_1 : ∑ x, P x = 1) :
-    ∃ (L_avg_bits : ℝ), L_avg_bits ≥ 0 ∧
-      -- For simplicity, we state it as equality for the ideal optimal code.
-      -- A more nuanced version would use inequalities or limits.
-      L_avg_bits = (stdShannonEntropyLn P) / (Real.log 2) -- Shannon entropy in bits
-      -- Status: Axiom (To be added, e.g. in PPNP.Entropy.SCT)
+lemma needed_bits_lemma (k : ℕ) (hk_pos : k > 0) :
+    k ≤ 2 ^ (Nat.ceil (Real.logb 2 k)) :=
+by
+  -- 1. Start with the property that x ≤ ⌈x⌉ for any x.
+  have h_le_ceil : Real.logb 2 k ≤ ↑(Nat.ceil (Real.logb 2 k)) :=
+    Nat.le_ceil _
+
+  -- 2. The function 2^x is monotone for real exponents when the base ≥ 1.
+  --    Apply this to both sides of the inequality.
+  have h_rpow_le : (2 : ℝ) ^ (Real.logb 2 k) ≤ (2 : ℝ) ^ (↑(Nat.ceil (Real.logb 2 k)) : ℝ) :=
+    (Real.rpow_le_rpow_of_exponent_le (by norm_num : 1 ≤ (2:ℝ)) h_le_ceil)
+
+  -- 3. Simplify the left-hand side: 2 ^ (logb 2 k) simplifies to k.
+  have h_k_real_pos : 0 < (k : ℝ) := Nat.cast_pos.mpr hk_pos
+  rw [Real.rpow_logb (by norm_num) (by norm_num) h_k_real_pos] at h_rpow_le
+  -- h_rpow_le is now: `↑k ≤ 2 ^ (↑(Nat.ceil (Real.logb 2 k)))` (with a real exponent)
+
+  -- 4. Convert the real power (rpow) on the RHS to a natural number power (pow).
+  rw [Real.rpow_natCast] at h_rpow_le
+  -- h_rpow_le is now: `↑k ≤ (2:ℝ) ^ (Nat.ceil (Real.logb 2 k))` (HPow with ℕ exponent)
+  let L := Nat.ceil (Real.logb 2 k)
+  -- h_rpow_le is effectively `↑k ≤ (2:ℝ) ^ L`
+
+  -- 5. Rewrite (2:ℝ)^L to ↑(2^L) using the helper lemma.
+  rw [real_two_pow_nat_eq_cast_nat_pow_two L] at h_rpow_le
+  -- h_rpow_le is now: `↑k ≤ ↑(2 ^ L)`
+
+  -- 6. Now the inequality is between two casted Nats, so `Nat.cast_le.mp` applies.
+  exact Nat.cast_le.mp h_rpow_le

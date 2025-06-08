@@ -52,7 +52,7 @@ encoding program previously defined.
 /--
 Theorem: A snapshot of an evolving system of `n` random walks at time `t_snapshot`
 can be characterized by a Bose-Einstein distribution, which in turn can be
-encoded by a `ClassicalComputerProgram` (prog_snapshot_BE). In computational terms, this is our "verifier" or "witness" program.
+encoded by a `ComputerProgram` (prog_snapshot_BE). In computational terms, this is our "verifier" or "witness" program.
 
 The `SystemEvolutionProgram` (tape `n*T`) determines the state of all walks.
 A snapshot of this state (e.g., number of heads per walk `(h_1, ..., h_n)`)
@@ -72,7 +72,7 @@ theorem system_snapshot_encodable_by_BE_program
     let M_BE := getTotalUpStepsAtSnapshot sys_prog_eval_output t_snapshot
     -- Condition for BE system to be valid (N_BE > 0 or M_BE = 0)
     if _h_N_BE_pos_or_M_BE_zero : N_BE > 0 ∨ M_BE = 0 then
-        ∃ (prog_snapshot_BE : ClassicalComputerProgram) (src_BE : IIDFairBinarySource)
+        ∃ (prog_snapshot_BE : ComputerProgram) (src_BE : FiniteIIDSample)
           (prog_BE_tape_len_nat : ℕ)
           (be_params : PPNP.Entropy.Physics.PhysicsDist.SystemParams)
           (_h_be_params_match : be_params.N = N_BE ∧ be_params.M = M_BE)
@@ -81,8 +81,8 @@ theorem system_snapshot_encodable_by_BE_program
               C_constant_real H_physical_system_has_Rota_entropy_properties * stdShannonEntropyLn (p_UD_fin be_params.N be_params.M)),
           prog_snapshot_BE.tape.length = prog_BE_tape_len_nat ∧
           src_BE.num_choices = prog_BE_tape_len_nat ∧
-          (ClassicalComputerProgram.complexity prog_snapshot_BE : ℝ) = (prog_BE_tape_len_nat : ℝ) ∧
-          (prog_BE_tape_len_nat : ℝ) = SCTOptimalTapeLength src_BE
+          (ComputerProgram.complexity prog_snapshot_BE : ℝ) = (prog_BE_tape_len_nat : ℝ) ∧
+          (prog_BE_tape_len_nat : ℝ) = ShannonSourceCodingTheorem src_BE
     else
         True -- If BE parameters are not valid (e.g. N_BE=0 and M_BE > 0), the BE encoding doesn't apply in this form.
         := by
@@ -107,7 +107,7 @@ theorem system_snapshot_encodable_by_BE_program
         exact Or.inr hM_zero
 
     -- Now call the existing `encoding_BE_system_by_program` theorem
-    -- It provides: ∃ (prog : ClassicalComputerProgram) (src : IIDFairBinarySource)
+    -- It provides: ∃ (prog : ComputerProgram) (src : FiniteIIDSample)
     --                (prog_tape_len_nat : ℕ)
     --                (_h_axiomatic_entropy_BE : H_phys ... = C * stdShannon...),
     --                prog.tape.length = prog_tape_len_nat ∧ ...
@@ -118,7 +118,7 @@ theorem system_snapshot_encodable_by_BE_program
     use src_be
     use tape_len_be
     use be_sys_params
-    --use by { constructor; exact rfl; exact rfl; } -- Proof for _h_be_params_match
+    use by { constructor; exact rfl; exact rfl; } -- Proof for _h_be_params_match
     --use h_ax_ent_be
     -- The rest of the goals match the output of encoding_BE_system_by_program
     --exact ⟨h_tape_eq, h_src_eq, h_compl_eq, h_len_eq_sct⟩
