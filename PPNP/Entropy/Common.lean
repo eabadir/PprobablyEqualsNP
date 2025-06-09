@@ -32,6 +32,93 @@ open PPNP.Common
 
 universe u
 
+
+/--
+Represents a finite sample an IID (Independent and Identically Distributed) Source.
+The total number of choices is determined by `num_sub_samples`, `p_param`, and `q_param`.
+If `p_param = 1` and `q_param = 0`, then `sample_size_num_choices` = `num_sub_samples`,
+aligning with a simple sequence of `num_sub_samples` bits.
+The parameters `p_param` and `q_param` allow for a more complex definition of sample size,
+potentially reflecting underlying structures or biases in how samples are grouped or generated,
+similar to how `p` and `q` might be used in `mkBiasedIIDParticleSource`.
+-/
+structure FiniteIIDSample where
+  p_param : ℕ
+  q_param : ℕ
+  num_sub_samples : ℕ
+  h_is_nontrivial : p_param + q_param > 0 -- Invariant
+
+namespace FiniteIIDSample
+
+/-- Computes the total number of choices for a FiniteIIDSample. -/
+def sample_size_num_choices (s : FiniteIIDSample) : ℕ :=
+  s.num_sub_samples * (s.p_param + s.q_param)
+
+end FiniteIIDSample
+
+/--
+The Shannon entropy (in bits) of a single choice from an FiniteIIDSample.
+Assuming each fundamental choice is a raw bit, its entropy contribution is 1 bit.
+Formally: - (0.5 * Real.logb 2 0.5 + (1-0.5) * Real.logb 2 (1-0.5)) = 1 for a fair bit.
+This definition assumes we are counting raw bits from the source.
+-/
+def BitsPerChoice_IIDParticleSource (_source : FiniteIIDSample) : ℕ  :=
+  1
+
+/--
+If ordering doesn't matter, a sample of 1's and 0's can be represented using only a sign bit and the lesser of the two parameters.
+--/
+def BitsPerSubSample_IIDParticleSource (s : FiniteIIDSample) : ℤ :=
+  BitsPerChoice_IIDParticleSource s * (Int.natAbs ((s.p_param : ℤ) - (s.q_param : ℤ)))
+
+/--
+The Shannon entropy (in bits) of a single trial from a biased source with
+`true` probability `p / (p+q)`.
+-/
+noncomputable def shannonEntropyOfBiasedSource (p q : ℕ) (_h_pos : p + q > 0) : ℝ :=
+  let p_real := (p : ℝ)
+  let q_real := (q : ℝ)
+  let total := p_real + q_real
+  let P_true := p_real / total
+  let P_false := q_real / total
+  -- The entropy formula: - (P_true * log₂ P_true + P_false * log₂ P_false)
+  -- Real.negMulLog is -x * log(x) (natural log), so we divide by log 2 for bits.
+  (Real.negMulLog P_true + Real.negMulLog P_false) / Real.log 2
+
+/-- Standard Shannon entropy of `p : α → NNReal`. Uses natural logarithm. -/
+noncomputable def stdShannonEntropyLn {α : Type*} [Fintype α] (p : α → NNReal) : Real :=
+  ∑ i : α, Real.negMulLog (p i : Real)
+
+
+
+
+
+/-- Standard Shannon Entropy (base 2) for a system of k equiprobable states. -/
+noncomputable def shannonEntropyOfSystem (k : ℕ) : ℝ :=
+  if k > 0 then Real.logb 2 k else 0
+
+
+
+
+/--
+**REVised Definition:** The efficient encoding length for a sequence of trials from
+a biased source. The length is the number of trials multiplied by the Shannon
+entropy per trial, reflecting the true information content. A source with lower
+entropy (more predictability) requires fewer bits to encode.
+-/
+noncomputable def EfficientPCAEncoder (s : FiniteIIDSample) : ℝ :=
+  (s.num_sub_samples : ℝ) * shannonEntropyOfBiasedSource s.p_param s.q_param s.h_is_nontrivial
+
+/--
+Calculates the Shannon entropy (in bits) of any given discrete
+probability distribution `dist` over `Fin k`. This generalizes
+`shannonEntropyOfSystem`, which is the special case for a uniform distribution.
+-/
+noncomputable def ShannonEntropyOfDist {k : ℕ} (dist : Fin k → NNReal) : ℝ :=
+  -- stdShannonEntropyLn calculates entropy in nats (-Σ pᵢ ln pᵢ).
+  -- We divide by ln 2 to convert to bits.
+  (stdShannonEntropyLn dist) / Real.log 2
+
 -- Definition: f(n) = H(uniform distribution on n outcomes)
 noncomputable def uniformProb (n : ℕ) : NNReal :=
   if _hn : n > 0 then (n⁻¹ : NNReal) else 0
@@ -230,9 +317,6 @@ structure HasRotaEntropyProperties -- This is the new definition
           IsEntropyMaxUniform H_func,
           IsEntropyZeroOnEmptyDomain H_func
 
-/-- Standard Shannon entropy of `p : α → NNReal`. Uses natural logarithm. -/
-noncomputable def stdShannonEntropyLn {α : Type*} [Fintype α] (p : α → NNReal) : Real :=
-  ∑ i : α, negMulLog (p i : Real)
 
 
 lemma product_coe_inv_coe_mul_log_eq_log {k : ℕ} (hk_pos_nat : k > 0) :

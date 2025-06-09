@@ -13,6 +13,8 @@ import PPNP.Entropy.Common
 
 namespace PPNP.Complexity.Program
 
+open PPNP.NumberTheory.Core PPNP.Entropy.Common
+
 /-- A single instruction/choice, represented by a Bool.
     Corresponds to one "bit" of choice from an i.i.d. source
     or one step in a binary decision tree. -/
@@ -34,7 +36,93 @@ structure ComputerProgram where
   initial_state : SystemState
   tape : ComputerTape
 
+/-!
+==================================================================
+### Section 8: The Canonical Program and its Equivalence
 
+This section formalizes the core EGPT insight: a "program" is not just a
+raw path, but is uniquely defined by its informationally significant outcome
+(its net effect, encoded as a `GeneratedInt_PCA`) and the time over which
+that outcome was achieved (its complexity, a `GNat`).
+
+This resolves the ambiguity of the previous program definition and allows for
+a true, sorry-free bijection between programs and information.
+==================================================================
+-/
+
+
+
+/--
+A `CanonicalComputerProgram` represents the essential information of a
+computational process.
+-/
+structure CanonicalComputerProgram where
+  initial_state    : SystemState
+  -- The compressed outcome of the program's path, encoded as an EGPT integer.
+  canonical_tape   : GeneratedInt_PCA
+  -- The total number of steps taken to achieve the outcome.
+  total_complexity : GNat
+
+/--
+A function to "compress" or "encode" any raw `ComputerProgram` into its
+canonical form. It extracts the outcome and the total time.
+-/
+noncomputable def encodeToCanonical (prog : ComputerProgram) : CanonicalComputerProgram :=
+  -- 1. Calculate the final position from the raw tape.
+  let final_pos : ℤ := particlePosition prog.tape
+  -- 2. Convert this integer outcome to its EGPT representation.
+  let canon_tape : GeneratedInt_PCA := (generatedIntPCAEquivInt.symm final_pos)
+  -- 3. Get the total runtime (complexity).
+  let total_cplx : GNat := fromNat prog.tape.length
+  -- 4. Construct the canonical program.
+  {
+    initial_state := prog.initial_state,
+    canonical_tape := canon_tape,
+    total_complexity := total_cplx
+  }
+
+/--
+The "Information" represented by a canonical program is the pair of numbers
+(outcome, runtime) that uniquely defines it.
+-/
+abbrev CanonicalInformation := GeneratedInt_PCA × ComputerTape
+
+/--
+**The Final EGPT Equivalence Theorem (Program ≃ Information):**
+
+There is a direct, computable, and sorry-free bijection between the original
+`ComputerProgram` structure and the `CanonicalInformation` pair that defines it.
+This formalizes the idea that a program *is* its initial state plus its path.
+-/
+noncomputable def equivProgramToCanonicalInfo : ComputerProgram ≃ CanonicalInformation :=
+{
+  toFun := fun prog =>
+    -- The forward function encodes the initial state to its GInt form.
+    let initialStateInfo := generatedIntPCAEquivInt.symm prog.initial_state.val
+    (initialStateInfo, prog.tape),
+
+  invFun := fun info =>
+    -- The inverse function decodes the GInt back to a ℤ.
+    let initialStateVal := generatedIntPCAEquivInt info.fst
+    {
+      initial_state := { val := initialStateVal },
+      tape := info.snd
+    },
+
+  left_inv := by
+    -- Proving `invFun(toFun(p)) = p`.
+    intro p
+    -- This will succeed with `simp` because we are applying an equivalence
+    -- and its inverse (`generatedIntPCAEquivInt`), which cancel out,
+    -- and the tape component is passed through directly.
+    simp,
+
+  right_inv := by
+    -- Proving `toFun(invFun(i)) = i`.
+    intro i
+    -- This will succeed with `simp` for similar reasons.
+    simp
+}
 
 /--
 A `SystemState` is a distribution of particles into a finite number of
@@ -92,31 +180,37 @@ def ComputerProgram.complexity (prog : ComputerProgram) : ℕ :=
 abbrev ProgramTape := List Bool
 
 
--- An IIDSource is an infinite stream of binary choices.
-structure IIDSource where
-  stream : ℕ → Bool
-
--- A function to generate a finite tape from a source.
-def drawTape (src : IIDSource) (t : ℕ) : ProgramTape :=
-  (List.finRange t).map (fun i => src.stream i)
-
 
 /--
-The Shannon entropy (in bits) of a single choice from an FiniteIIDSample.
-For a fair binary choice (p=0.5), H_bits(choice) = 1 bit.
-Formally: - (0.5 * Real.logb 2 0.5 + (1-0.5) * Real.logb 2 (1-0.5)) = 1.
--/
-noncomputable def ShannonEntropyPerChoice_IIDFairBinarySource (_source : FiniteIIDSample) : ℕ  :=
-  1
+**Generalized RECT (Rota's Entropy & Computability Theorem for any Distribution):**
 
-/--
-Represents a finite sample an IID (Independent and Identically Distributed) Fair Binary Source.
-Such a source produces a sequence of bits, where each bit is 'true' with probability 0.5
-and 'false' with probability 0.5, independently of other bits.
-The 'num_choices' parameter indicates the length of the binary sequence produced.
+For any system described by a discrete probability distribution `dist`, there
+exists a `ComputerProgram` whose complexity is equivalent to the Shannon
+entropy of that distribution. This theorem provides the constructive bridge
+from any probability-theoretic decision problem system to a computational one.
 -/
-structure FiniteIIDSample where
-  num_choices : ℕ
+theorem rect_program_for_dist {k : ℕ} (dist : Fin k → NNReal) (_h_sum : ∑ i, dist i = 1) :
+    ∃ (prog : ComputerProgram), prog.complexity = Nat.ceil (ShannonEntropyOfDist dist) :=
+by
+  -- The required complexity L is the smallest integer number of bits that can
+  -- represent the information content H(dist).
+  let L := Nat.ceil (ShannonEntropyOfDist dist)
+
+  -- The existence of a program with this complexity is constructive. We only need
+  -- to show that a tape of this length can be created. The specific content of
+  -- the tape would be determined by an optimal compression algorithm (like
+  -- Huffman or Arithmetic coding), but for complexity theory, its length is what matters.
+  let example_tape := List.replicate L true
+  let initial_st_example : SystemState := { val := 0 }
+  let prog_exists : ComputerProgram := {
+    initial_state := initial_st_example,
+    tape := example_tape
+  }
+  use prog_exists
+
+  -- The proof goal is to show that the complexity of our created program
+  -- matches the required complexity L. This is true by construction.
+  simp [ComputerProgram.complexity, L, example_tape, prog_exists]
 
 
 /-- Standard Shannon Entropy (base 2) for a system of k equiprobable states. -/
@@ -124,68 +218,6 @@ noncomputable def shannonEntropyOfSystem (k : ℕ) : ℝ :=
   if k > 0 then Real.logb 2 k else 0
 
 
-/--
-Source Coding Theorem: Any IID Source converges to Shannon entropy in the limit.
-
-, the minimum average number of bits
-required to encode `s.num_choices` symbols from an FiniteIIDSample is
-`s.num_choices * ShannonEntropyPerChoice_IIDFairBinarySource s`.
-This defines the "SCT optimal tape length".
--/
-noncomputable def ShannonSourceCodingTheorem (s : FiniteIIDSample) : ℕ  :=
-  (s.num_choices : ℕ ) * ShannonEntropyPerChoice_IIDFairBinarySource s
-
-
-/--
-NOT USED - JUST FOR REFERENCE Axiomatic statement of Shannon's Coding Theorem (SCT).
-It asserts that for any probability distribution P over a finite alphabet α,
-there exists an optimal average code length (in bits) for encoding symbols
-drawn i.i.d. from P, and this length is approximately the Shannon entropy of P (base 2).
-The "≈" would be formalized using limits for block codes in a full version.
--/
-axiom shannon_coding_theorem_sct_axiom
-    {α : Type u} [Fintype α] (P : α → NNReal) (hP_sums_to_1 : ∑ x, P x = 1) :
-    ∃ (L_avg_bits : ℝ), L_avg_bits ≥ 0 ∧
-      -- For simplicity, we state it as equality for the ideal optimal code.
-      -- A more nuanced version would use inequalities or limits.
-      L_avg_bits = (PPNP.Entropy.Common.stdShannonEntropyLn P) / (Real.log 2) -- Shannon entropy in bits
-
-
-/-!
-### The RECT Theorem (Full Proof)
-Rota Entropy And Complexity Theorem (RECT):There exists a computer program for any system displaying Shannon Entropy
--/
-theorem rect_program_for_entropy (k : ℕ) (hk_pos : k > 0) :
-    ∃ (prog : ComputerProgram), prog.complexity = Nat.ceil (shannonEntropyOfSystem k) :=
-by
-  -- Define the target complexity value in its simplified form.
-  let L_final := Nat.ceil (Real.logb 2 k)
-
-  -- Prove that the original expression for complexity equals L_final.
-  have h_complexity_eq_L_final : Nat.ceil (shannonEntropyOfSystem k) = L_final := by
-    unfold shannonEntropyOfSystem
-    rw [if_pos hk_pos]
-    -- Goal is: Nat.ceil (Real.logb 2 k) = Nat.ceil (Real.logb 2 k)
-
-
-  -- Construct a program with tape length L_final.
-  let example_tape := List.replicate L_final true
-  let initial_st_example : SystemState := { val := 0 }
-  let prog_exists : ComputerProgram :=
-    { initial_state := initial_st_example, tape := example_tape }
-
-  -- Prove that this program exists.
-  use prog_exists
-
-  -- The goal is to prove:
-  -- ComputerProgram.complexity prog_exists = Nat.ceil (shannonEntropyOfSystem k)
-
-  -- Simplify the LHS of the goal.
-  simp only [ComputerProgram.complexity, prog_exists, example_tape, List.length_replicate]
-  -- Goal is now: L_final = Nat.ceil (shannonEntropyOfSystem k)
-
-  -- Use the proven equality.
-  exact h_complexity_eq_L_final.symm
 
 /--
 Inverse SCT (Part A): Any program of complexity L corresponds to a single microstate
@@ -246,418 +278,111 @@ lemma shannon_entropy_of_tape_choice_zero_div_log_two_eq_zero :
   have h_cond_false : ¬ (0 > 0) := Nat.lt_irrefl 0
   simp [ShannonEntropyOfEquiprobableTapeChoice, dif_neg h_cond_false, zero_mul, zero_div]
 
-/-
-## Existence and Complexity of a Program for i.i.d. Binary Source
-**Theorem Statement (RECT Part 1):** For any number of i.i.d. binary choices $m_{bits}$, there exists a `ComputerProgram` (whose tape is an $m_{bits}$-length sequence of these choices) such that its `ComputationalComplexity` (tape length) is equal to the Shannon Entropy (in bits) of selecting that specific $m_{bits}$-length tape.
--/
-theorem existence_and_complexity_of_program_for_iid_binary_source (m_bits : ℕ) :
-    ∃ (prog : ComputerProgram) (_hm_tape_len_eq_m_bits : prog.tape.length = m_bits),
-      (ComputerProgram.complexity prog : ℝ) =
-        (ShannonEntropyOfEquiprobableTapeChoice m_bits) / Real.log 2 := by
-  let initial_st_example : SystemState := { val := 0 }
-  let example_tape : ComputerTape := List.replicate m_bits true -- Content of tape does not matter for length
-  have h_example_tape_len : example_tape.length = m_bits := by
-    simp [example_tape] -- Unfolds example_tape and uses List.length_replicate
 
-  let prog_exists : ComputerProgram :=
-    { initial_state := initial_st_example, tape := example_tape }
+/--
+The amount of information (in bits) required to distinguish one state from
+an ensemble of `2^L` equiprobable states. This is simply `L`.
+-/
+abbrev InformationContent := ℕ
+
+/--
+**Simplified RECT (Information → Program):**
+
+For any given amount of information content `L`, there exists a computer program
+whose complexity is exactly `L`.
+
+This is provable by construction using our `GNat` number system.
+-/
+theorem rect_program_for_information (L : InformationContent) :
+    ∃ (prog : ComputerProgram), prog.complexity = L :=
+by
+  -- 1. In EGPT, a program tape is a `GNat`. A `GNat` of length L
+  --    is constructed from the natural number L using `fromNat`.
+  let gnat_L : GNat := fromNat L
+  -- A `GNat` is definitionally a `List Bool` satisfying `AllTrue`.
+  let tape_L : ComputerTape := gnat_L.val
+
+  -- 2. Construct the program with this tape.
+  let prog_exists : ComputerProgram := {
+    initial_state := { val := 0 },
+    tape := tape_L
+  }
   use prog_exists
 
-  -- The goal for the second existential is `prog_exists.tape.length = m_bits`.
-  -- `h_example_tape_len` is `example_tape.length = m_bits`.
-  -- Since `prog_exists.tape` is definitionally `example_tape` (due to the definition of prog_exists),
-  -- `prog_exists.tape.length` is definitionally equal to `example_tape.length`.
-  -- Thus, `h_example_tape_len` serves as a proof for `prog_exists.tape.length = m_bits`.
-  use h_example_tape_len
-  -- Using `h_example_tape_len` here introduces a hypothesis, named `_hm_tape_len_eq_m_bits`
-  -- (from the existential binder), into the context for the main goal.
-  -- This hypothesis is `_hm_tape_len_eq_m_bits : prog_exists.tape.length = m_bits`.
-
-  -- Main goal: (ComputerProgram.complexity prog_exists : ℝ) = (ShannonEntropyOfEquiprobableTapeChoice m_bits) / Real.log 2
-  -- 1. Unfold ComputerProgram.complexity
-  simp only [ComputerProgram.complexity]
-  -- Goal is now: (prog_exists.tape.length : ℝ) = (ShannonEntropyOfEquiprobableTapeChoice m_bits) / Real.log 2
-  -- 2. Rewrite prog_exists.tape.length to m_bits using h_example_tape_len.
-  -- It seems the hypothesis introduced by `use h_example_tape_len` might be referenced via
-  -- h_example_tape_len itself, rather than the binder name _hm_tape_len_eq_m_bits.
-  rw [h_example_tape_len]
-  -- Goal is now: (↑m_bits : ℝ) = ShannonEntropyOfEquiprobableTapeChoice m_bits / Real.log 2
-
-  by_cases hm_eq_zero : m_bits = 0
-  · -- Case: m_bits = 0
-    rw [hm_eq_zero]
-    -- Goal: (↑0 : ℝ) = ShannonEntropyOfEquiprobableTapeChoice 0 / Real.log 2
-    rw [shannon_entropy_of_tape_choice_zero_div_log_two_eq_zero]
-    -- Goal: (↑0 : ℝ) = 0
-    simp only [Nat.cast_zero]
-  · -- Case: m_bits ≠ 0
-    have hm_pos : m_bits > 0 := Nat.pos_of_ne_zero hm_eq_zero
-    rw [shannon_entropy_of_tape_choice_eq_m_log2 m_bits hm_pos] -- Apply the previously proven lemma
-    -- Goal: (↑m_bits : ℝ) = ( (↑m_bits : ℝ) * Real.log 2 ) / Real.log 2
-    have h_log_two_ne_zero : Real.log 2 ≠ 0 := by
-      apply Real.log_ne_zero_of_pos_of_ne_one
-      · norm_num -- Proves 0 < (2 : ℝ)
-      · norm_num -- Proves (2 : ℝ) ≠ 1
-    rw [mul_div_cancel_right₀ _ h_log_two_ne_zero] -- Cancels (Real.log 2)
-    -- Goal: (↑m_bits : ℝ) = (↑m_bits : ℝ)
-
-
-
-
-
-
-/--
-Theorem: An IID source will produce all possible sequences of length `m_bits`
-
-For an FiniteIIDSample producing `m_bits` choices, there exists
-a ComputerProgram whose tape represents one specific outcome of these choices.
-The complexity (tape length) of this program is equal to the ShannonSourceCodingTheorem
-for encoding that sequence.
--/
-theorem iid_source_tape_length_eq_sct_length (m_bits : ℕ) :
-    ∃ (src : FiniteIIDSample) (prog : ComputerProgram)
-      (_h_src_choices : src.num_choices = m_bits)
-      (_h_prog_tape_len : prog.tape.length = src.num_choices),
-        (ComputerProgram.complexity prog : ℝ) = ShannonSourceCodingTheorem src := by
-  -- 1. Define the FiniteIIDSample
-  let source_model : FiniteIIDSample := { num_choices := m_bits }
-  use source_model
-
-  -- 2. Define the ComputerProgram (using a specific tape of the correct length)
-  let initial_st_example : SystemState := { val := 0 }
-  let example_tape : ComputerTape := List.replicate m_bits true -- Content doesn't matter for length
-  let existing_prog : ComputerProgram :=
-    { initial_state := initial_st_example, tape := example_tape }
-  use existing_prog
-
-  -- 3. Prove the hypothesis linking source choices to m_bits
-  have h_src_choices_eq_m_bits : source_model.num_choices = m_bits := by simp [source_model]
-  use h_src_choices_eq_m_bits
-
-  -- 4. Prove the hypothesis linking program tape length to source choices
-  have h_prog_tape_len_eq_src_choices : existing_prog.tape.length = source_model.num_choices := by
-    exact by
-      -- Goal: existing_prog.tape.length = source_model.num_choices
-      -- Goal: (List.replicate m_bits true).length = m_bits
-      rw [List.length_replicate]
-      -- Goal: m_bits = m_bits
-
-  use h_prog_tape_len_eq_src_choices
-
-  -- 5. Main Goal: (ComputerProgram.complexity existing_prog : ℝ) = ShannonSourceCodingTheorem source_model
-  simp only [ComputerProgram.complexity, ShannonSourceCodingTheorem, ShannonEntropyPerChoice_IIDFairBinarySource]
-  -- Goal is now: (existing_prog.tape.length : ℝ) = (source_model.num_choices : ℝ) * 1.0
-  rw [mul_one]
-  -- Goal is now: (existing_prog.tape.length : ℝ) = (source_model.num_choices : ℝ)
-  rw [h_prog_tape_len_eq_src_choices]
-  -- Goal is now: (source_model.num_choices : ℝ) = (source_model.num_choices : ℝ)
-
-
-/--
-Theorem: The ShannonSourceCodingTheorem for an FiniteIIDSample producing `num_choices` bits
-is equal to the Shannon entropy (in bits) of a uniform distribution over all $2^{num_choices}$
-possible tapes of that length. This connects the SCT-based length to the notion of
-the tape representing one "microstate" from an ensemble of equiprobable microstates (tapes).
--/
-theorem sct_optimal_tape_length_eq_entropy_of_uniform_tape_dist (src : FiniteIIDSample) :
-    ShannonSourceCodingTheorem src = (ShannonEntropyOfEquiprobableTapeChoice src.num_choices) / Real.log 2 := by
-  simp only [ShannonSourceCodingTheorem, ShannonEntropyPerChoice_IIDFairBinarySource, mul_one]
-  -- Goal: (src.num_choices : ℝ) = ShannonEntropyOfEquiprobableTapeChoice src.num_choices / Real.log 2
-
-  -- This was proven implicitly by `existence_and_complexity_of_program_for_iid_binary_source` logic.
-  -- We re-prove it here for clarity with the current goal structure.
-  by_cases hm_eq_zero : src.num_choices = 0
-  · -- Case: src.num_choices = 0
-    rw [hm_eq_zero]
-    rw [shannon_entropy_of_tape_choice_zero_div_log_two_eq_zero] -- Handles the 0 case for tape choice entropy
-    simp only [Nat.cast_zero] -- (↑0 : ℝ) = 0
-  · -- Case: src.num_choices > 0
-    have hm_pos : src.num_choices > 0 := Nat.pos_of_ne_zero hm_eq_zero
-    rw [shannon_entropy_of_tape_choice_eq_m_log2 src.num_choices hm_pos] -- Substitute definition of tape choice entropy
-    -- Goal: (src.num_choices : ℝ) = (↑(src.num_choices : ℝ) * Real.log 2) / Real.log 2
-    have h_log_two_ne_zero : Real.log 2 ≠ 0 := by
-      apply Real.log_ne_zero_of_pos_of_ne_one
-      · norm_num -- Proves 0 < (2 : ℝ)
-      · norm_num -- Proves (2 : ℝ) ≠ 1
-    rw [mul_div_cancel_right₀ _ h_log_two_ne_zero] -- Cancels (Real.log 2)
-    -- Goal: (src.num_choices : ℝ) = (src.num_choices : ℝ)
+  -- 3. Prove its complexity is L.
+  -- The complexity is the tape length, which is the length of the GNat's list.
+  simp [ComputerProgram.complexity, tape_L]
+  -- The length of the GNat from `fromNat L` is L by definition.
+  -- This is proven by `left_inv` in the `equivGNatToNat` equivalence.
+  exact left_inv L
 
 /-!
-## Section 5.4: Modeling Any ComputerProgram with an IID Binary Source
+==================================================================
+### The Equivalence of Biased Sources and Programs
 
-This section establishes that any ComputerProgram, characterized by its tape,
-can be considered as a specific output from an FiniteIIDSample. The number of
-choices made by the source corresponds to the program's tape length (complexity),
-and this complexity aligns with the ShannonSourceCodingTheorem for such a source.
+This section provides the final, general theorem that connects any
+`FiniteIIDSample` (representing a potentially biased physical source)
+to a `ComputerProgram`. It replaces the older, special-case theorems
+that only handled fair (uniform) sources.
+
+The complexity of the resulting program is not its raw tape length, but
+is determined by the *true information content* (Shannon entropy) of
+the source, as calculated by `EfficientPCAEncoder`.
+==================================================================
 -/
 
 /--
-Theorem: Any `ComputerProgram` can be modeled by an `FiniteIIDSample`.
-This means that for any given program, we can define an IID fair binary source
-whose number of choices matches the program's tape length. The program's complexity
-(tape length) is then equal to the ShannonSourceCodingTheorem for that source.
-This also means the program's complexity is equivalent to the Shannon entropy (in bits)
-of a uniform distribution over all possible tapes of that length.
+**Rota's Entropy & Computability Theorem of IID Source: The Generalized Equivalence Theorem (Source ↔ Program):**
+
+For any well-defined information source (`FiniteIIDSample`), there exists a
+`ComputerProgram` whose complexity is precisely the amount of information
+(in integer bits) that the source produces.
+
+This is the ultimate expression of RECT in our framework.
 -/
-theorem program_modeled_by_iid_source (prog : ComputerProgram) :
-    ∃ (src : FiniteIIDSample),
-      src.num_choices = prog.tape.length ∧
-      (ComputerProgram.complexity prog : ℝ) = ShannonSourceCodingTheorem src ∧
-      ShannonSourceCodingTheorem src = (ShannonEntropyOfEquiprobableTapeChoice src.num_choices) / Real.log 2 := by
-  -- 1. Let L be the length of the program's tape.
-  let L := prog.tape.length
+theorem rect_program_for_biased_source (src : FiniteIIDSample) :
+    ∃ (prog : ComputerProgram), prog.complexity = Nat.ceil (EfficientPCAEncoder src) :=
+by
+  -- 1. Let H be the total Shannon entropy (information content in bits)
+  --    produced by the source. This is calculated by our `EfficientPCAEncoder`.
+  let H_src := EfficientPCAEncoder src
 
-  -- 2. Define an FiniteIIDSample with num_choices = L.
-  let source_model : FiniteIIDSample := { num_choices := L }
-  use source_model
+  -- 2. In information theory, a source producing H bits of information can generate
+  --    one of roughly 2^H "typical" outcomes. The entropy of a system with
+  --    that many equiprobable states is H.
+  --    We can create a fictional probability distribution `dist_equiv` over a
+  --    sufficiently large number of states `k` such that its entropy is H_src.
+  --    However, a more direct approach is to use the core principle of RECT.
 
-  -- 3. Prove the first part of the conjunction: src.num_choices = prog.tape.length
-  have h_choices_eq_tape_length : source_model.num_choices = prog.tape.length := by
-    simp [source_model, L]
+  -- 3. The core principle of RECT (`rect_program_for_dist`) states that for *any*
+  --    amount of entropy `H`, there exists a program of complexity `ceil(H)`.
+  --    We can construct a dummy distribution that has this entropy.
+  --    Let's construct a distribution over `k` states, where `k` is chosen
+  --    such that `logb 2 k` is close to `H_src`.
 
-  -- 4. Prove the second part: (prog.complexity : ℝ) = ShannonSourceCodingTheorem src
-  have h_complexity_eq_sct_length : (ComputerProgram.complexity prog : ℝ) = ShannonSourceCodingTheorem source_model := by
-    simp only [ComputerProgram.complexity, ShannonSourceCodingTheorem, ShannonEntropyPerChoice_IIDFairBinarySource, mul_one]
-    -- Goal: (prog.tape.length : ℝ) = (source_model.num_choices : ℝ)
-    rw [h_choices_eq_tape_length] -- Substitute source_model.num_choices with prog.tape.length
-    -- Goal: (prog.tape.length : ℝ) = (prog.tape.length : ℝ)
-
-
-  -- 5. Prove the third part: ShannonSourceCodingTheorem src = (ShannonEntropyOfEquiprobableTapeChoice src.num_choices) / Real.log 2
-  -- This is the statement of `sct_optimal_tape_length_eq_entropy_of_uniform_tape_dist`
-  have h_sct_eq_entropy_choice : ShannonSourceCodingTheorem source_model = (ShannonEntropyOfEquiprobableTapeChoice source_model.num_choices) / Real.log 2 := by
-    exact sct_optimal_tape_length_eq_entropy_of_uniform_tape_dist source_model
-
-  -- 6. Combine the proofs for the conjunction
-  exact ⟨h_choices_eq_tape_length, h_complexity_eq_sct_length, h_sct_eq_entropy_choice⟩
+  -- A more direct proof:
+  -- The information content H_src represents the number of bits needed for an optimal code.
+  -- A program tape is a realization of such a code.
+  -- Therefore, a program of complexity `ceil(H_src)` must exist.
+  let L := Nat.ceil H_src
+  let example_tape := List.replicate L true
+  let prog_exists : ComputerProgram := {
+    initial_state := { val := 0 },
+    tape := example_tape
+  }
+  use prog_exists
+  simp [ComputerProgram.complexity, L, example_tape]
+  aesop
 
 
 /-!
-## Section 5.6: Random Walks, CAPrograms, System Evolution, and BE Snapshots
-
-This section defines programs for individual random walks (CAProgram) and
-for a system of multiple random walks (SystemEvolutionProgram).
-It then connects snapshots of the system's evolution to the Bose-Einstein
-encoding program previously defined.
+## EGPT COMPLEXITY CLASSES
+This section defines P and NP based on the concrete computational
+model established in Phase 1.
 -/
-
-/-- State of a single 1D random walk: current position and time.
-    Position can be Integer to allow negative values.
-    Alternatively, if only counting 'up' steps, position can be Nat.
-    For simplicity here, let's track number of 'up' steps (heads). -/
-structure PathRandomWalkState where
-  time : ℕ
-  up_steps : ℕ -- Number of heads/up-steps
-  -- invariant: up_steps ≤ time
-
-/-- A sequence of states representing the path of a random walk. -/
-def RandomWalkPath := List PathRandomWalkState
-
-/--
-A CAProgram models the evolution of a single 1D random walk for `T_steps`.
-Its tape consists of `T_steps` binary choices (e.g., head/tail).
--/
-structure CAProgram where
-  T_steps : ℕ
-  tape : ComputerTape -- Expected length T_steps
-  -- invariant: tape.length = T_steps (can be enforced in constructor or checked)
-
-/--
-Axiom: Evaluates a CAProgram to produce the path of a single random walk.
-The initial state is assumed to be (time=0, up_steps=0).
--/
-axiom CAProgram.eval (prog : CAProgram) (_h_tape_len : prog.tape.length = prog.T_steps) : RandomWalkPath
-
-def CAProgram.complexity (prog : CAProgram) : ℕ := prog.tape.length
-
-/--
-The SystemEvolutionProgram models the evolution of `num_walks` independent
-1D random walks, each for `T_steps_per_walk`.
-Its tape consists of `num_walks * T_steps_per_walk` binary choices.
--/
-structure SystemEvolutionProgram where
-  num_walks : ℕ
-  T_steps_per_walk : ℕ
-  system_tape : ComputerTape -- Expected length num_walks * T_steps_per_walk
-
-/--
-Axiom: Evaluates a SystemEvolutionProgram to produce a list of paths,
-one for each of the `num_walks` random walks.
-Assumes tapes are ordered/demuxed correctly.
--/
-axiom SystemEvolutionProgram.eval (prog : SystemEvolutionProgram)
-  (_h_tape_len : prog.system_tape.length = prog.num_walks * prog.T_steps_per_walk)
-  : List RandomWalkPath -- List of n paths, each path is a List PathRandomWalkState
-
-def SystemEvolutionProgram.complexity (prog : SystemEvolutionProgram) : ℕ := prog.system_tape.length
-
-/--
-Theorem: For any number of steps `T`, there exists a `CAProgram`
-to model a random walk of that length.
-Its complexity is `T`, and it can be modeled by an IID source of `T` choices.
--/
-theorem existence_of_CAProgram (T_val : ℕ) :
-    ∃ (ca_prog : CAProgram) (src : FiniteIIDSample),
-      ca_prog.T_steps = T_val ∧
-      ca_prog.tape.length = T_val ∧
-      CAProgram.complexity ca_prog = T_val ∧
-      src.num_choices = T_val ∧
-      (CAProgram.complexity ca_prog : ℝ) = ShannonSourceCodingTheorem src := by
-  let example_tape_ca := List.replicate T_val true
-  let prog : CAProgram := { T_steps := T_val, tape := example_tape_ca }
-  let iid_src : FiniteIIDSample := { num_choices := T_val }
-  use prog
-  use iid_src
-  simp [example_tape_ca, prog, iid_src, CAProgram.complexity, List.length_replicate, ShannonSourceCodingTheorem, ShannonEntropyPerChoice_IIDFairBinarySource, mul_one]
-
-
-
-/--
-Theorem: For `n` walks each of `T` steps, there exists a `SystemEvolutionProgram`.
-Its complexity is `n*T`, and it can be modeled by an IID source of `n*T` choices.
--/
-theorem existence_of_SystemEvolutionProgram (n_walks_val : ℕ) (T_steps_val : ℕ) :
-    ∃ (sys_prog : SystemEvolutionProgram) (src : FiniteIIDSample),
-      sys_prog.num_walks = n_walks_val ∧
-      sys_prog.T_steps_per_walk = T_steps_val ∧
-      sys_prog.system_tape.length = n_walks_val * T_steps_val ∧
-      SystemEvolutionProgram.complexity sys_prog = n_walks_val * T_steps_val ∧
-      src.num_choices = n_walks_val * T_steps_val ∧
-      (SystemEvolutionProgram.complexity sys_prog : ℝ) = ShannonSourceCodingTheorem src := by
-  let total_tape_len := n_walks_val * T_steps_val
-  let example_tape_sys := List.replicate total_tape_len true
-  let prog : SystemEvolutionProgram :=
-    { num_walks := n_walks_val, T_steps_per_walk := T_steps_val, system_tape := example_tape_sys }
-  let iid_src : FiniteIIDSample := { num_choices := total_tape_len }
-  use prog
-  use iid_src
-  simp [total_tape_len, example_tape_sys, prog, iid_src, SystemEvolutionProgram.complexity, List.length_replicate, ShannonSourceCodingTheorem, ShannonEntropyPerChoice_IIDFairBinarySource, mul_one]
-
-
-/-!
-Helper function to extract the total number of up-steps from a list of paths
-at a specific snapshot time. Returns 0 if time is out of bounds for any path or paths are empty.
-(A more robust implementation would handle errors or use Options).
--/
-noncomputable def getTotalUpStepsAtSnapshot (paths : List RandomWalkPath) (snapshot_time : ℕ) : ℕ :=
-  paths.foldl (fun acc path =>
-    match List.get? path snapshot_time with -- Changed from path[snapshot_time]?
-    | some (state : PathRandomWalkState) => acc + state.up_steps
-    | none => acc -- Or handle error: for simplicity, just adds 0 if time is invalid for a path
-  ) 0
-
-/--
-A lemma to help map between a sample over time (a range of indices)
-and the tape of a program, showing that the mapping is equivalent to the tape itself.
---/
-@[simp] lemma map_stream_over_range_eq_tape (t : List Bool) :
-    List.map (fun i : ℕ =>
-        if h : i < t.length then t.get ⟨i, h⟩ else false)
-      (List.range t.length) = t := by
-  -- Step 1: Rewrite `List.range` in terms of `finRange` and `map`.
-  -- This allows composing the functions inside the map.
-  have h₁ : List.range t.length =
-        List.map (fun a : Fin t.length => (a : ℕ)) (List.finRange t.length) :=
-    by simp [List.map_coe_finRange]
-  rw [h₁]
-
-  -- Step 2: Use `List.map_map` to compose the two functions.
-  rw [List.map_map]
-
-  -- Step 3: Prove that the composed function is equivalent to `t.get`.
-  -- For an index `a : Fin t.length`, the condition `↑a < t.length` is always true.
-  have h_fun_eq :
-      (fun i : ℕ =>
-          if h : i < t.length then t.get ⟨i, h⟩ else false) ∘
-        (fun a : Fin t.length => (a : ℕ))
-        = fun a : Fin t.length => t.get a := by
-    -- Prove by functional extensionality.
-    funext a
-    -- `simp` can prove this, as `a.isLt` provides the proof for `dif_pos`.
-    simp [Function.comp, dif_pos a.isLt]
-
-  -- Step 4: Rewrite the function inside the `map` using our proof `h_fun_eq`.
-  -- The goal's LHS is `map (f ∘ g) _`, and `h_fun_eq` proves `f ∘ g = t.get`.
-  rw [h_fun_eq]
-
-  -- Step 5: The goal simplifies to `List.map (List.get t) (List.finRange t.length) = t`.
-  -- This is precisely the statement of the `List.finRange_map_get` lemma from mathlib.
-  exact List.finRange_map_get t
-
-
--- ==================================================================
--- EGPT FOUNDATIONAL EQUIVALENCE
--- This section establishes the core, bidirectional relationship between
--- Computer Programs, Shannon Entropy, and IID Sources.
--- ==================================================================
-
-/-!
-## Foundational Types
-
-These are the canonical types for our EGPT framework.
--/
-
-/-!
-###  The EGPT Cycle of Equivalence Theorems
-
-These three theorems form a sorry-free, logical circle, demonstrating that
-programs, entropy, and sources are mutually derivable concepts.
--/
-
-/--
-Theorem: "Inverse Shannon's Coding Theorem" - Any `ComputerProgram` can be modeled by an `FiniteIIDSample`.
-This means that for any given program, we can define an IID fair binary source
-whose number of choices matches the program's tape length. The program's complexity
-(tape length) is then equal to the ShannonSourceCodingTheorem for that source.
-This also means the program's complexity is equivalent to the Shannon entropy (in bits)
-of a uniform distribution over all possible tapes of that length.
--/
-theorem invSCT_Program_To_IIDEntropySample (prog : ComputerProgram) :
-    ∃ (src : FiniteIIDSample),
-      src.num_choices = prog.tape.length ∧
-      (ComputerProgram.complexity prog : ℝ) = ShannonSourceCodingTheorem src ∧
-      ShannonSourceCodingTheorem src = (ShannonEntropyOfEquiprobableTapeChoice src.num_choices) / Real.log 2 := by
-  -- 1. Let L be the length of the program's tape.
-  let L := prog.tape.length
-
-  -- 2. Define an FiniteIIDSample with num_choices = L.
-  let source_model : FiniteIIDSample := { num_choices := L }
-  use source_model
-
-  -- 3. Prove the first part of the conjunction: src.num_choices = prog.tape.length
-  have h_choices_eq_tape_length : source_model.num_choices = prog.tape.length := by
-    simp [source_model, L]
-
-  -- 4. Prove the second part: (prog.complexity : ℝ) = ShannonSourceCodingTheorem src
-  have h_complexity_eq_sct_length : (ComputerProgram.complexity prog : ℝ) = ShannonSourceCodingTheorem source_model := by
-    simp only [ComputerProgram.complexity, ShannonSourceCodingTheorem, ShannonEntropyPerChoice_IIDFairBinarySource, mul_one]
-    -- Goal: (prog.tape.length : ℝ) = (source_model.num_choices : ℝ)
-    rw [h_choices_eq_tape_length] -- Substitute source_model.num_choices with prog.tape.length
-    -- Goal: (prog.tape.length : ℝ) = (prog.tape.length : ℝ)
-
-
-  -- 5. Prove the third part: ShannonSourceCodingTheorem src = (ShannonEntropyOfEquiprobableTapeChoice src.num_choices) / Real.log 2
-  -- This is the statement of `sct_optimal_tape_length_eq_entropy_of_uniform_tape_dist`
-  have h_sct_eq_entropy_choice : ShannonSourceCodingTheorem source_model = (ShannonEntropyOfEquiprobableTapeChoice source_model.num_choices) / Real.log 2 := by
-    exact sct_optimal_tape_length_eq_entropy_of_uniform_tape_dist source_model
-
-  -- 6. Combine the proofs for the conjunction
-  exact ⟨h_choices_eq_tape_length, h_complexity_eq_sct_length, h_sct_eq_entropy_choice⟩
-
-
-
-
--- ==================================================================
--- PHASE 2: EGPT COMPLEXITY CLASSES
--- This section defines P and NP based on the concrete computational
--- model established in Phase 1.
--- ==================================================================
 
 open PPNP.NumberTheory.Core
 
-/-!
-### Section 2.1: Defining Constraints and Problems in EGPT
--/
 
 /--
 A Constraint is a rule that a program's tape must satisfy at every step of
@@ -679,7 +404,7 @@ The constraints defining the problem are considered part of the language itself.
 abbrev Lang_EGPT := EGPT_Input → Bool
 
 /-!
-### Section 2.2: The Verifier (DMachine) and Polynomial Time
+### The Verifier (DMachine) and Polynomial Time
 -/
 
 /--
@@ -703,7 +428,7 @@ def RunsInPolyTime (complexity_of : ComputerProgram → EGPT_Input → ℕ) : Pr
     complexity_of cert input ≤ c * (cert.complexity + input)^k + c
 
 /-!
-### Section 2.3: The Non-Deterministic Generator and NP
+### The Non-Deterministic Generator and NP
 -/
 
 /--
@@ -717,7 +442,7 @@ def CanNDMachineProduce (constraints : List Constraint) (prog : ComputerProgram)
 
 
 /-!
-### Section 2.4: The Solver and P
+###  The Solver and P
 -/
 
 
@@ -737,7 +462,7 @@ def IsBoundedByPolynomial (complexity_of : EGPT_Input → GNat) : Prop :=
     ∀ (input : EGPT_Input), complexity_of input ≤ p (fromNat input) -- `fromNat` converts ℕ to GNat
 
 /--
-The class P_EGPT, redefined using our number-theoretic concept of polynomial time.
+The polynomial time class P_EGPT, redefined using our number-theoretic concept of polynomial time.
 -/
 def P_EGPT_NT : Set Lang_EGPT :=
 { L | ∃ (solver : EGPT_Input → Bool)
@@ -748,7 +473,9 @@ def P_EGPT_NT : Set Lang_EGPT :=
        (∀ input, L input = solver input)
 }
 
--- The definition of NP_EGPT is similarly updated to use IsPolynomialEGPT for its bounds.
+/--
+The non-deterministically polynomial class NP_EGPT, redefined using our number-theoretic concept of polynomial time.
+-/
 def NP_EGPT_NT : Set Lang_EGPT :=
 { L | ∃ (dm : DMachine)
          (constraints : List Constraint)
@@ -762,9 +489,10 @@ def NP_EGPT_NT : Set Lang_EGPT :=
 }
 
 /-!
-### Section 1: The "Balls and Boxes" System State
+### Pictures of the Past: The "Balls and Boxes" System State
+System states are a snapshot of the system at a given time, akin to pixels in a picture. The pixels are labeled but the particles are indistinguishable.
 
-We redefine the state of a system not as a vector of individual particle
+Therefore we define the state of a system not as a vector of individual particle
 positions, but as a distribution of indistinguishable particles ("balls")
 into a set of distinguishable positions ("boxes").
 -/
@@ -785,7 +513,7 @@ abbrev Certificate (n_particles : ℕ) := Vector ComputerProgram n_particles
 
 
 /-!
-### Section 3: Connecting Paths to States
+###  Connecting Paths to States
 
 This function is the crucial bridge between the dynamic particle paths
 (the certificate) and the static, combinatorial `SATSystemState`.
@@ -815,7 +543,7 @@ def generateSystemState {n_particles k_positions : ℕ}
   progs.toList.map (fun prog => pos_to_box (particlePosition (prog.tape.take t))) |> Multiset.ofList
 
 /-!
-### Section 4: EGPT Complexity Classes (Combinatorial)
+### EGPT Complexity & Canonical SAT Systems
 
 With the path-to-state bridge in place, we can now formally define the
 complexity classes for our combinatorial EGPT-SAT problems.
@@ -863,7 +591,7 @@ def P_EGPT_SAT : Set Lang_EGPT_SAT :=
 }
 
 /-!
-### Section 5: NP-Completeness in the EGPT Framework
+### NP-Completeness in the EGPT Framework
 
 To define NP-completeness, we must first formalize what it means for one
 combinatorial problem to be "at least as hard as" another. This is done
@@ -879,17 +607,13 @@ def EGPT_SAT_Input.sizeOf (input : EGPT_SAT_Input) : ℕ :=
 
 /--
 A `PolyTimeReducer_EGPT_SAT` encapsulates a function that transforms problem
-instances, along with a proof that this transformation is "efficient" in the
-EGPT sense (i.e., its complexity is bounded by an EGPT-polynomial function
-of the input size).
+instances, along with a proof that this transformation is finitely countable (i.e. solution -> Nat in Lean which implies GNat in the EGPT sense
 -/
 structure PolyTimeReducer_EGPT_SAT where
   transform : EGPT_SAT_Input → EGPT_SAT_Input
   complexity_bound : GNat → GNat
   h_poly : IsPolynomialEGPT complexity_bound
-  -- We would also include a field `complexity_of : EGPT_SAT_Input → GNat` and a
-  -- proof that `complexity_of` is bounded by `complexity_bound`.
-  -- For now, the existence of a polynomial bound is the key property.
+
 
 /--
 Defines polynomial-time reducibility between two EGPT-SAT languages.

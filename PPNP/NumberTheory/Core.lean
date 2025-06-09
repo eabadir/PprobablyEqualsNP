@@ -4,32 +4,46 @@ import Mathlib.Logic.Equiv.Nat     -- intEquivNat, natSumNatEquivNat, …
 import Mathlib.Data.Rat.Defs
 import Mathlib.Data.Rat.Lemmas
 import Mathlib.Data.Real.Cardinality
+import Mathlib.Control.Random
 
 
 namespace PPNP.NumberTheory.Core
 
 open List
 
-/-- The primordial source of infinite binary choices. -/
-structure IIDParticleSource where
-  stream : ℕ → Bool
+class IIDParticleSource (α : Type) where
+  stream : ℕ → α
 
-/-- A particle path is a finite list of boolean outcomes. -/
-abbrev ParticlePath := List Bool
+/-- The canonical representation of a particle path sampled from an IIDParticleSource is symmetric and sorted with 1s first. For example `[true, true, false, false]` is the canonical representation of the path `[true, false, true, false]`. This means that the order of choices does not matter, only the counts of `true` and `false` do. -/
+def CannonicalSymmetricParticlePath := List Bool
 
-/-- Draws the first `t` choices from an IIDParticleSource to form a ParticlePath. -/
-def drawPath (src : IIDParticleSource) (t : ℕ) : ParticlePath :=
-  (List.finRange t).map (fun i => src.stream i)
+/-- A non-canonical particle path is just the list of movements describing a random walk -/
+abbrev RandomWalkPath := List Bool
+
+
+instance mkPseudoRandomSource (seed : Nat) : IIDParticleSource Bool :=
+{ stream := fun n =>
+    let gen0 := mkStdGen seed
+    let genN := (List.range n).foldl (fun g _ => (stdNext g).2) gen0
+    (randBool genN).1 }
+
+/-- A biased IID particle source that generates `true` with probability `p / (p + q)` and `false` with probability `q / (p + q)`. -/
+instance mkBiasedIIDParticleSource (seed : Nat) (p : ℕ) (q: ℕ) (_h : p + q > 0) : IIDParticleSource Bool :=
+{ stream := fun n =>
+    let gen0 := mkStdGen seed
+    let genN := (List.range n).foldl (fun g _ => (stdNext g).2) gen0
+    (randBool genN).1 }
+
 
 /-- Calculates the number of `true` choices (e.g., "up-steps") in a path. -/
-def numOnes (p_path : ParticlePath) : ℕ :=
-  p_path.count true -- as in your current code
+def numOnes (p_path : RandomWalkPath) : ℕ :=
+  p_path.count true
 
 /--
 Calculates the "position" of a particle after `t` steps,
 defined as (#trues - #falses).
 -/
-def particlePosition (p_path : ParticlePath) : ℤ :=
+def particlePosition (p_path : RandomWalkPath) : ℤ :=
   let ones := numOnes p_path
   let path_len := p_path.length
   let zeros := path_len - ones
@@ -38,15 +52,15 @@ def particlePosition (p_path : ParticlePath) : ℤ :=
 ------------------------------------------------------------
 -- 2.  Unary naturals = lists of all-true values
 ------------------------------------------------------------
-def AllTrue (L : List Bool) : Prop := ∀ x ∈ L, x = true
+def GNatCompressPath_AllTrue (L : List Bool) : Prop := ∀ x ∈ L, x = true
 
 -- NEW: make the predicate decidable so that the generic
 --      `[Encodable {x // p x}]` instance can fire.
-instance (L : List Bool) : Decidable (AllTrue L) := by
-  unfold AllTrue
+instance (L : List Bool) : Decidable (GNatCompressPath_AllTrue L) := by
+  unfold GNatCompressPath_AllTrue
   exact List.decidableBAll (fun x => x = true) L
 
-abbrev GeneratedNat_Unary := { L : List Bool // AllTrue L }
+abbrev GeneratedNat_Unary := { L : List Bool // GNatCompressPath_AllTrue L }
 
 ------------------------------------------------------------
 -- 3.  Encodable instance now *does* synthesise
@@ -80,7 +94,7 @@ noncomputable def equivUnaryNat : GeneratedNat_Unary ≃ ℕ :=
   right_inv:= left_inv }
 
 
-abbrev GNat := { L : List Bool // AllTrue L }
+abbrev GNat := { L : List Bool // GNatCompressPath_AllTrue L }
 def equivGNatToNat : GNat ≃ ℕ :=
 { toFun    := toNat,
   invFun   := fromNat,

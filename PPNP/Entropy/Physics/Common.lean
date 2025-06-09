@@ -33,6 +33,8 @@ namespace PPNP.Entropy.Physics.Common
 
 open PPNP.Entropy.Common
 
+
+
 -- Define the type for Macrostates (occupancy vectors summing to M)
 -- Needed for both MB and BE state space definitions
 def MBMacrostate (N M : ℕ) := { q : Fin N → ℕ // ∑ i, q i = M }
