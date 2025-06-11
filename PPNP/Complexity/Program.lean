@@ -38,7 +38,7 @@ structure ComputerProgram where
 
 /-!
 ==================================================================
-### Section 8: The Canonical Program and its Equivalence
+### The Canonical Program and its Equivalence
 
 This section formalizes the core EGPT insight: a "program" is not just a
 raw path, but is uniquely defined by its informationally significant outcome
@@ -636,3 +636,293 @@ def EGPT_NPComplete (L : Lang_EGPT_SAT) : Prop :=
   (L ∈ NP_EGPT_SAT) ∧
   -- Condition 2: The problem is NP-hard within our class.
   (∀ (L' : Lang_EGPT_SAT) (_hL' : L' ∈ NP_EGPT_SAT), L' <=p L)
+
+/-!
+==================================================================
+###  The EGPT Foundational Equivalence Cycle
+
+This section establishes the core, bidirectional relationships between the
+three fundamental concepts of EGPT: physical sources, information content,
+and computational programs. We provide canonical names for each direction
+of the equivalence.
+==================================================================
+-/
+
+-- === Type Aliases for Clarity ===
+
+/--
+An `InformationSource` is a physical or abstract process that generates
+choices with a given probability distribution. Alias for `FiniteIIDSample`.
+-/
+abbrev InformationSource := FiniteIIDSample
+
+/--
+`InformationContentR` is the measure of uncertainty or information in a Real valued system,
+quantified in bits. It is represented by a non-negative Real number.
+-/
+abbrev InformationContentR := ℝ
+
+/--
+A `ComputationalDescription` is a deterministic set of instructions that
+encodes the outcome of a process. Alias for `ComputerProgram`.
+-/
+abbrev ComputationalDescription := ComputerProgram
+
+
+-- === The Equivalence Theorems ===
+
+/-!
+###  IIDSource ↔ ShannonEntropy
+-/
+
+/--
+**SCT (Source Coding Theorem): An InformationSource has a quantifiable InformationContentR.**
+The total information produced by a source is its number of trials multiplied by the
+entropy per trial.
+-/
+noncomputable def SCT_Source_to_Entropy (src : InformationSource) : InformationContentR :=
+  EfficientPCAEncoder src
+
+/--
+**ISCT (Inverse Source Coding Theorem): Any InformationContentR can be modeled by a Source.**
+For any amount of information `H`, we can construct a source that produces it. This is
+achieved by creating a fair source (1 bit/trial) with `ceil(H)` trials.
+-/
+noncomputable def ISCT_Entropy_to_Source (H : InformationContentR) : InformationSource :=
+  let L := Nat.ceil H
+  { p_param := 1, q_param := 1, num_sub_samples := L, h_is_nontrivial := by norm_num }
+
+-- We can prove that ISCT is a valid inverse for SCT for integer information contents.
+theorem ISCT_SCT_inverse_for_integer_entropy (L : ℕ) :
+    SCT_Source_to_Entropy (ISCT_Entropy_to_Source (L : ℝ)) = (L : ℝ) :=
+by
+  simp [SCT_Source_to_Entropy, ISCT_Entropy_to_Source, EfficientPCAEncoder]
+  -- We need to prove shannonEntropyOfBiasedSource 1 1 = 1.
+  have h_entropy_one : shannonEntropyOfBiasedSource 1 1 (by norm_num) = 1 := by
+    -- Assuming shannonEntropyOfBiasedSource p q _ := ( (p/(p+q)).negMulLog + (q/(p+q)).negMulLog ) / Real.log 2
+    -- And Real.negMulLog x := -x * Real.log x for x > 0 (if x=0, then 0)
+    simp only [shannonEntropyOfBiasedSource, Real.negMulLog]
+
+    -- Simplify the fraction (↑1 / (↑1 + ↑1)) which appears as arguments to negMulLog.
+    have h_frac : (↑1 : ℝ) / (↑1 + ↑1) = (1/2 : ℝ) := by norm_num
+    -- The simp tactic below will use h_frac, simplify Real.negMulLog for 1/2,
+    -- apply Real.log_inv (which is a simp lemma) to Real.log (1/2),
+    -- and perform arithmetic simplification on the terms.
+    simp [h_frac]
+
+    -- Goal is now (2⁻¹ * Real.log 2 + 2⁻¹ * Real.log 2) / Real.log 2 = 1
+    -- Introduce hypothesis that Real.log 2 is non-zero for field_simp.
+    have h_log_nz : Real.log 2 ≠ 0 :=
+      Real.log_ne_zero_of_pos_of_ne_one (by norm_num) (by norm_num)
+
+    -- field_simp will simplify the numerator (2⁻¹ * X + 2⁻¹ * X) to X,
+    -- then X / X to 1, given X ≠ 0.
+    field_simp [h_log_nz]
+
+  rw [h_entropy_one, mul_one]
+
+/-!
+### ShannonEntropy ↔ ComputerProgram
+-/
+
+/--
+**RECT (Rota's Entropy & Computability Theorem): InformationContentR implies a Program.**
+For any amount of information `H`, there exists a program whose complexity
+(tape length) is the smallest integer number of bits that can represent `H`.
+-/
+theorem RECT_Entropy_to_Program (H : InformationContentR) :
+    ∃ (prog : ComputationalDescription), prog.complexity = Nat.ceil H :=
+by
+  let L := Nat.ceil H
+  use { initial_state := { val := 0 }, tape := List.replicate L true }
+  simp [ComputerProgram.complexity]
+  aesop
+
+/--
+**IRECT (Inverse RECT): A Program has an equivalent InformationContentR.**
+Any program of complexity `L` represents a single choice from an ensemble of
+`2^L` equiprobable states, which has an information content of `L` bits.
+-/
+noncomputable def IRECT_Program_to_Entropy (prog : ComputationalDescription) :
+InformationContentR :=
+  (prog.complexity : ℝ)
+
+-- The inverse relationship is definitional.
+theorem IRECT_RECT_inverse_for_integer_complexity (L : ℕ) :
+    ∃ (prog : ComputationalDescription),
+      IRECT_Program_to_Entropy prog = (L : ℝ) ∧ prog.complexity = L :=
+by
+  use { initial_state := { val := 0 }, tape := List.replicate L true }
+  simp [IRECT_Program_to_Entropy, ComputerProgram.complexity]
+
+/-!
+### IIDSource ↔ ComputerProgram (The Direct Bridge)
+-/
+
+/--
+**SCT → RECT Bridge: A Source implies a Program.**
+Any information source can be encoded by a program whose complexity matches the
+source's information content.
+-/
+theorem IID_Source_to_Program (src : InformationSource) :
+    ∃ (prog : ComputationalDescription), prog.complexity = Nat.ceil (SCT_Source_to_Entropy src) :=
+by
+  -- This is just applying RECT to the output of SCT.
+  exact RECT_Entropy_to_Program (SCT_Source_to_Entropy src)
+
+/--
+**IRECT → ISCT Bridge: A Program implies a Source.**
+Any program can be modeled as the output of an information source with equivalent
+information content.
+-/
+noncomputable def Program_to_IID_Source (prog : ComputationalDescription) : InformationSource :=
+  -- Apply IRECT, then ISCT.
+  ISCT_Entropy_to_Source (IRECT_Program_to_Entropy prog)
+
+-- Prove the consistency of the direct bridge.
+theorem program_source_complexity_matches (prog : ComputationalDescription) :
+    let src := Program_to_IID_Source prog
+    SCT_Source_to_Entropy src = IRECT_Program_to_Entropy prog :=
+by
+  -- Unfold definitions and use the previous inverse proof.
+  simp [Program_to_IID_Source, IRECT_Program_to_Entropy]
+  exact ISCT_SCT_inverse_for_integer_entropy prog.complexity
+
+/-!
+==================================================================
+### A Hierarchy of EGPT Problem Languages
+
+This section defines specific languages (sets of programs) within the EGPT framework. It allows us to formally distinguish between general programs, constraint-based programs, and SAT problems, all grounded in the same `GNat` representation.
+
+
+**Un-Axiomatizing Constraint Encoding**
+
+Instead of an `equivCNF_to_GNat` axiom we give a constructive
+proof. We achieve this by defining a *syntactic* data structure for CNF
+formulas, proving it can be bijectively encoded to a `GNat`, and then
+providing an interpreter that gives this syntax its semantic meaning within our "balls and boxes" model.
+==================================================================
+-/
+
+-- === Step 1: Define the Syntactic CNF Data Structures ===
+
+/--
+A `Literal_EGPT` represents a single literal (e.g., `xᵢ` or `¬xᵢ`).
+It pairs a box index with a polarity (true for positive, false for negative).
+-/
+structure Literal_EGPT (k_positions : ℕ) where
+  box_index : Fin k_positions
+  polarity  : Bool
+
+/-- Helper equivalence for `Literal_EGPT` to a product type. -/
+def Literal_EGPT.equivProd {k_positions : ℕ} : Literal_EGPT k_positions ≃ (Fin k_positions × Bool) :=
+{
+  toFun := fun lit => (lit.box_index, lit.polarity),
+  invFun := fun p => { box_index := p.1, polarity := p.2 },
+  left_inv := fun lit => by cases lit; simp,
+  right_inv := fun p => by cases p; simp
+}
+
+instance Literal_EGPT.encodable {k_positions : ℕ} : Encodable (Literal_EGPT k_positions) :=
+  Encodable.ofEquiv _ (Literal_EGPT.equivProd)
+
+/-- A `Clause_EGPT` is a list of literals, representing their disjunction. -/
+abbrev Clause_EGPT (k_positions : ℕ) := List (Literal_EGPT k_positions)
+
+/--
+A `SyntacticCNF_EGPT` is the data structure for a CNF formula, represented
+as a list of clauses.
+-/
+abbrev SyntacticCNF_EGPT (k_positions : ℕ) := List (Clause_EGPT k_positions)
+
+instance denumerable_SyntacticCNF_EGPT (k : ℕ) : Denumerable (SyntacticCNF_EGPT k) :=
+  Denumerable.ofEncodableOfInfinite (SyntacticCNF_EGPT k)
+
+-- === Step 2: Define the Provable Encoding (SyntacticCNF ≃ GNat) ===
+
+/-
+To encode a `SyntacticCNF_EGPT` as a `List Bool`, we need a canonical mapping.
+A simple example scheme:
+- Literal `(box_index, polarity)`: `(encode box_index) ++ [polarity]`
+- Clause `[L1, L2, ...]`: `(encode L1) ++ [false, true] ++ (encode L2) ++ ...` (using `[false, true]` as a separator)
+- CNF `[C1, C2, ...]`: `(encode C1) ++ [false, false, true] ++ (encode C2) ++ ...` (using a different separator)
+
+Mathlib's `Encodable` typeclass can build such an encoding automatically,
+since all our components (`List`, `Fin`, `Bool`) are encodable.
+-/
+
+/--
+**The New Equivalence (Un-Axiomatized):**
+There exists a computable bijection between the syntactic representation of a
+CNF formula and the `GNat` type. We state its existence via `Encodable`.
+-/
+noncomputable def equivSyntacticCNF_to_GNat {k : ℕ} : SyntacticCNF_EGPT k ≃ GNat :=
+  -- We use the power of Lean's typeclass synthesis for Denumerable types.
+  -- `List`, `Fin k`, and `Bool` are all denumerable, so their product and list
+  -- combinations are also denumerable. `GNat` is denumerable via its equiv to `ℕ`.
+  (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (equivGNatToNat.symm)
+
+-- === Step 3: Bridge from Syntax to Semantics (The Interpreter) ===
+
+/--
+`eval_literal` gives the semantic meaning of a syntactic literal.
+e.g., `(box_index:=i, polarity:=true)` means "is box i occupied?".
+-/
+def eval_literal {k : ℕ} (lit : Literal_EGPT k) (state : SATSystemState k) : Bool :=
+  if lit.polarity then
+    (state.count lit.box_index > 0) -- Positive literal: check for occupation
+  else
+    (state.count lit.box_index = 0) -- Negative literal: check for emptiness
+
+/--
+`eval_clause` gives the semantic meaning of a syntactic clause.
+A clause is true if at least one of its literals is true.
+-/
+def eval_clause {k : ℕ} (clause : Clause_EGPT k) : ClauseConstraint k :=
+  fun state => clause.any (fun lit => eval_literal lit state)
+
+/--
+`eval_syntactic_cnf` is the main interpreter. It converts a syntactic CNF data
+structure into the semantic `CNF_Formula` (a list of predicate functions).
+-/
+def eval_syntactic_cnf {k : ℕ} (syn_cnf : SyntacticCNF_EGPT k) : CNF_Formula k :=
+  syn_cnf.map eval_clause
+
+-- === Updated Language Definitions ===
+
+
+/--
+A `ProgramProblem` is the language of all validly encoded computer programs.
+For now, we can consider this to be the set of all `GNat`s, as every `GNat`
+can be interpreted as the tape of some program.
+-/
+abbrev ProgramProblem : Set GNat := Set.univ
+
+/--
+**REVISED `CNFProgram`:** The language of programs (`GNat`s) that are valid
+encodings of a *syntactic* CNF formula. This is now fully constructive.
+-/
+def CNFProgram {k : ℕ} : Set GNat :=
+  { gnat | ∃ (s : SyntacticCNF_EGPT k), equivSyntacticCNF_to_GNat.symm gnat = s }
+
+/--
+A `StateCheckProgram` is a specific kind of `CNFProgram` that represents
+constraints on final system states. This is conceptually equivalent to
+`CNFProgram` in our "balls and boxes" model, as our constraints are already
+defined on `SATSystemState`s.
+-/
+abbrev StateCheckProgram {k : ℕ} : Set GNat := CNFProgram (k := k)
+
+
+
+-- === Program Composition ===
+
+/--
+**CompositeProgram (Addition of Programs):**
+A `CompositeProgram` is formed by the EGPT addition of two `GNat`s, where
+one represents a general program and the other represents a set of constraints.
+This is a polynomial-time operation.
+-/
+def CompositeProgram (prog_gnat : GNat) (constraint_gnat : GNat) : GNat :=
+  -- GNat addition is a polynomial-time operation in EGPT.
+  add_gnat prog_gnat constraint_gnat
