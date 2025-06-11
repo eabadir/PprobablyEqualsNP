@@ -338,8 +338,31 @@ noncomputable def fromRat (q_in : ℚ) : Σ k : ℕ, GeneratedRat_PCA k :=
             _ ≤ all_k_vectors.length := h_len_ge_pq
 
     events_disjoint := by
-      -- The finsets are disjoint because their underlying lists are disjoint.
-      simp [disjoint_iff, List.disjoint_take_drop]
+      -- Disjointness follows from `List.disjoint_take_drop` applied to the
+      -- master list `all_k_vectors`.  We transfer that fact to the two
+      -- `Finset`s obtained from the list slices.
+      apply Finset.disjoint_left.mpr
+      intro v hv_heads hv_tails
+      -- Convert finset membership to list membership.
+      have hv_heads_list : v ∈ List.take p all_k_vectors := by
+        simpa [List.mem_toFinset] using hv_heads
+      have hv_tails_list : v ∈ List.take q (List.drop p all_k_vectors) := by
+        simpa [List.mem_toFinset] using hv_tails
+      -- Membership in the `tails` slice implies membership in the full `drop p` suffix.
+      have hv_drop : v ∈ List.drop p all_k_vectors :=
+        List.mem_of_mem_take hv_tails_list
+      -- Use disjointness of the two list segments, which follows from the fact
+      -- that `all_k_vectors` is duplicate‑free (`Nodup`).
+      have h_nodup : all_k_vectors.Nodup := by
+        -- `toList` of a `Finset` is always `Nodup`.
+        simpa [all_k_vectors] using
+          (Finset.nodup_toList (Finset.univ : Finset (Vector Bool k)))
+      -- `List.disjoint_take_drop` needs that `Nodup` hypothesis.
+      have h_disjoint :
+          List.Disjoint (List.take p all_k_vectors) (List.drop p all_k_vectors) :=
+        List.disjoint_take_drop (l := all_k_vectors) (m := p) (n := p) h_nodup (le_rfl)
+      -- Convert the disjointness lemma into the usable `disjoint_left` form.
+      aesop
   }⟩
 
 -- The equivalence now relates the dependent pair `Σ k : ℕ, GeneratedRat_PCA k` to `ℚ`.
