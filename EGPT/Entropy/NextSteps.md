@@ -7,7 +7,7 @@
 
 This section outlines the development roadmap for achieving a `sorry`-free (or minimally `sorry`'d, with `sorry`s restricted to standard, unformalized mathematical facts or highly complex probability theory) formalization in Lean 4. The primary objective is to rigorously prove the classical computability of physical systems governed by Bose-Einstein (BE) statistics. This is achieved by first proving the general classical computability of any Uniformly Distributed System (UDS), and then demonstrating that BE systems are an instance of a UDS. This computability involves the existence of an efficient classical computational program whose outputs (representing system states) are generated according to the system's defined uniform probability distribution, and whose individual structural validity can be efficiently verified. This framework provides a formal counterargument to strong interpretations of wave-particle duality.
 
-The formalization leverages existing components from the `PPNP` (Physics, Probability, and Number Puzzles) project and `Mathlib`.
+The formalization leverages existing components from the `EGPT` (Physics, Probability, and Number Puzzles) project and `Mathlib`.
 
 Okay, here's a self-contained explanation of the thinking and motivation behind the `General_UDS_Is_ClassicallyComputable_and_Verified` approach and the UDS → INV_SCT → IID_Binary_Source_Spec → RECT → ClassicalComputerProgram chain, aimed at an experienced Lean 4 programmer or computer scientist.
 
@@ -21,7 +21,7 @@ A central question at the intersection of physics, information theory, and compu
 
 Our strategy hinges on Rota's Entropy Theorem (RET), which provides a unique, axiomatic definition of entropy. We leverage RET to demonstrate that systems described by uniform probability distributions—the bedrock of statistical mechanics for many systems like Bose-Einstein (BE), Fermi-Dirac (FD), and Maxwell-Boltzmann (MB) statistics—are not only characterized by Shannon-type entropy but are also *mandated* to be classically computable.
 
-We have successfully navigated from an abstract, axiomatic framework to a highly sophisticated, concrete, and self-contained EGPT framework. The consolidation of code into `PPNP.Complexity.Program` and `PPNP.Entropy.Common` is a major milestone.
+We have successfully navigated from an abstract, axiomatic framework to a highly sophisticated, concrete, and self-contained EGPT framework. The consolidation of code into `EGPT.Complexity` and `EGPT.Entropy.Common` is a major milestone.
 
 Let's break down the journey, the current state of the architecture, and the clear path forward to completing the proofs in the `Sketches/` folder.
 
@@ -37,43 +37,43 @@ The objective was to replace this axiomatic foundation with a "sorry-free" frame
 
 The evolution of the code reflects a deepening understanding of the EGPT philosophy. Here are the key revisions in the order we made them:
 
-1.  **From Abstract to Concrete (`ComputerProgram`)**: We replaced abstract `Word`s and `Machine`s with the concrete `ComputerProgram` structure, whose core identity is its `tape : List Bool`. Complexity was grounded as `tape.length`.
+1.  **From Abstract to Concrete (`PathProgram`)**: We replaced abstract `Word`s and `Machine`s with the concrete `PathProgram` structure, whose core identity is its `tape : List Bool`. Complexity was grounded as `tape.length`.
 
 2.  **From Uniform to General (`rect_program_for_dist`)**: We realized that real physical systems are not always equiprobable. We generalized the framework by:
     *   Introducing `FiniteIIDSample` with `p`/`q` parameters to model biased sources.
     *   Defining `shannonEntropyOfBiasedSource` to correctly calculate the information content of these sources.
-    *   Proving the generalized **`rect_program_for_dist`**, which connects *any* discrete probability distribution to an equivalent `ComputerProgram`. This was a major leap in power and applicability.
+    *   Proving the generalized **`rect_program_for_dist`**, which connects *any* discrete probability distribution to an equivalent `PathProgram`. This was a major leap in power and applicability.
 
 3.  **From Ad-Hoc to Combinatorial SAT (`SATSystemState`)**: We refined the concept of an NP-complete problem. Instead of an abstract `Circuit`, we defined the "balls and boxes" model:
     *   `SATSystemState := Multiset (Fin k_positions)` captures the state of indistinguishable particles.
     *   `ClauseConstraint` represents a physical law as a predicate on these distributions.
     *   This grounded NP problems in the well-understood language of combinatorics and statistical physics.
 
-4.  **From External to Native Polynomial Time (`IsPolynomialEGPT`)**: A crucial insight was to stop borrowing the `c * n^k` definition of polynomial time. We defined `IsPolynomialEGPT` based on the theory's own `GNat` arithmetic from `NumberTheory.Core`. This made the framework truly self-contained, defining "efficiency" from its own primitives.
+4.  **From External to Native Polynomial Time (`IsPolynomialEGPT`)**: A crucial insight was to stop borrowing the `c * n^k` definition of polynomial time. We defined `IsPolynomialEGPT` based on the theory's own `ParticlePath` arithmetic from `NumberTheory.Core`. This made the framework truly self-contained, defining "efficiency" from its own primitives.
 
-5.  **From Ambiguous to Canonical Programs (`equivProgramToCanonicalInfo`)**: Our final and most elegant refinement. We recognized that a program is uniquely defined by its `initial_state` and its `tape`. By formalizing this as the pair `(GeneratedInt_PCA, ComputerTape)`, we created a **true, sorry-free bijection** between the program and the information it represents. This resolved all ambiguities and provides a rock-solid, definitive foundation.
+5.  **From Ambiguous to Canonical Programs (`equivProgramToCanonicalInfo`)**: Our final and most elegant refinement. We recognized that a program is uniquely defined by its `initial_state` and its `tape`. By formalizing this as the pair `(ChargedParticlePath, ComputerTape)`, we created a **true, sorry-free bijection** between the program and the information it represents. This resolved all ambiguities and provides a rock-solid, definitive foundation.
 
 ### **III. Conceptual Overview of the New Framework**
 
 The new architecture is a cohesive, three-layer stack where each layer builds upon the one below it.
 
-*   **Layer 1: The Number System (`PPNP.NumberTheory.Core`)**
+*   **Layer 1: The Number System (`EGPT.NumberTheory.Core`)**
     *   **Concept:** The foundation of reality and computation is counting.
-    *   **Implementation:** `GNat` (`List Bool`) is the unary representation of natural numbers. This is the "atom" of complexity. `GeneratedInt_PCA` (`GNat × sign`) and `GeneratedReal_PCA` (`GNat → Bool`) build integers and the continuum from this atom.
-    *   **Role:** Provides the fundamental data types and the crucial distinction between polynomial (countable `GNat` operations) and exponential (uncountable `GeneratedReal_PCA` operations).
+    *   **Implementation:** `ParticlePath` (`List Bool`) is the unary representation of natural numbers. This is the "atom" of complexity. `ChargedParticlePath` (`ParticlePath × sign`) and `ParticleSystemPDF` (`ParticlePath → Bool`) build integers and the continuum from this atom.
+    *   **Role:** Provides the fundamental data types and the crucial distinction between polynomial (countable `ParticlePath` operations) and exponential (uncountable `ParticleSystemPDF` operations).
 
-*   **Layer 2: The EGPT Machine (`PPNP.Complexity.Program`)**
+*   **Layer 2: The EGPT Machine (`EGPT.Complexity`)**
     *   **Concept:** Computation is a physical process defined by a starting point and a path.
     *   **Implementation:** `CanonicalComputerProgram` is the definitive program type, bundling an initial state and a tape. The `equivProgramToCanonicalInfo` proves its soundness. The complexity classes (`P_EGPT_SAT`, `NP_EGPT_SAT`, `EGPT_NPComplete`) are defined using these concrete types and the native `IsPolynomialEGPT` notion of efficiency. The "balls and boxes" (`SATSystemState`) model provides the link to physics.
     *   **Role:** Provides the concrete machinery for defining and classifying computational problems within the physical EGPT world.
 
-*   **Layer 3: The Physics Interface (`PPNP.Entropy.Common`)**
+*   **Layer 3: The Physics Interface (`EGPT.Entropy.Common`)**
     *   **Concept:** Physics systems are information sources whose information content can be measured by entropy.
     *   **Implementation:** `FiniteIIDSample` models any discrete information source. `ShannonEntropyOfDist` provides the universal measure of its information content in bits.
-    *   **Role:** Provides the bridge from any physical system to the EGPT machine. The key theorem, **`rect_program_for_dist`**, guarantees that for any physical system with a given entropy `H`, a `ComputerProgram` of complexity `ceil(H)` exists.
+    *   **Role:** Provides the bridge from any physical system to the EGPT machine. The key theorem, **`rect_program_for_dist`**, guarantees that for any physical system with a given entropy `H`, a `PathProgram` of complexity `ceil(H)` exists.
 
 **How they Interrelate:**
-`NumberTheory` provides the atoms (bits as `GNat`s). `Complexity` assembles these atoms into programs and problems. `Entropy` provides the universal "ruler" to measure any physical system and state its equivalent size in those same atoms.
+`NumberTheory` provides the atoms (bits as `ParticlePath`s). `Complexity` assembles these atoms into programs and problems. `Entropy` provides the universal "ruler" to measure any physical system and state its equivalent size in those same atoms.
 
 ---
 Excellent. This is the final and most important phase: migrating the high-level proof sketches into the new, rigorous EGPT framework. The goal is to replace every `axiom` and abstract `Lang` with concrete, sorry-free EGPT definitions and theorems.
@@ -100,13 +100,13 @@ The plan is to rewrite `PequalsNP.lean` from the ground up using our new, concre
 
 #### **Phase 3.A: Defining the Core Problem in EGPT**
 
-**Action:** In a new `PPNP.Problems.BoseEinstein.lean` file (or directly in `PequalsNP.lean`), we will define the Bose-Einstein decision problem using our `Lang_EGPT_SAT` type.
+**Action:** In a new `EGPT.Problems.BoseEinstein.lean` file (or directly in `PequalsNP.lean`), we will define the Bose-Einstein decision problem using our `Lang_EGPT_SAT` type.
 
 | File | Item | Action | New/Revised Definition |
 | :--- | :--- | :--- | :--- |
-| `PPNP.Problems.BoseEinstein` | **BE Input** | **New** | `structure BE_Input where N M : ℕ, threshold : ℝ` |
-| `PPNP.Problems.BoseEinstein` | **BE Language** | **New** | `def BoseEinsteinDecisionProblem : (BE_Input → Bool) := fun i => H_BE(i.N, i.M) ≥ i.threshold` where `H_BE(N, M) := Real.logb 2 (Nat.multichoose N M)` |
-| `PPNP.Problems.BoseEinstein` | **BE in P** | **New Proof** | `theorem boseEinsteinDecisionProblem_in_P_EGPT_NT` |
+| `EGPT.Problems.BoseEinstein` | **BE Input** | **New** | `structure BE_Input where N M : ℕ, threshold : ℝ` |
+| `EGPT.Problems.BoseEinstein` | **BE Language** | **New** | `def BoseEinsteinDecisionProblem : (BE_Input → Bool) := fun i => H_BE(i.N, i.M) ≥ i.threshold` where `H_BE(N, M) := Real.logb 2 (Nat.multichoose N M)` |
+| `EGPT.Problems.BoseEinstein` | **BE in P** | **New Proof** | `theorem boseEinsteinDecisionProblem_in_P_EGPT_NT` |
 
 **Proof Plan for `boseEinsteinDecisionProblem_in_P_EGPT_NT`:**
 1.  The input is `(N, M, threshold)`. The size of the input is related to `N` and `M`.
@@ -119,9 +119,9 @@ The plan is to rewrite `PequalsNP.lean` from the ground up using our new, concre
 
 | File | Item | Action | New/Revised Definition |
 | :--- | :--- | :--- | :--- |
-| `PPNP.Problems.BoseEinstein` | **Membership in NP** | **New Proof** | `theorem boseEinsteinDecisionProblem_in_NP_EGPT_SAT` |
-| `PPNP.Problems.BoseEinstein` | **NP-Hardness** | **New (Axiomatized) Reduction** | `axiom SAT_reduces_to_BE_EGPT : ∀ (L : Lang_EGPT_SAT), L ∈ NP_EGPT_SAT → L <=p BoseEinsteinDecisionProblem` |
-| `PPNP.Problems.BoseEinstein` | **NP-Completeness** | **New Proof** | `theorem boseEinstein_is_EGPT_NPComplete : EGPT_NPComplete BoseEinsteinDecisionProblem` |
+| `EGPT.Problems.BoseEinstein` | **Membership in NP** | **New Proof** | `theorem boseEinsteinDecisionProblem_in_NP_EGPT_SAT` |
+| `EGPT.Problems.BoseEinstein` | **NP-Hardness** | **New (Axiomatized) Reduction** | `axiom SAT_reduces_to_BE_EGPT : ∀ (L : Lang_EGPT_SAT), L ∈ NP_EGPT_SAT → L <=p BoseEinsteinDecisionProblem` |
+| `EGPT.Problems.BoseEinstein` | **NP-Completeness** | **New Proof** | `theorem boseEinstein_is_EGPT_NPComplete : EGPT_NPComplete BoseEinsteinDecisionProblem` |
 
 **Proof Plan for Membership in NP:**
 *   A certificate would be a `SATSystemState` (a multiset).
@@ -153,7 +153,7 @@ The `SAT_reduces_to_BE_EGPT` axiom is the formal EGPT version of `SAT_reduces_to
 
 | Old Concept (in Sketches/Basic/RET) | New EGPT Concept | Action | Justification |
 | :--- | :--- | :--- | :--- |
-| `Lang`, `Word`, `Machine` | `Lang_EGPT_SAT`, `ComputerProgram` | **Replace** | Ground abstract types in concrete EGPT structures. |
+| `Lang`, `Word`, `Machine` | `Lang_EGPT_SAT`, `PathProgram` | **Replace** | Ground abstract types in concrete EGPT structures. |
 | `PolyTimeReducible` | `PolyTimeReducible_EGPT_SAT` | **Replace** | Ground reducibility in the EGPT framework. |
 | `NPComplete` | `EGPT_NPComplete` | **Replace** | Define NP-completeness within the EGPT class `NP_EGPT_SAT`. |
 | `P`, `NP` | `P_EGPT_SAT`, `NP_EGPT_SAT` | **Replace** | Use the new classes based on EGPT-native polynomial time. |

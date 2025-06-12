@@ -7,27 +7,27 @@ import Mathlib.Tactic.Sat.FromLRAT
 import Mathlib.Data.List.Range
 import Mathlib.Data.List.FinRange
 
-import PPNP.NumberTheory.Core
-import PPNP.Common.Basic
-import PPNP.Entropy.Common
-import PPNP.Complexity.Program
+import EGPT.NumberTheory.Core
+import EGPT.Common.Basic
+import EGPT.Entropy.Common
+import EGPT.Complexity.Core
 import Mathlib.Logic.Encodable.Basic
 import Mathlib.Logic.Denumerable
 
-open PPNP.Entropy.Common PPNP.Complexity.Program PPNP.NumberTheory.Core
+open EGPT.Entropy.Common EGPT.Complexity EGPT.NumberTheory.Core
 
 /-!
 ==================================================================
 ### A Hierarchy of EGPT Problem Languages
 
-This section defines specific languages (sets of programs) within the EGPT framework. It allows us to formally distinguish between general programs, constraint-based programs, and SAT problems, all grounded in the same `GNat` representation.
+This section defines specific languages (sets of programs) within the EGPT framework. It allows us to formally distinguish between general programs, constraint-based programs, and SAT problems, all grounded in the same `ParticlePath` representation.
 
 
 **Un-Axiomatizing Constraint Encoding**
 
 Instead of an `equivCNF_to_GNat` axiom we give a constructive
 proof. We achieve this by defining a *syntactic* data structure for CNF
-formulas, proving it can be bijectively encoded to a `GNat`, and then
+formulas, proving it can be bijectively encoded to a `ParticlePath`, and then
 providing an interpreter that gives this syntax its semantic meaning within our "balls and boxes" model.
 ==================================================================
 -/
@@ -66,7 +66,7 @@ abbrev SyntacticCNF_EGPT (k_positions : ℕ) := List (Clause_EGPT k_positions)
 instance denumerable_SyntacticCNF_EGPT (k : ℕ) : Denumerable (SyntacticCNF_EGPT k) :=
   Denumerable.ofEncodableOfInfinite (SyntacticCNF_EGPT k)
 
--- === Step 2: Define the Provable Encoding (SyntacticCNF ≃ GNat) ===
+-- === Step 2: Define the Provable Encoding (SyntacticCNF ≃ ParticlePath) ===
 
 /-
 To encode a `SyntacticCNF_EGPT` as a `List Bool`, we need a canonical mapping.
@@ -82,13 +82,13 @@ since all our components (`List`, `Fin`, `Bool`) are encodable.
 /--
 **The New Equivalence (Un-Axiomatized):**
 There exists a computable bijection between the syntactic representation of a
-CNF formula and the `GNat` type. We state its existence via `Encodable`.
+CNF formula and the `ParticlePath` type. We state its existence via `Encodable`.
 -/
-noncomputable def equivSyntacticCNF_to_GNat {k : ℕ} : SyntacticCNF_EGPT k ≃ GNat :=
+noncomputable def equivSyntacticCNF_to_GNat {k : ℕ} : SyntacticCNF_EGPT k ≃ ParticlePath :=
   -- We use the power of Lean's typeclass synthesis for Denumerable types.
   -- `List`, `Fin k`, and `Bool` are all denumerable, so their product and list
-  -- combinations are also denumerable. `GNat` is denumerable via its equiv to `ℕ`.
-  (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (equivGNatToNat.symm)
+  -- combinations are also denumerable. `ParticlePath` is denumerable via its equiv to `ℕ`.
+  (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (equivParticlePathToNat.symm)
 
 -- === Step 3: Bridge from Syntax to Semantics (The Interpreter) ===
 
@@ -121,16 +121,16 @@ def eval_syntactic_cnf {k : ℕ} (syn_cnf : SyntacticCNF_EGPT k) : CNF_Formula k
 
 /--
 A `ProgramProblem` is the language of all validly encoded computer programs.
-For now, we can consider this to be the set of all `GNat`s, as every `GNat`
+For now, we can consider this to be the set of all `ParticlePath`s, as every `ParticlePath`
 can be interpreted as the tape of some program.
 -/
-abbrev ProgramProblem : Set GNat := Set.univ
+abbrev ProgramProblem : Set ParticlePath := Set.univ
 
 /--
-**REVISED `CNFProgram`:** The language of programs (`GNat`s) that are valid
+**REVISED `CNFProgram`:** The language of programs (`ParticlePath`s) that are valid
 encodings of a *syntactic* CNF formula. This is now fully constructive.
 -/
-def CNFProgram {k : ℕ} : Set GNat :=
+def CNFProgram {k : ℕ} : Set ParticlePath :=
   { gnat | ∃ (s : SyntacticCNF_EGPT k), equivSyntacticCNF_to_GNat.symm gnat = s }
 
 /--
@@ -139,7 +139,7 @@ constraints on final system states. This is conceptually equivalent to
 `CNFProgram` in our "balls and boxes" model, as our constraints are already
 defined on `SATSystemState`s.
 -/
-abbrev StateCheckProgram {k : ℕ} : Set GNat := CNFProgram (k := k)
+abbrev StateCheckProgram {k : ℕ} : Set ParticlePath := CNFProgram (k := k)
 
 
 
@@ -147,10 +147,10 @@ abbrev StateCheckProgram {k : ℕ} : Set GNat := CNFProgram (k := k)
 
 /--
 **CompositeProgram (Addition of Programs):**
-A `CompositeProgram` is formed by the EGPT addition of two `GNat`s, where
+A `CompositeProgram` is formed by the EGPT addition of two `ParticlePath`s, where
 one represents a general program and the other represents a set of constraints.
 This is a polynomial-time operation.
 -/
-def CompositeProgram (prog_gnat : GNat) (constraint_gnat : GNat) : GNat :=
-  -- GNat addition is a polynomial-time operation in EGPT.
-  add_gnat prog_gnat constraint_gnat
+def CompositeProgram (prog_gnat : ParticlePath) (constraint_gnat : ParticlePath) : ParticlePath :=
+  -- ParticlePath addition is a polynomial-time operation in EGPT.
+  add_ParticlePath prog_gnat constraint_gnat

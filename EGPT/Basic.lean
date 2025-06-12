@@ -26,7 +26,7 @@ import Mathlib.GroupTheory.Congruence.Basic
 -- Import previous definitions and theorems
 
 
-namespace PPNP.Common
+namespace EGPT
 
 open BigOperators Fin Real Topology NNReal Filter Nat Set
 

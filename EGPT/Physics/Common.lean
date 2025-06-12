@@ -26,12 +26,12 @@ import Mathlib.Data.Nat.Basic -- Basic Nat properties
 import Mathlib.Data.Multiset.Bind
 import Mathlib.Data.Multiset.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import PPNP.Entropy.Common
-import PPNP.Common.Basic
+import EGPT.Entropy.Common
+import EGPT.Core
 
-namespace PPNP.Entropy.Physics.Common
+namespace EGPT.Physics.Common
 
-open PPNP.Entropy.Common
+open EGPT.Entropy.Common
 
 
 
@@ -81,7 +81,7 @@ noncomputable def H_physical_system_uniform_only_calc (k : ℕ) (hk_ge1 : k ≥ 
   if _hk_eq_1 : k = 1 then
     0 -- H(uniform_1) = C * log 1 = 0
   else
-    C_physical_NNReal * PPNP.Common.RealLogNatToNNReal k hk_ge1
+    C_physical_NNReal * EGPT.RealLogNatToNNReal k hk_ge1
 
 
 /--
@@ -112,7 +112,7 @@ noncomputable def H_physical_system {α : Type} [Fintype α] (p : α → NNReal)
 
 noncomputable def eval_H_phys_system_on_fin_dist_to_real
     {k : ℕ} (p_dist : Fin k → NNReal) : ℝ :=
-  (PPNP.Entropy.Physics.Common.H_physical_system (α := Fin k) p_dist : ℝ)
+  (EGPT.Physics.Common.H_physical_system (α := Fin k) p_dist : ℝ)
 
 
 -- Helper lemma from previous step (or ensure it's available)

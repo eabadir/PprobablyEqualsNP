@@ -21,7 +21,7 @@ The full computational ramifications of Rota's work may have been historically u
 This project formalizes Rota's insights within the Lean 4 proof assistant, establishing and applying two central theorems:
 
 1.  **RUE (Rota's Uniqueness of Entropy Theorem):** *There is one and only one precise mathematical formulation for entropy that satisfies a set of fundamental, intuitive properties. This unique form is necessarily proportional to the standard Shannon Entropy function.*
-    (The formalization for uniform distributions is located in `PPNP.Entropy.RET.RotaUniformTheorem`).
+    (The formalization for uniform distributions is located in `EGPT.Entropy.RET.RotaUniformTheorem`).
 2.  **RECT (Rota's Entropy & Computability Theorem):** *For any system whose behavior is characterized by RUE-compliant entropy, there exists (constructively for uniform cases, existentially for general cases) an informationally equivalent i.i.d. (independent and identically distributed) source. By Shannon's Coding Theorem, a classical computer program simulating this i.i.d. source can be constructed whose computational complexity (defined as the number of fundamental i.i.d. choices processed) *is* its Shannon Entropy (in appropriate units).*
     (The formalization for i.i.d. binary sources and uniform system outputs forms the basis of subsequent sections).
 
@@ -49,12 +49,12 @@ Bose-Einstein statistics describe the distribution of indistinguishable particle
 Given $N_{particles}$ indistinguishable particles and $K_{boxes}$ distinguishable states, the total number of distinct BE microstates, $|\Omega_{BE}|$, is determined by the multichoose function:
 $|\Omega_{BE}| = \text{multichoose } K_{boxes} N_{particles} = \binom{K_{boxes} + N_{particles} - 1}{N_{particles}}$.
 
-The Lean 4 formalization of this cardinality is proven in `PPNP.Entropy.Physics.BoseEinstein.card_omega_be`. The postulate of equiprobability dictates that the probability of any specific BE microstate $\omega$ is $P(\omega) = 1 / |\Omega_{BE}|$.
+The Lean 4 formalization of this cardinality is proven in `EGPT.Physics.BoseEinstein.card_omega_be`. The postulate of equiprobability dictates that the probability of any specific BE microstate $\omega$ is $P(\omega) = 1 / |\Omega_{BE}|$.
 
 ### 1.2 Why This Focus: Implications for Other Physical Distributions
 
 The focus on the uniform distribution case, as exemplified by BE microstates, is a strategic choice:
-1.  **Direct Application of RUE (Uniform Case):** Rota's Uniqueness of Entropy theorem possesses a direct and mathematically simpler form for uniform distributions. This form has been fully formalized in `PPNP.Entropy.RET.RotaUniformTheorem`.
+1.  **Direct Application of RUE (Uniform Case):** Rota's Uniqueness of Entropy theorem possesses a direct and mathematically simpler form for uniform distributions. This form has been fully formalized in `EGPT.Entropy.RET.RotaUniformTheorem`.
 2.  **Relevance to Bosons/Photons:** BE statistics are fundamental to the physics of photons and other bosons. Demonstrating classical computability for BE statistics directly addresses phenomena central to discussions of wave-particle duality and quantum optics.
 3.  **Foundation for Extensibility:** The principles established for BE statistics, arising from their underlying uniform microstate distribution, are conceptually extendable. Other fundamental physical distributions, such as Maxwell-Boltzmann (MB) and Fermi-Dirac (FD), are also characterized by uniform probabilities over their respective valid microstate configurations. Consequently, proving the BE case provides a robust template and foundational formal components for subsequently addressing MB and FD systems.
 4.  **Minimum Path to Core Argument:** Proving the existence of an efficient, verifiable classical computational model for BE statistics constitutes the minimum necessary work to formally challenge the broadest interpretations of Feynman's "impossible to explain classically" assertion for a significant class of quantum statistical phenomena.
@@ -69,9 +69,9 @@ Rota's Uniqueness of Entropy Theorem (RUE) establishes the mathematical bedrock 
 
 ### 2.1 Rota's Axioms for Entropy Functions
 
-A function `H_func : (Fin k → NNReal) → NNReal` (which maps a probability distribution over $k$ discrete outcomes to a non-negative real number value) is defined as possessing Rota's entropy properties if it satisfies the axioms formally encapsulated by the Lean 4 structure `PPNP.Entropy.Common.HasRotaEntropyProperties`. These axioms are:
+A function `H_func : (Fin k → NNReal) → NNReal` (which maps a probability distribution over $k$ discrete outcomes to a non-negative real number value) is defined as possessing Rota's entropy properties if it satisfies the axioms formally encapsulated by the Lean 4 structure `EGPT.Entropy.Common.HasRotaEntropyProperties`. These axioms are:
 
-| Axiom Property             | Brief Description                                                         | Lean Structure in `PPNP.Entropy.Common` | Status |
+| Axiom Property             | Brief Description                                                         | Lean Structure in `EGPT.Entropy.Common` | Status |
 | :------------------------- | :------------------------------------------------------------------------ | :------------------------------------ | :----- |
 | Normalization              | Entropy of a certain outcome (1 state, probability 1) is 0.               | `IsEntropyNormalized H_func`          | Def    |
 | Symmetry                   | Entropy is invariant under relabeling/permutation of outcomes.            | `IsEntropySymmetric H_func`           | Def    |
@@ -81,7 +81,7 @@ A function `H_func : (Fin k → NNReal) → NNReal` (which maps a probability di
 | Maximality at Uniform      | Entropy is maximized for the uniform distribution over $k$ outcomes.      | `IsEntropyMaxUniform H_func`          | Def    |
 | **Overall Structure**      | Combines all above properties.                                            | `HasRotaEntropyProperties H_func`     | Def    |
 
-Any function that satisfies `HasRotaEntropyProperties` behaves as a consistent and logically sound measure of information or uncertainty. The specific function `PPNP.Entropy.Physics.Common.H_physical_system`, representing the entropy of physical systems in this project, is axiomatically asserted to satisfy `HasRotaEntropyProperties`.
+Any function that satisfies `HasRotaEntropyProperties` behaves as a consistent and logically sound measure of information or uncertainty. The specific function `EGPT.Physics.Common.H_physical_system`, representing the entropy of physical systems in this project, is axiomatically asserted to satisfy `HasRotaEntropyProperties`.
 
 ### 2.2 RUE Statement for Uniform Distributions
 
@@ -94,9 +94,9 @@ $(f_0(H_{func}, k) : \mathbb{R}) = C_H \cdot \text{Real.log } k$.
 
 ### 2.3 Lean 4 Formalization of RUE for Uniform Distributions
 
-The RUE for uniform distributions has been fully formalized and proven within the `PPNP.Entropy.RET` namespace in Lean 4.
+The RUE for uniform distributions has been fully formalized and proven within the `EGPT.Entropy.RET` namespace in Lean 4.
 
-| Lean Construct Name in `PPNP.Entropy.RET`     | Signature (Simplified)                                          | Brief Description                                                                   | Status   |
+| Lean Construct Name in `EGPT.Entropy.RET`     | Signature (Simplified)                                          | Brief Description                                                                   | Status   |
 | :-------------------------------------------- | :-------------------------------------------------------------- | :---------------------------------------------------------------------------------- | :------- |
 | `f0`                                          | `(hH : HasRotaEntropyProperties H_func) → ℕ → NNReal`        | Computes $H_{func}(\text{uniform on } k \text{ outcomes})$.                               | Def      |
 | `C_constant_real`                             | `(hH : HasRotaEntropyProperties H_func) → ℝ`                 | Defines the constant $C_H \equiv (f_0(hH, 2):\mathbb{R}) / \text{Real.log } 2$ (if $H$ non-trivial, else 0). | Def      |
@@ -105,7 +105,7 @@ The RUE for uniform distributions has been fully formalized and proven within th
 
 **Illustrative Usage within a Lean 4 Proof:**
 ```lean
-open PPNP.Entropy.RET PPNP.Entropy.Common Real
+open EGPT.Entropy.RET EGPT.Entropy.Common Real
 
 -- Given a physical system whose Rota-compliant entropy function is H_func_example
 -- and its properties proof h_H_example_is_rota
@@ -145,7 +145,7 @@ axiom ShannonCodingTheorem_Implies_OptimalBits
     {AlphabetType : Type} [Fintype AlphabetType] (P_source : AlphabetType → NNReal)
     (_h_P_sums_to_1 : Finset.sum Finset.univ P_source = 1) :
     ∃ (optimal_avg_bits : ℝ),
-      optimal_avg_bits = PPNP.Entropy.Common.stdShannonEntropyLn P_source / Real.log 2 :=
+      optimal_avg_bits = EGPT.Entropy.Common.stdShannonEntropyLn P_source / Real.log 2 :=
   sorry -- This is taken as an established result from information theory.
         -- Note: stdShannonEntropyLn uses natural log, so division by Real.log 2 converts to bits.
 ```
@@ -162,13 +162,13 @@ This theorem is formalized in Lean 4 by demonstrating that $f_0(H_{sys}, k)$ (de
 
 | Lean Construct Name                                          | Signature (Simplified)                                                                    | Brief Description                                                                 | Status   |
 | :------------------------------------------------------ | :---------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- | :------- |
-| `PPNP.Entropy.Common.uniformDist`                       | `(Fin k → NNReal)` (given `k>0`)                                                          | Defines the PMF $P(i) = 1/k$ for an i.i.d. source over $k$ outcomes.               | Def      |
-| `PPNP.Entropy.Common.stdShannonEntropyLn_uniform_eq_log_card` | `stdShannonEntropyLn (uniformDist _ k_proof) = Real.log (Fintype.card (Fin k))`         | Proves Shannon entropy (base $e$) of a uniform distribution is $\ln k$.             | Proved   |
+| `EGPT.Entropy.Common.uniformDist`                       | `(Fin k → NNReal)` (given `k>0`)                                                          | Defines the PMF $P(i) = 1/k$ for an i.i.d. source over $k$ outcomes.               | Def      |
+| `EGPT.Entropy.Common.stdShannonEntropyLn_uniform_eq_log_card` | `stdShannonEntropyLn (uniformDist _ k_proof) = Real.log (Fintype.card (Fin k))`         | Proves Shannon entropy (base $e$) of a uniform distribution is $\ln k$.             | Proved   |
 | `exists_equivalent_iid_source_for_uniform_distribution` | `(H_func, hH, k, hk_pos) → ∃ (src_alph, P_src, ...), f0 H k = C_H * stdShannonEntropyLn(P_src)` | Links Rota-entropy of a uniform system to an i.i.d. uniform source.                 | Proved   |
 
 **Lean 4 Proof Sketch for `exists_equivalent_iid_source_for_uniform_distribution`:**
 ```lean
-open PPNP.Entropy.RET PPNP.Entropy.Common Real Finset Fintype
+open EGPT.Entropy.RET EGPT.Entropy.Common Real Finset Fintype
 
 theorem exists_equivalent_iid_source_for_uniform_distribution_Sketch
     (H_func : ∀ {α_aux : Type} [Fintype α_aux], (α_aux → NNReal) → NNReal)
@@ -191,7 +191,7 @@ theorem exists_equivalent_iid_source_for_uniform_distribution_Sketch
   -- 2. Prove the properties of the constructed source:
   --    a) P_source is indeed this uniformDist and its alphabet cardinality is k_outcomes.
   --    b) P_source sums to 1.
-  --    (These proofs are straightforward using Mathlib and PPNP.Entropy.Common lemmas.)
+  --    (These proofs are straightforward using Mathlib and EGPT.Entropy.Common lemmas.)
   repeat { constructor };
   · rfl;
   · exact card_fin k_outcomes;
@@ -233,9 +233,9 @@ To formalize the notion of "computational complexity" in this context, a simple,
 | :------------------------------------------ | :---------------------------------------------------------- | :----------------------------------------------------------------------------------- | :------- |
 | `ComputerInstruction`                       | `:= Bool`                                                   | Represents a fundamental binary choice (e.g., left/right, 0/1).                      | Def      |
 | `ComputerTape`                              | `:= List ComputerInstruction`                               | A finite sequence of binary choices, representing the "input program" or path.       | Def      |
-| `SystemState` (Conceptual Placeholder)      | `:= Nat` (or `Vector ℕ StateVarCount`, etc.)                | An abstract representation of the instantaneous state of the system being simulated.   | Def      |
-| `ClassicalComputerProgram`                  | `(initial_state : SystemState) (tape : ComputerTape)`       | Defines a computation by an initial state and a tape of guiding choices.             | Def      |
-| `ClassicalComputerProgram.eval` (Axiom)     | `ClassicalComputerProgram → SystemState`                    | Axiomatically defines the deterministic outcome (final state) of running the program. | Axiom    |
+| `ParticlePosition` (Conceptual Placeholder)      | `:= Nat` (or `Vector ℕ StateVarCount`, etc.)                | An abstract representation of the instantaneous state of the system being simulated.   | Def      |
+| `ClassicalComputerProgram`                  | `(initial_state : ParticlePosition) (tape : ComputerTape)`       | Defines a computation by an initial state and a tape of guiding choices.             | Def      |
+| `ClassicalComputerProgram.eval` (Axiom)     | `ClassicalComputerProgram → ParticlePosition`                    | Axiomatically defines the deterministic outcome (final state) of running the program. | Axiom    |
 | `ClassicalComputerProgram.complexity`       | `ClassicalComputerProgram → ℕ`                              | Defined as `prog.tape.length`. This equates complexity with the number of choices. | Def      |
 
 This model posits that the "program" dictating the evolution or selection of a state is encoded in the `ComputerTape`, and the fundamental measure of computational effort for a specific evolution is the number of binary choices on that tape.
@@ -265,7 +265,7 @@ Let a physical system be characterized by $k > 0$ equiprobable microstates, and 
 
 **Lean 4 Proof Sketch for RECT (Uniform Case):**
 ```lean
-open PPNP.Entropy.RET PPNP.Entropy.Common Real
+open EGPT.Entropy.RET EGPT.Entropy.Common Real
 
 theorem RECT_for_Uniform_Systems_Sketch
     (H_phys_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal)
@@ -347,7 +347,7 @@ With RUE and RECT established for uniform distributions (which characterize Bose
 
 **Lean 4 Proof Sketch:**
 ```lean
-open PPNP.Entropy.RET PPNP.Entropy.Common Real
+open EGPT.Entropy.RET EGPT.Entropy.Common Real
 
 theorem BoseEinstein_System_Is_ClassicallyExplainable
     (N_photons K_boxes : ℕ) (h_valid_domain : K_boxes ≠ 0 ∨ N_photons = 0) :
@@ -355,8 +355,8 @@ theorem BoseEinstein_System_Is_ClassicallyExplainable
   -- 1. Determine the number of BE microstates and its base-2 logarithm.
   let k_BE_outcomes := multichoose K_boxes N_photons
   have hk_BE_pos : k_BE_outcomes > 0 :=
-    by { rw [←PPNP.Entropy.Physics.BoseEinstein.card_omega_be];
-         exact PPNP.Entropy.Physics.BoseEinstein.card_omega_BE_pos K_boxes N_photons h_valid_domain }
+    by { rw [←EGPT.Physics.BoseEinstein.card_omega_be];
+         exact EGPT.Physics.BoseEinstein.card_omega_BE_pos K_boxes N_photons h_valid_domain }
   let H_BE_base2 := Real.logb 2 k_BE_outcomes
 
   -- 2. Invoke RECT_for_Uniform_Systems:
@@ -434,7 +434,7 @@ This document serves as a detailed technical guide for developers contributing t
 2.  **Existence of an Informationally Equivalent i.i.d. Source:** Proving that any system whose Rota-entropy corresponds to a uniform distribution is informationally equivalent to a mathematically definable i.i.d. source producing the same uniform statistics.
 3.  **Rota's Entropy & Computability Theorem (RECT) for i.i.d. binary processes:** Proving that a classical computer program simulating an i.i.d. binary source (represented by a tape of choices) has a computational complexity (defined as the number of choices processed) equal to the Shannon entropy (in bits) of selecting that specific sequence of choices.
 
-This guide provides the necessary definitions, theorem statements, current status of formalization (with references to Lean constructs in the `PPNP` namespace), and detailed Lean 4 proof stubs for incomplete parts. The goal is to facilitate collaborative work towards a complete, `sorry`-free formalization of these foundational results. The successful completion of the theorems outlined herein will form the bedrock for a subsequent project (detailed in a separate README) aiming to apply these results to model physical systems and address questions about their classical computability.
+This guide provides the necessary definitions, theorem statements, current status of formalization (with references to Lean constructs in the `EGPT` namespace), and detailed Lean 4 proof stubs for incomplete parts. The goal is to facilitate collaborative work towards a complete, `sorry`-free formalization of these foundational results. The successful completion of the theorems outlined herein will form the bedrock for a subsequent project (detailed in a separate README) aiming to apply these results to model physical systems and address questions about their classical computability.
 
 ---
 
@@ -459,14 +459,14 @@ This guide provides the necessary definitions, theorem statements, current statu
 
 ## 1. Foundational Lean 4 Setup and Namespaces
 
-This project relies on definitions and theorems from `Mathlib` and custom namespaces within the `PPNP` (Physics, Probability, and Number Puzzles) project. Developers should ensure their Lean environment is configured to access these.
+This project relies on definitions and theorems from `Mathlib` and custom namespaces within the `EGPT` (Physics, Probability, and Number Puzzles) project. Developers should ensure their Lean environment is configured to access these.
 
 **Key Namespaces Used:**
-*   `PPNP.Entropy.Common`: Basic definitions for probability distributions, Shannon entropy (`stdShannonEntropyLn`), and the structure `HasRotaEntropyProperties`.
-*   `PPNP.Entropy.RET`: Formalization of Rota's Uniqueness of Entropy Theorem for uniform distributions.
+*   `EGPT.Entropy.Common`: Basic definitions for probability distributions, Shannon entropy (`stdShannonEntropyLn`), and the structure `HasRotaEntropyProperties`.
+*   `EGPT.Entropy.RET`: Formalization of Rota's Uniqueness of Entropy Theorem for uniform distributions.
 *   `Mathlib`: For standard mathematical definitions (real numbers, logarithms, Fin, Fintype, NNReal, BigOperators, etc.).
 
-**Core Types from `PPNP.Entropy.Common`:**
+**Core Types from `EGPT.Entropy.Common`:**
 *   `NNReal`: Non-negative real numbers, used for probabilities.
 *   `uniformDist {α : Type*} [Fintype α] (h_card_pos : 0 < Fintype.card α) : α → NNReal`: Defines the uniform probability distribution over a finite type `α`.
 *   `stdShannonEntropyLn {α : Type*} [Fintype α] (p : α → NNReal) : Real`: Calculates the standard Shannon entropy using the natural logarithm.
@@ -478,7 +478,7 @@ This project relies on definitions and theorems from `Mathlib` and custom namesp
 
 The formalization of Rota's work begins with defining the properties an entropy function must satisfy. These are encapsulated in the `HasRotaEntropyProperties` structure.
 
-| Lean Construct Name in `PPNP.Entropy.Common` | Signature (Simplified for `H_func`)                  | Brief Description                                                       | Status   |
+| Lean Construct Name in `EGPT.Entropy.Common` | Signature (Simplified for `H_func`)                  | Brief Description                                                       | Status   |
 | :------------------------------------------- | :--------------------------------------------------- | :---------------------------------------------------------------------- | :------- |
 | `IsEntropyNormalized H_func`                 | `(Fin 1 → NNReal) → H_func p = 0` (if $\sum p = 1$) | Entropy of a certain outcome (1 state) is 0.                            | Def      |
 | `IsEntropySymmetric H_func`                  | `(β→NNReal) → (α≃β) → H_func (p∘e) = H_func p`    | Entropy is invariant under relabeling of outcomes.                      | Def      |
@@ -488,8 +488,8 @@ The formalization of Rota's work begins with defining the properties an entropy 
 | `IsEntropyMaxUniform H_func`                 | `(α→NNReal) → H p ≤ H (uniformDist_on_α)`            | Entropy is maximized for the uniform distribution.                      | Def      |
 | `HasRotaEntropyProperties H_func`            | (Extends all above structures)                       | Predicate: `H_func` satisfies all Rota axioms.                          | Def      |
 
-**Note:** These structures define properties. A specific function, like `PPNP.Entropy.Physics.Common.H_physical_system`, is then *asserted* to satisfy these properties via an axiom:
-`axiom PPNP.Entropy.Physics.Common.H_physical_system_has_Rota_entropy_properties : HasRotaEntropyProperties PPNP.Entropy.Physics.Common.H_physical_system` (Status: `Axiom`)
+**Note:** These structures define properties. A specific function, like `EGPT.Physics.Common.H_physical_system`, is then *asserted* to satisfy these properties via an axiom:
+`axiom EGPT.Physics.Common.H_physical_system_has_Rota_entropy_properties : HasRotaEntropyProperties EGPT.Physics.Common.H_physical_system` (Status: `Axiom`)
 
 ---
 
@@ -503,13 +503,13 @@ $f_0(H, k)$ represents the entropy of a uniform distribution over $k$ outcomes, 
 
 | Lean Construct Name   | Signature (Simplified)                                                                   | Brief Description                                                                 | Status   |
 | :-------------------- | :--------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- | :------- |
-| `PPNP.Entropy.RET.f0` | `(hH : HasRotaEntropyProperties H_func) → (n : ℕ) → NNReal`                             | $H_{func}(\text{uniformDist on Fin n})$ if $n>0$, else $0$.                        | Def      |
+| `EGPT.Entropy.RET.f0` | `(hH : HasRotaEntropyProperties H_func) → (n : ℕ) → NNReal`                             | $H_{func}(\text{uniformDist on Fin n})$ if $n>0$, else $0$.                        | Def      |
 
 ### 3.2. Key Properties of $f_0(H, k)$
 
 The proof of RUE for uniform distributions relies on several key lemmas about $f_0$.
 
-| Lean Construct Name in `PPNP.Entropy.RET`           | Signature (Simplified)                               | Brief Description                                          | Status   |
+| Lean Construct Name in `EGPT.Entropy.RET`           | Signature (Simplified)                               | Brief Description                                          | Status   |
 | :--------------------------------------------------- | :--------------------------------------------------- | :--------------------------------------------------------- | :------- |
 | `f0_1_eq_0`                                          | `f0 hH 1 = 0`                                        | Entropy of 1 outcome is 0.                               | Proved   |
 | `f0_mono`                                            | `Monotone (f0 hH)`                                   | $f_0$ is non-decreasing.                                 | Proved   |
@@ -523,7 +523,7 @@ The proof of RUE for uniform distributions relies on several key lemmas about $f
 
 A constant $C_H$ arises naturally, relating $f_0(H,k)$ to the standard logarithm.
 
-| Lean Construct Name in `PPNP.Entropy.RET`  | Signature (Simplified)                               | Brief Description                                              | Status   |
+| Lean Construct Name in `EGPT.Entropy.RET`  | Signature (Simplified)                               | Brief Description                                              | Status   |
 | :----------------------------------------- | :--------------------------------------------------- | :------------------------------------------------------------- | :------- |
 | `C_constant_real`                          | `(hH : HasRotaEntropyProperties H_func) → Real`     | Defined as $(f_0(hH, 2) : ℝ) / \text{Real.log } 2$ (if non-trivial H), else 0. | Def      |
 | `C_constant_real_nonneg`                   | `C_constant_real hH ≥ 0`                             | The constant $C_H$ is non-negative.                            | Proved   |
@@ -535,14 +535,14 @@ For any function `H_func` satisfying `HasRotaEntropyProperties`, there exists a 
 
 **Lean 4 Formalization:**
 
-| Lean Construct Name in `PPNP.Entropy.RET`        | Signature (Simplified)                                            | Brief Description                                          | Status   |
+| Lean Construct Name in `EGPT.Entropy.RET`        | Signature (Simplified)                                            | Brief Description                                          | Status   |
 | :----------------------------------------------- | :---------------------------------------------------------------- | :--------------------------------------------------------- | :------- |
 | `RotaUniformTheorem_formula_with_C_constant`     | `hH → (C_H ≥ 0 ∧ ∀ n > 0, f0 hH n = C_H * Real.log n)`            | Main formula with the defined `C_constant_real`.           | Proved   |
 | `RotaUniformTheorem`                             | `hH → ∃ C ≥ 0, ∀ n > 0, f0 hH n = C * Real.log n`                 | Existential statement of RUE for uniform.                  | Proved   |
 
 **Lean 4 Proof Sketch (Illustrative of usage):**
 ```lean
-open PPNP.Entropy.RET PPNP.Entropy.Common Real
+open EGPT.Entropy.RET EGPT.Entropy.Common Real
 
 theorem RotaUniformTheorem_Usage_Example
     (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal)
@@ -552,7 +552,7 @@ theorem RotaUniformTheorem_Usage_Example
   -- The RotaUniformTheorem directly provides this.
   exact RotaUniformTheorem hH_axioms
 ```
-**Current Status:** The formalization of RUE for uniform distributions is complete and proven in `PPNP.Entropy.RET.lean`.
+**Current Status:** The formalization of RUE for uniform distributions is complete and proven in `EGPT.Entropy.RET.lean`.
 
 ---
 
@@ -564,8 +564,8 @@ This section establishes that any system described by RUE-compliant entropy with
 
 | Lean Construct Name                               | Signature (Simplified)                      | Brief Description                                                              | Status         |
 | :------------------------------------------------ | :------------------------------------------ | :----------------------------------------------------------------------------- | :------------- |
-| `PPNP.Entropy.Common.uniformDist`                 | `(Fin k → NNReal)` (given `k>0`)            | The PMF $P(i) = 1/k$ for an i.i.d. source over $k$ outcomes.                     | Def (Mathlib-like) |
-| `PPNP.Entropy.Common.stdShannonEntropyLn_uniform_eq_log_card` | `stdShannonEntropyLn (uniformDist k) = Real.log k` | Shannon entropy (nats) of uniform dist is $\ln k$.                         | Proved         |
+| `EGPT.Entropy.Common.uniformDist`                 | `(Fin k → NNReal)` (given `k>0`)            | The PMF $P(i) = 1/k$ for an i.i.d. source over $k$ outcomes.                     | Def (Mathlib-like) |
+| `EGPT.Entropy.Common.stdShannonEntropyLn_uniform_eq_log_card` | `stdShannonEntropyLn (uniformDist k) = Real.log k` | Shannon entropy (nats) of uniform dist is $\ln k$.                         | Proved         |
 
 ### 4.2. Theorem: Existence of Equivalent i.i.d. Source (Uniform Case)
 
@@ -580,7 +580,7 @@ This section establishes that any system described by RUE-compliant entropy with
 **Lean 4 Proof Stub for `exists_equivalent_iid_source_for_uniform_distribution`:**
 *(Based on previous interaction, to be completed)*
 ```lean
-open PPNP.Entropy.RET PPNP.Entropy.Common Real Finset Fintype
+open EGPT.Entropy.RET EGPT.Entropy.Common Real Finset Fintype
 
 theorem exists_equivalent_iid_source_for_uniform_distribution
     (H_func : ∀ {α_aux : Type} [Fintype α_aux], (α_aux → NNReal) → NNReal)
@@ -630,9 +630,9 @@ This section aims to prove that for a process driven by i.i.d. binary choices (l
 | :------------------------------------------ | :---------------------------------------------------------- | :---------------------------------------------------------------- | :------- |
 | `ComputerInstruction`                       | `:= Bool`                                                   | Fundamental binary choice.                                        | Def      |
 | `ComputerTape`                              | `:= List ComputerInstruction`                               | Sequence of choices.                                              | Def      |
-| `SystemState` (Placeholder)                 | `:= Nat` (or more complex)                                  | Abstract representation of a system's state.                      | Def      |
-| `ClassicalComputerProgram`                  | `(initial_state : SystemState) (tape : ComputerTape)`       | Program = initial state + choice tape.                            | Def      |
-| `ClassicalComputerProgram.eval` (Axiom)     | `ClassicalComputerProgram → SystemState`                    | Deterministic evaluation given tape (behavior is abstract).       | Axiom    |
+| `ParticlePosition` (Placeholder)                 | `:= Nat` (or more complex)                                  | Abstract representation of a system's state.                      | Def      |
+| `ClassicalComputerProgram`                  | `(initial_state : ParticlePosition) (tape : ComputerTape)`       | Program = initial state + choice tape.                            | Def      |
+| `ClassicalComputerProgram.eval` (Axiom)     | `ClassicalComputerProgram → ParticlePosition`                    | Deterministic evaluation given tape (behavior is abstract).       | Axiom    |
 | `ClassicalComputerProgram.complexity`       | `ClassicalComputerProgram → ℕ`                              | Defined as `prog.tape.length`.                                    | Def      |
 
 ### 5.2. Shannon Entropy of a Specific Binary Tape Choice
@@ -691,7 +691,7 @@ theorem existence_and_complexity_of_program_for_iid_binary_source (m_bits : ℕ)
     ∃ (prog : ClassicalComputerProgram) (h_tape_len_eq_m_bits : prog.tape.length = m_bits),
       (ClassicalComputerProgram.complexity prog : ℝ) =
         (ShannonEntropyOfTapeChoice m_bits) / Real.log 2 := by
-  let initial_st_example : SystemState := { val := 0 }
+  let initial_st_example : ParticlePosition := { val := 0 }
   let example_tape : ComputerTape := List.replicate m_bits true
   have h_example_tape_len : example_tape.length = m_bits := List.length_replicate _ _
 

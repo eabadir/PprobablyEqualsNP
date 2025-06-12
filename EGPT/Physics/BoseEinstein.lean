@@ -1,22 +1,22 @@
 import Mathlib.Data.Sym.Card
 
-import PPNP.Common.Basic
-import PPNP.Entropy.Common
-import PPNP.Entropy.Physics.Common
-import PPNP.Entropy.RET
-import PPNP.Entropy.Physics.UniformSystems
+import EGPT.Core
+import EGPT.Entropy.Common
+import EGPT.Physics.Common
+import EGPT.Entropy.RET
+import EGPT.Physics.UniformSystems
 
-namespace PPNP.Entropy.Physics.BE
+namespace EGPT.Physics.BE
 
 open Multiset NNReal Finset Function -- Added Function for comp_apply
 
-open PPNP.Entropy.RET
+open EGPT.Entropy.RET
 
 open Multiset NNReal
-open PPNP.Common
-open PPNP.Entropy.Common
-open PPNP.Entropy.Physics.Common
-open PPNP.Entropy.Physics.UniformSystems
+open EGPT
+open EGPT.Entropy.Common
+open EGPT.Physics.Common
+open EGPT.Physics.UniformSystems
 
 
 /-!
@@ -273,8 +273,8 @@ lemma H_p_BE_fin_eq_f_H_card (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0)
 
 
 theorem H_BE_from_Multiset_eq_C_shannon (N M : ℕ) (h_domain_valid : N ≠ 0 ∨ M = 0) :
-    (PPNP.Entropy.Physics.Common.H_physical_system (p_UD_fin N M) : ℝ) =
-      (PPNP.Entropy.Physics.Common.C_physical_NNReal : ℝ) *
+    (EGPT.Physics.Common.H_physical_system (p_UD_fin N M) : ℝ) =
+      (EGPT.Physics.Common.C_physical_NNReal : ℝ) *
       stdShannonEntropyLn (p_UD_fin N M) := by
   -- The proof is exactly what H_physical_system_is_rota_uniform does.
   exact H_physical_system_is_rota_uniform N M h_domain_valid

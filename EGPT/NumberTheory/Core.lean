@@ -6,73 +6,48 @@ import Mathlib.Data.Rat.Lemmas
 import Mathlib.Data.Real.Cardinality
 import Mathlib.Control.Random
 import Mathlib.Data.Fintype.Vector
+import EGPT.Core
 
-namespace PPNP.NumberTheory.Core
+namespace EGPT.NumberTheory.Core
 
 open List
 
-class IIDParticleSource (α : Type) where
-  stream : ℕ → α
+/-!
+# EGPT Number Theory: Numbers Are Physics
+The core axiom of EGPT is that particles move according to a RandomWalk - as they move forward in time step by step, they make a "coin flip" decision to move up or down such as heads = move up, tails = move down. If each heads/tails outcome is recorded we can use binary string of 1's and 0's to capture their path. In Lean we use List Bool as the fundamental type for this binary recording. When the path is walked the next step is independent of history (except the last state/position) - the next step depends only on the current position and the next coin flip. In probability theory each step on the path is said to be "event" in an independent and identically distributed (IID) process, the path formation is called a "memoryless stochastic process" (aka a Markov Process), and the resultant path is called a Markov Chain (or Random Walk).
 
-/-- The canonical representation of a particle path sampled from an IIDParticleSource is symmetric and sorted with 1s first. For example `[true, true, false, false]` is the canonical representation of the path `[true, false, true, false]`. This means that the order of choices does not matter, only the counts of `true` and `false` do. -/
-def CannonicalSymmetricParticlePath := List Bool
-
-/-- A non-canonical particle path is just the list of movements describing a random walk -/
-abbrev RandomWalkPath := List Bool
-
-
-instance mkPseudoRandomSource (seed : Nat) : IIDParticleSource Bool :=
-{ stream := fun n =>
-    let gen0 := mkStdGen seed
-    let genN := (List.range n).foldl (fun g _ => (stdNext g).2) gen0
-    (randBool genN).1 }
-
-/-- A biased IID particle source that generates `true` with probability `p / (p + q)` and `false` with probability `q / (p + q)`. -/
-instance mkBiasedIIDParticleSource (seed : Nat) (p : ℕ) (q: ℕ) (_h : p + q > 0) : IIDParticleSource Bool :=
-{ stream := fun n =>
-    let gen0 := mkStdGen seed
-    let genN := (List.range n).foldl (fun g _ => (stdNext g).2) gen0
-    (randBool genN).1 }
-
-
-/-- Calculates the number of `true` choices (e.g., "up-steps") in a path. -/
-def numOnes (p_path : RandomWalkPath) : ℕ :=
-  p_path.count true
-
-/--
-Calculates the "position" of a particle after `t` steps,
-defined as (#trues - #falses).
+In short, to describe particle movement and interactions the core encoding we use is a `List Bool`.
 -/
-def particlePosition (p_path : RandomWalkPath) : ℤ :=
-  let ones := numOnes p_path
-  let path_len := p_path.length
-  let zeros := path_len - ones
-  (ones : ℤ) - (zeros : ℤ)
 
-------------------------------------------------------------
--- 2.  Unary naturals = lists of all-true values
-------------------------------------------------------------
-def GNatCompressPath_AllTrue (L : List Bool) : Prop := ∀ x ∈ L, x = true
+def PathCompress_AllTrue (L : List Bool) : Prop := ∀ x ∈ L, x = true
+
+
+/-!
+## EGPT Natural Numbers Are A Single Particle Path For A "Fair" Random Walk
+##############################################################################
+The "natural numbers" in EGPT can be thought of as the unique paths of random walks which return to their baseline (heads = tails) for the first time. For example, the number 1 is a path [1,0], 2 is [1,1,0,0], etc.. We can represent the same path in shorter form by dropping the trailing zeros and then the sum of 1's is the number itself. This is the canonical form of a natural number in EGPT.
+##############################################################################
+-/
+abbrev ParticlePath := { L : List Bool // PathCompress_AllTrue L }
+abbrev EGPT.Nat := ParticlePath
 
 -- NEW: make the predicate decidable so that the generic
 --      `[Encodable {x // p x}]` instance can fire.
-instance (L : List Bool) : Decidable (GNatCompressPath_AllTrue L) := by
-  unfold GNatCompressPath_AllTrue
+instance (L : List Bool) : Decidable (PathCompress_AllTrue L) := by
+  unfold PathCompress_AllTrue
   exact List.decidableBAll (fun x => x = true) L
 
-abbrev GeneratedNat_Unary := { L : List Bool // GNatCompressPath_AllTrue L }
+------------------------------------------------------------
+-- Encodable instance now *does* synthesise
+------------------------------------------------------------
+--example : Encodable ParticlePath := inferInstance   -- compiles
 
 ------------------------------------------------------------
--- 3.  Encodable instance now *does* synthesise
+-- Bijection with ℕ
 ------------------------------------------------------------
-example : Encodable GeneratedNat_Unary := inferInstance   -- compiles
+def toNat   (u : ParticlePath) : ℕ := u.val.length
 
-------------------------------------------------------------
--- 4.  Bijection with ℕ
-------------------------------------------------------------
-def toNat   (u : GeneratedNat_Unary) : ℕ := u.val.length
-
-def fromNat (n : ℕ) : GeneratedNat_Unary :=
+def fromNat (n : ℕ) : ParticlePath :=
   ⟨List.replicate n true, by
     intro x h_mem
     rw [List.mem_replicate] at h_mem
@@ -81,91 +56,401 @@ def fromNat (n : ℕ) : GeneratedNat_Unary :=
 lemma left_inv  (n : ℕ) : toNat (fromNat n) = n := by
   simp [toNat, fromNat]
 
-lemma right_inv (u : GeneratedNat_Unary) : fromNat (toNat u) = u := by
+lemma right_inv (u : ParticlePath) : fromNat (toNat u) = u := by
   cases u with
   | mk L hL =>
       simp [toNat, fromNat, List.length_replicate, Subtype.ext]
       exact (List.eq_replicate_of_mem hL).symm
 
-noncomputable def equivUnaryNat : GeneratedNat_Unary ≃ ℕ :=
+
+def equivParticlePathToNat : ParticlePath ≃ ℕ :=
 { toFun    := toNat,
   invFun   := fromNat,
   left_inv := right_inv,
   right_inv:= left_inv }
 
+/-- Adds two ParticlePath numbers by converting them to ℕ, adding, and converting back. -/
+def add_ParticlePath (path1 path2 : ParticlePath) : ParticlePath :=
+  equivParticlePathToNat.invFun (equivParticlePathToNat.toFun path1 + equivParticlePathToNat.toFun path2)
 
-abbrev GNat := { L : List Bool // GNatCompressPath_AllTrue L }
-def equivGNatToNat : GNat ≃ ℕ :=
-{ toFun    := toNat,
-  invFun   := fromNat,
-  left_inv := right_inv,
-  right_inv:= left_inv }
 
-/-- Adds two GNat numbers by converting them to ℕ, adding, and converting back. -/
-def add_gnat (g1 g2 : GNat) : GNat :=
-  equivGNatToNat.invFun (equivGNatToNat.toFun g1 + equivGNatToNat.toFun g2)
+/-!
+## Integers As EGPT ChargedParticlePath: A Single Particle Path, with initial direction ("Charge"), for A "Fair" Random Walk
+##############################################################################
+Symmetric particle paths could start up or down [1,1,0,0] and [0,0,1,1] return to baseline but our Nat/ParticlePath's limit our ability to indicate this difference. The "integers" in EGPT allow describing  two particles starting from the same position but initially moving in different directions paths resulting in the same return time to baseline. We use a single "charge" sign bit to indicate whether the particle went "up" or "down" first for the first half of the path and then did the opposite in the second. path is positive or negative. For example, for a particle that goes up ("heads") for the first part of the the number 1 is a path [1,1,0], and "down" first is -1 is [0,1,0], 2 is [1,1,1,0,0], and -2 is [0,1,1,0,0]. As with the EGPT Naturals (ParticlePath) we can represent ChargedParticlePath in the same path in shorter form by dropping the trailing zeros and then the sign and sum of 1's is the number itself. This is the canonical form of an integer in EGPT.
 
-/--
-The type representing "emergent integers".
-Pairs an element from `GNat` (representing magnitude)
-with a `Bool` (representing sign: e.g., true for non-negative, false for negative).
-This definition directly uses GNat.
--/
-def GeneratedInt_PCA : Type := GNat × Bool
-
--- To establish GeneratedInt_PCA ≃ ℤ:
--- 1. We have `GNat ≃ ℕ` (via equivGNatToNat).
+-- To establish ChargedParticlePath ≃ ℤ:
+-- 1. We have `ParticlePath ≃ ℕ` (via equivParticlePathToNat).
 -- 2. We need an equivalence `ℕ × Bool ≃ ℤ`. Mathlib provides `Int.equivNatProdBool : ℤ ≃ ℕ × Bool`. [1]
 --    Its inverse is `Int.equivNatProdBool.symm : ℕ × Bool ≃ ℤ`.
 -- 3. We construct the equivalence:
---    `GeneratedInt_PCA = GNat × Bool`
---    `≃ ℕ × Bool` (using `Equiv.prodCongr equivGNatToNat (Equiv.refl Bool)`) [3]
+--    `ChargedParticlePath = ParticlePath × Bool`
+--    `≃ ℕ × Bool` (using `Equiv.prodCongr equivParticlePathToNat (Equiv.refl Bool)`) [3]
 --    `≃ ℤ` (using `Int.equivNatProdBool.symm`)
+##############################################################################
+-/
 
-open Equiv
-
-------------------------------------------------------------
--- Emergent integers
-------------------------------------------------------------
+def ChargedParticlePath : Type := ParticlePath × Bool
+def EGPT.Int := ChargedParticlePath
 
 noncomputable def intEquivNatProdBool : ℤ ≃ ℕ × Bool :=
   (Equiv.intEquivNat.trans (Equiv.boolProdNatEquivNat.symm)).trans (Equiv.prodComm ℕ Bool).symm   -- citations: ③,④,②
 
-noncomputable def generatedIntPCAEquivInt : GeneratedInt_PCA ≃ ℤ :=
-  (Equiv.prodCongr equivGNatToNat (Equiv.refl Bool)).trans intEquivNatProdBool.symm
+noncomputable def ParticlePathIntEquiv : ChargedParticlePath ≃ ℤ :=
+  (Equiv.prodCongr equivParticlePathToNat (Equiv.refl Bool)).trans intEquivNatProdBool.symm
+
+
+/-!
+## Rationals as EGPT ParticlePMF: The Positional Probability of a Single Particle Path Under Constraints (Probabality Mass Function)
+
+############################################################################
+
+  This definitive EGPT model grounds rational numbers as the compressed state (position) of a system of particles after some finite interval of time, or, equivalently the probability of finding a single particle at a given position after a number of steps in a random walk. This is a significant departure from traditional number theory, where rational numbers are often treated as abstract entities without direct physical interpretation.
+
+  The EGPT ParticlePMF is therefore a lossy compression function. Instead of storing the path of every particle in a large (countably infinite) system of particles, we store probability distribution over the system. For example, for a system of `N` IID particles over t steps, we would need `N * t` bits to store the path of every particle. Instead, we can store the probability distribution of a particles path (ParticlePMF) then we can compute the probabilitic position of N particles at time t for any N and t.
+
+  1.  **Canonical Form:** A rational number is represented by a unique `List Bool`
+      of the form `{sign bit} ++ {string of 1s} ++ {string of 0s}`. This
+      is the most informationally dense way to encode the parameters (sign, p, q)
+      and is a natural extension of `ParticlePath` and `ChargedParticlePath`.
+
+  2.  **Physical Interpretation:** This canonical `List Bool` is not just an
+      abstract number. It is the direct recipe for constructing a
+      `BiasedIIDParticleSource`. The number of 1s is the `p` parameter,
+      and the number of 0s is the `q` parameter.
+
+  3.  **Direct Bijection:** The `toRat` and `fromRat` functions are
+      direct transformations (counting and construction), avoiding the
+      complexities of intermediate sampling or filtering mechanisms. This makes
+      the bijection with Mathlib's `ℚ` clear and provable.
+
+**Partition Theory And "Fractal Compression"**
+For all the "detail" of the path we use the ParticlePath which is the "uncompressed" form. The ParticlePMF is the "compressed" form. The ParticlePMF is the sum of all the ParticlePath's that have the same probability distribution. For the advanced mathematician, we note that the ParticlePMF's compression is a "coarser" partition under Parition Theory and the ParticlePath is a "finer" partition. Parition Theory's fractal like recursive proofs of probablistic invariance under equal partitioning allows us to see that the ParticlePMF is scale invariant to the number of particles in the system.
+
+##############################################################################
+-/
+
+/--
+A predicate asserting that a `List Bool` is in the canonical form for a rational.
+The form is `sign :: 1...1 ++ 0...0`. We also enforce that the rational is
+normalized (numerator and denominator are coprime), the denominator is non-zero,
+and zero has a unique non-negative representation.
+-/
+def CanonicalParticlePMF (l : List Bool) : Prop :=
+  ∃ (s : Bool) (p q : ℕ),
+    -- The list has the exact canonical structure.
+    l = [s] ++ List.replicate p true ++ List.replicate q false ∧
+    -- The denominator must be non-zero.
+    q > 0 ∧
+    -- The fraction p/q must be in lowest terms.
+    Nat.Coprime p q ∧
+    -- Canonical Zero: If the numerator is 0, the sign must be non-negative (true).
+    (p = 0 → s = true)
+/--
+A `ParticlePMF` is a `List Bool` that is proven to be in the canonical,
+normalized form for a rational number. This is the EGPT representation.
+-/
+abbrev ParticlePMF := { l : List Bool // CanonicalParticlePMF l }
+abbrev EGPT.Rat := ParticlePMF
+
+-- In EGPT/NumberTheory/Core.lean or your new Rational file
 
 
 
+/--
+Parses the numerator `p` (count of `true`s) from a canonical rational list.
+-/
+def getNum (r : ParticlePMF) : ℕ :=
+  r.val.tail.count true
+
+/--
+Parses the denominator `q` (count of `false`s) from a canonical rational list.
+-/
+def getDen (r : ParticlePMF) : ℕ :=
+  r.val.tail.count false
+
+/--
+Parses the sign bit from a canonical rational list.
+Requires proof that the list is non-empty, which `CanonicalParticlePMF` provides.
+-/
+def getSign (r : ParticlePMF) : Bool :=
+  -- The existential in `CanonicalParticlePMF` guarantees the list is non-empty.
+  r.val.head (by { rcases r.property with ⟨s, p, q, h_struct, _, _⟩; rw [h_struct]; simp })
+
+/--
+**`toRat`:** Decodes the abstract mathematical value `p/q` from its canonical
+EGPT `List Bool` representation.
+-/
+noncomputable def toRat (r : ParticlePMF) : ℚ :=
+  let s := getSign r
+  let p := getNum r
+  let q := getDen r
+  let num_int : ℤ := if s then p else -p
+  -- `Rat.mkRat` normalizes, but since our canonical form is already normalized,
+  -- this is equivalent to direct construction.
+  mkRat num_int q
+
+/--
+**`fromRat`:** Encodes a standard `ℚ` into its canonical, normalized EGPT
+`List Bool` representation.
+-/
+noncomputable def fromRat (q_in : ℚ) : ParticlePMF :=
+  let s := decide (0 ≤ q_in.num)
+  -- Mathlib's `q.num` and `q.den` are already normalized (coprime).
+  let p := q_in.num.natAbs
+  let q := q_in.den
+  let l := [s] ++ List.replicate p true ++ List.replicate q false
+  -- We package the list `l` with the proof that it satisfies `CanonicalParticlePMF`.
+  ⟨l, by
+    use s, p, q
+    constructor
+    · rfl
+    · constructor
+      · exact q_in.den_pos
+      · constructor
+        ·
+          -- `Rat` provides `reduced`, a proof that `q_in.num.natAbs` and `q_in.den` are coprime.
+          have h_coprime : Nat.Coprime p q := by
+            simpa [p, q] using q_in.reduced
+          exact h_coprime
+        · -- Prove the new condition for canonical zero
+          intro hp_eq_zero
+          -- Unfold definitions of s and p
+          dsimp [s, p]
+          -- If p = 0, then q_in.num.natAbs = 0, which means q_in.num = 0.
+          have h_num_zero : q_in.num = 0 := by aesop
+          -- If q_in.num = 0, then `0 ≤ q_in.num` is true.
+          -- By definition, s is `(0 ≤ q_in.num)`, so s is true.
+          rw [h_num_zero]
+          simp
+  ⟩
+
+/--
+**Instantiates the Physical Process:**
+Takes the EGPT description of a ParticlePMF (rational number) and creates the corresponding
+`BiasedIIDParticleSource` that generates `true` with probability `p/(p+q)`.
+This version uses a more explicit proof style that matches the provided `Filter.lean`.
+-/
+noncomputable def toBiasedSource (r : ParticlePMF) (seed : ℕ) : IIDParticleSource Bool :=
+  let p := getNum r
+  let q := getDen r
+  -- We need to prove `p + q > 0`. This follows from `q > 0` which is guaranteed
+  -- by the `CanonicalParticlePMF` property.
+  have h_total_pos : p + q > 0 := by
+    -- 1. Deconstruct the `CanonicalParticlePMF` proof to get the parameters and properties.
+    rcases r.property with ⟨s_prop, p_prop, q_prop, h_struct, h_q_pos, _⟩
+    -- 2. Prove that our parsed denominator `q` is equal to the `q_prop` from the proof.
+    have h_q_eq : q = q_prop := by
+      -- Unfold the definition of `q` (`getDen r`) and rewrite using
+      -- the canonical structure of the list.
+      dsimp [q, getDen]
+      -- After substituting the structure of `r.val`, we need to
+      -- reassociate the list so that `List.tail_cons` can fire
+      -- (otherwise `::` binds too tightly).  Then `simp` can finish.
+      simp [ h_struct,
+             List.singleton_append,      -- `[s] ++ t = s :: t`
+             List.cons_append,           -- `s :: l₁ ++ l₂ = s :: (l₁ ++ l₂)`
+             List.tail_cons,
+             List.count_append,
+             List.count_replicate,
+             Bool.decEq ]
+    -- 3. The goal is now `p + q > 0`. We substitute `q` with `q_prop`.
+    rw [h_q_eq]
+    -- 4. The `CanonicalParticlePMF` property gives `h_q_pos : q_prop > 0`.
+    --    Since `p` is a natural number, `p ≥ 0`. The sum is therefore > 0.
+    exact add_pos_of_nonneg_of_pos (Nat.zero_le p) h_q_pos
+  -- Construct the biased source using the parsed parameters and the now-proven hypothesis.
+  mkBiasedIIDParticleSource seed p q h_total_pos
+
+-- In the `equivParticlePMFtoRational` definition
+
+noncomputable def equivParticlePMFtoRational : ParticlePMF ≃ ℚ :=
+{
+  toFun    := toRat,
+  invFun   := fromRat,
+  left_inv := by
+    -- Goal: fromRat (toRat r) = r
+    intro r
+    -- To prove equality of two subtype elements, we prove their values are equal.
+    apply Subtype.ext
+
+    -- Deconstruct the proof `r.property` to get the canonical parameters for `r`.
+    rcases r.property with ⟨s, p, q, h_struct, h_q_pos, h_coprime, h_zero_sign⟩
+
+    -- Goal is now: (fromRat (toRat r)).val = r.val
+
+    -- To simplify the goal, let's establish what `toRat r` is
+    -- in terms of s, p, and q.
+    have h_toRat_r_eq_mkRat : toRat r = mkRat (if s then p else -p) q := by
+      -- Unfold the definition of toRat
+      dsimp [toRat] -- Removed q_equiv from dsimp
+      -- We need to prove getNum r = p, getDen r = q, and getSign r = s.
+      have h_s_loc : getSign r = s := by -- Renamed to avoid conflict if s is used differently
+        dsimp [getSign]; simp [h_struct];
+      have h_p_loc : getNum r = p := by -- Renamed
+        dsimp [getNum]
+        rw [h_struct]
+        rw [List.singleton_append]
+        simp  [List.tail_cons, List.count_append, List.count_replicate, add_zero]
+      have h_q_loc : getDen r = q := by -- Renamed
+        dsimp [getDen]
+        rw [h_struct]
+        rw [List.singleton_append]
+        simp [List.tail_cons, List.count_append, List.count_replicate, zero_add]
+      -- Substitute these back into the definition.
+      rw [h_s_loc, h_p_loc, h_q_loc]
 
 
-/-! #############################################################
+    -- Now, let's analyze the LHS: `(fromRat (toRat r)).val`.
+    -- Unfold the definition of `fromRat`.
+    -- `dsimp` will substitute `toRat r` for `q_in` in the body of `fromRat`.
+    dsimp [fromRat]
+    -- The goal now contains terms like `(toRat r).num` and `(toRat r).den`.
+    -- Substitute `toRat r` using our hypothesis.
+    rw [h_toRat_r_eq_mkRat]
+    -- The goal now contains terms like `(mkRat (if s then p else -p) q).num`, etc.
+
+    -- `fromRat` uses the `num` and `den` of its input. Let's find those for `q_equiv`:
+    have h_num_den :
+      (mkRat (if s then (↑p : ℤ) else -(↑p : ℤ)) q).num =
+        (if s then (↑p : ℤ) else -(↑p : ℤ)) ∧
+      (mkRat (if s then (↑p : ℤ) else -(↑p : ℤ)) q).den = q := by
+      let v : ℤ := if s then ↑p else -↑p
+      have hq_pos_int : (0 : ℤ) < (q : ℤ) := by exact_mod_cast h_q_pos
+      -- h_q_ne_zero is not strictly needed here as Rat.mkRat_eq_divInt does not require q ≠ 0.
+      -- The hq_pos_int implies q ≠ 0 for the coprime lemmas.
+      have h_coprime_int :
+        (Int.natAbs v).Coprime (Int.natAbs (q : ℤ)) := by
+        dsimp only [v]
+        rw [Int.natAbs_ofNat q]
+        split_ifs with hs_cond
+        · simp only [Int.natAbs_ofNat]; exact h_coprime
+        · simp only [Int.natAbs_neg, Int.natAbs_ofNat]; exact h_coprime
+
+      constructor
+      · -- Numerator part: (mkRat v q).num = v
+        rw [Rat.mkRat_eq_divInt v q]
+        rw [Rat.divInt_eq_div v ↑q] -- Converts (Rat.divInt v ↑q).num to (v / ↑q).num
+        exact Rat.num_div_eq_of_coprime hq_pos_int h_coprime_int
+      · -- Denominator part: (mkRat v q).den = q
+        rw [Rat.mkRat_eq_divInt v q]
+        rw [Rat.divInt_eq_div v ↑q] -- Goal is now (v / ↑q).den = q
+        -- Rewrite the RHS of the goal to prepare for comparison.
+        rw [← Int.natAbs_ofNat q]    -- Goal becomes (v / ↑q).den = Int.natAbs ↑q
+
+        -- We know `Rat.den_div_eq_of_coprime hq_pos_int h_coprime_int` proves `(v / ↑q).den = Int.natAbs ↑q`.
+        -- `convert` will use this and ask us to prove `Int.natAbs ↑q = Int.natAbs ↑q` (after unification).
+        convert Rat.den_div_eq_of_coprime hq_pos_int h_coprime_int
+        -- New goal: Int.natAbs ↑q = Int.natAbs ↑q (or q = q after simplification)
+        aesop
+        --exact (Int.natAbs_ofNat q).symm
+
+    -- Substitute these known num/den values into the `fromRat` expression.
+    -- Replace `simp [h_num_den]` with explicit rewrites.
+    rw [h_num_den.1, h_num_den.2]
+    rw [h_struct] -- Substitute r.val with its structure
+
+    -- The goal is now to prove equality of two lists:
+    -- `[decide (0 ≤ (if s then p else -↑p))] ++ replicate ((if s then p else -↑p).natAbs) true ++ replicate q false`
+    -- = `[s] ++ replicate p true ++ replicate q false`
+
+    -- Ensure lists are in `h :: t` form for `List.cons_eq_cons`.
+    -- `[h] ++ t` is `h :: t`. `h :: (t1 ++ t2)` is `h :: t1 ++ t2`.
+    -- `simp` with `List.singleton_append` can achieve this, or it might be automatic.
+    -- The current structure after `simp [h_num_den]` and `rw [h_struct]` should be:
+    -- `(decide (...)) :: (replicate ... ++ replicate ...)`
+    -- `s :: (replicate ... ++ replicate ...)`
+    -- So `List.cons_eq_cons` can be applied.
+
+    simp [List.cons_eq_cons]
+    constructor
+    · -- 1. Prove the sign bits are equal:
+      -- `decide (0 ≤ (if s then p else -↑p)) = s`
+      by_cases hs : s
+      · -- Case s = true: Goal is `decide (0 ≤ ↑p) = true`. Since p is Nat, 0 ≤ ↑p is true. decide true = true.
+        -- The problematic line was here.
+        -- If p can be 0, then (0 <= p) is true.
+        aesop
+        --simp [hs, zero_le (p :ℤ)]
+      · -- Case s = false: Goal is `decide (0 ≤ -↑p) = false`.
+        -- This means `¬(0 ≤ -↑p)`, which is `-↑p < 0`, or `↑p > 0`.
+        simp [hs]
+        -- Goal is now `¬(0 ≤ -↑p)`, which simplifies to `p > 0`.
+        -- If `p` were `0`, then `h_zero_sign` would force `s` to be `true`,
+        -- which contradicts our case `hs : ¬s`. So `p` cannot be `0`.
+        have hp_ne_zero : p ≠ 0 := by
+          intro hp_is_zero
+          have hs_must_be_true := h_zero_sign hp_is_zero
+          exact hs hs_must_be_true
+        -- Since p is a Nat, p ≠ 0 implies p > 0.
+        --exact Nat.pos_of_ne_zero hp_ne_zero
+        aesop
+    · -- 2. Prove tails are equal:
+      -- `replicate ((if s then ↑p else -↑p).natAbs) true ++ replicate q false = replicate p true ++ replicate q false`
+      -- Since `replicate q false` is the same on both sides, we can cancel it.
+      --rw [List.append_right_cancel_iff]
+      aesop
+  ,
+  right_inv := by
+    -- (The previous proof for right_inv remains correct)
+    intro q_in
+    simp [ toRat, fromRat, getNum, getSign, getDen,
+       List.count_append, List.count_replicate,
+       List.head_cons, List.tail_cons, List.singleton_append,
+       add_zero, zero_add ]      -- everything here exists
+    -- `fromRat` chooses its numerator as
+    --   if 0 ≤ q_in then |q_in.num| else -|q_in.num|
+    -- We show this is convertible to `q_in.num`, after which
+    -- `Rat.mkRat_self` finishes the proof.
+    by_cases h_nonneg : (0 : ℚ) ≤ q_in
+    ·  -- branch 0 ≤ q_in : the numerator chosen is `|q_in.num| = q_in.num`
+       have : (if (0 : ℚ) ≤ q_in then (|q_in.num|) else -(|q_in.num|)) = q_in.num := by
+         simp [h_nonneg, abs_of_nonneg (Rat.num_nonneg.2 h_nonneg)]
+       simpa [this] using Rat.mkRat_self q_in
+    ·  -- branch q_in < 0 : numerator is `- |q_in.num| = q_in.num`
+       have : (if (0 : ℚ) ≤ q_in then (|q_in.num|) else -(|q_in.num|)) = q_in.num := by
+         have h_lt : q_in < 0 := lt_of_not_ge h_nonneg
+         -- Translate the negativity of the rational to negativity of its numerator.
+         -- `Rat.num_neg_iff_neg` is a lemma in `Mathlib.Data.Rat.Lemmas`
+         -- giving `q.num < 0 ↔ q < 0` when the denominator is positive.
+         have h_num_neg : q_in.num < 0 := by
+           --simpa using (Rat.num_nonneg).2 h_lt
+           simp [Rat.num_nonneg]
+           aesop
+         simp [h_nonneg, abs_of_neg h_num_neg]
+       simpa [this] using Rat.mkRat_self q_in
+}
+
+
+/-!
+## Reals as EGPT ParticleSystemPDF: Probability Density Functions over Infinite Systems of Particle's:
+     ###########################################################
      Reals as Boolean-valued *functions* on our emergent naturals
      *Constructive Interpretation of functions* --
      ########################################################### -/
 
+/-- Emergent reals: the power set of `ParticlePath`, i.e. characteristic
+    functions `ParticlePath → Bool`. -/
+abbrev ParticleSystemPDF := ParticlePath → Bool
+abbrev EGPT.Real := ParticleSystemPDF
 
 
-/-- Emergent reals: the power set of `GNat`, i.e. characteristic
-    functions `GNat → Bool`. -/
-abbrev GeneratedReal_PCA := GNat → Bool
 
-namespace GeneratedReal_PCA
-
-/-- Transport along `GNat ≃ ℕ`, giving `(GNat → Bool) ≃ (ℕ → Bool)`. -/
-noncomputable def equivFunNat : GeneratedReal_PCA ≃ (ℕ → Bool) :=
-  Equiv.arrowCongr equivGNatToNat (Equiv.refl Bool)
+/-- Transport along `ParticlePath ≃ ℕ`, giving `(ParticlePath → Bool) ≃ (ℕ → Bool)`. -/
+noncomputable def equivFunNat : ParticleSystemPDF ≃ (ℕ → Bool) :=
+  Equiv.arrowCongr equivParticlePathToNat (Equiv.refl Bool)
 
 
 open Cardinal
 
 
-/-- The cardinality of `GeneratedReal_PCA` (functions from GNat to Bool) is \(2^{\aleph_0}\). -/
-lemma cardinal_eq_two_pow_aleph0 : Cardinal.mk GeneratedReal_PCA = 2 ^ Cardinal.aleph0 := by
+/-- The cardinality of `ParticleSystemPDF` (functions from ParticlePath to Bool) is \(2^{\aleph_0}\). -/
+lemma cardinal_eq_two_pow_aleph0 : Cardinal.mk ParticleSystemPDF = 2 ^ Cardinal.aleph0 := by
   calc
-    -- 1) By definition, GeneratedReal_PCA is GNat → Bool.
-    --    Using the equivalence equivFunNat : (GNat → Bool) ≃ (ℕ → Bool),
+    -- 1) By definition, ParticleSystemPDF is ParticlePath → Bool.
+    --    Using the equivalence equivFunNat : (ParticlePath → Bool) ≃ (ℕ → Bool),
     --    their cardinalities are equal.
-    Cardinal.mk GeneratedReal_PCA
+    Cardinal.mk ParticleSystemPDF
       = Cardinal.mk (ℕ → Bool)             := Cardinal.mk_congr equivFunNat
     -- 2) The cardinality of a function space #(A → B) is #B ^ #A.
     _ = Cardinal.mk Bool ^ Cardinal.mk ℕ   := by rw [Cardinal.power_def]
@@ -173,14 +458,11 @@ lemma cardinal_eq_two_pow_aleph0 : Cardinal.mk GeneratedReal_PCA = 2 ^ Cardinal.
     _ = 2 ^ Cardinal.aleph0                := by aesop
 /-- The emergent reals have exactly the same cardinality as ℝ (the continuum). -/
 
-noncomputable def equivGeneratedReal : GeneratedReal_PCA ≃ ℝ :=
+noncomputable def equivParticleSystemPMFtoReal : ParticleSystemPDF ≃ ℝ :=
   -- 1) combine your two cardinality proofs into `#G = #ℝ`
-  have h : mk GeneratedReal_PCA = mk ℝ := by
+  have h : mk ParticleSystemPDF = mk ℝ := by
     calc
-      mk GeneratedReal_PCA = 2 ^ aleph0    := cardinal_eq_two_pow_aleph0
+      mk ParticleSystemPDF = 2 ^ aleph0    := cardinal_eq_two_pow_aleph0
       _                 = #ℝ              := (Cardinal.mk_real).symm
   -- 2) use `Cardinal.eq` to get `Nonempty (G ≃ ℝ)`
   Classical.choice (Cardinal.eq.1 h)
-
-
-end GeneratedReal_PCA

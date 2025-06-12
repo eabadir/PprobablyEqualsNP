@@ -1,18 +1,18 @@
 import Mathlib.Data.Sym.Card
 
-import PPNP.Common.Basic
-import PPNP.Entropy.Common
-import PPNP.Entropy.Physics.Common
-import PPNP.Entropy.RET
+import EGPT.Core
+import EGPT.Entropy.Common
+import EGPT.Physics.Common
+import EGPT.Entropy.RET
 
-namespace PPNP.Entropy.Physics.UniformSystems
+namespace EGPT.Physics.UniformSystems
 
-open PPNP.Entropy.RET
+open EGPT.Entropy.RET
 
 open Multiset NNReal
-open PPNP.Common
-open PPNP.Entropy.Common
-open PPNP.Entropy.Physics.Common
+open EGPT
+open EGPT.Entropy.Common
+open EGPT.Physics.Common
 
 
 
@@ -677,7 +677,7 @@ Defines the Bose-Einstein probability distribution `p_BE` over the state space `
 This is a uniform distribution, where each state `q : OmegaUD N M` has probability
 `1 / Fintype.card (OmegaUD N M)`.
 The probability is given as an `NNReal` (non-negative real number).
-This definition relies on `uniformProb` from `PPNP.Entropy.Common`, which handles
+This definition relies on `uniformProb` from `EGPT.Entropy.Common`, which handles
 the case where the number of outcomes might be zero (though `card_omega_be_pos`
 ensures the cardinality is positive under typical physical conditions `N ≠ 0 ∨ M = 0`).
 -/
@@ -880,7 +880,7 @@ theorem H_physical_system_is_rota_uniform (N M : ℕ) (h_domain_valid : N ≠ 0 
     simp only [mul_zero]
   else
     rw [dif_neg hk_eq_1]
-    simp only [PPNP.Common.RealLogNatToNNReal, NNReal.coe_mul, (Real.log_nonneg (Nat.one_le_cast.mpr hk_card_ge1_))]
+    simp only [EGPT.RealLogNatToNNReal, NNReal.coe_mul, (Real.log_nonneg (Nat.one_le_cast.mpr hk_card_ge1_))]
     have h_shannon_eq_log_k : stdShannonEntropyLn (p_UD_fin N M) = Real.log (k_card_ : ℝ) := by
       rw [p_BE_fin_is_H_physical_system_uniform_input N M h_domain_valid]
       rw [stdShannonEntropyLn_uniform_eq_log_card]

@@ -62,13 +62,13 @@ Algorithm = recorded ParticlePath (List Bool) ... a canonical Int
 
 ParticlePosition = given (t : Nat) (path : ParticlePath) := t --where t is the time (number of coinflips recorded) on the particle's path where the origin is time 0. I.e. it is the first t elements of the  of the ParticlePath (which, since ParticlePath is Int in canonical form (List Bool), ParticlePath is just another Int, with Nat magnitude t)
 
-ComputerProgram (Int paths) as a data structure (List, concat, etc.) of Algorithm's (single paths) ... List Algorithm
+PathProgram (Int paths) as a data structure (List, concat, etc.) of Algorithm's (single paths) ... List Algorithm
 
-MathFunction as mappings to end positions. Therefore MathFunction := List ParticlPath := List Nat := List Int := List Algorithm := ComputerProgram
+MathFunction as mappings to end positions. Therefore MathFunction := List ParticlPath := List Nat := List Int := List Algorithm := PathProgram
 
-SystemState := List ParticlePosition
+ParticlePosition := List ParticlePosition
 
-PartitionFunction (partitionSize : Nat, SystemState)
+PartitionFunction (partitionSize : Nat, ParticlePosition)
 
 ## Computing the Future Using Rationals As Partition Functions: Uniform in the Microstates
 
@@ -111,7 +111,7 @@ Furthermore, since all paths are equally likely,
 Since we want to compute the future of systems of particles as if we were walking a binary computer tape, and furthermore, since the law of large numbers is our bridge to doing so, we will want convenient ways to talk about large sets of particle paths. We can think of the evolution of a system of particles as a series of discrete time steps just like the Galton board levels, where each step is a coin flip/ peg that determines the next position of the particle ... i.e. the set of particle paths is the definition of state of the system at a given time (or equivalently, the particle positions if we repeat the process for each particle).
 
 ### Computer Programs as Finite Samples From the IID Source (I.e. Samples are a set of *actual* Particle Paths)
-We have already said that particle paths are equivalent to a "digital tape" that records the outcomes of the coin flips, and the paths can be represented as binary strings (List Bool) where each bit represents the outcome of a coin flip (heads or tails). Computer Science, built on the framework of Turing Machines, definitionally finds our List Bool equivalent to the "tape" of a replayable by a Universal Turning Machine and the UniversalTuringMachine itself represents a replay mechanism for the uncountably infinite set of all tapes. Previously we have said that the set of all particle paths is equivalent to the set of all possible outcomes of a stochastic process and we also said that "PrimePaths" are the fundamental building blocks of all paths. It therefore follows that any Computer Program (concatenation of List Bool which are particle paths) ... so we can think of a Computer Program made up of PrimePaths as a set of particle paths that can be executed in a sequence to produce a final output. Computer Scientists would call these PrimePaths "Symbols" or "words" in a formal "Language". In short, an IIDSource of particles will produce the every possible ComputerProgram (ParticlePath's) and also the Language composed of a countably infinite set Symbols.  
+We have already said that particle paths are equivalent to a "digital tape" that records the outcomes of the coin flips, and the paths can be represented as binary strings (List Bool) where each bit represents the outcome of a coin flip (heads or tails). Computer Science, built on the framework of Turing Machines, definitionally finds our List Bool equivalent to the "tape" of a replayable by a Universal Turning Machine and the UniversalTuringMachine itself represents a replay mechanism for the uncountably infinite set of all tapes. Previously we have said that the set of all particle paths is equivalent to the set of all possible outcomes of a stochastic process and we also said that "PrimePaths" are the fundamental building blocks of all paths. It therefore follows that any Computer Program (concatenation of List Bool which are particle paths) ... so we can think of a Computer Program made up of PrimePaths as a set of particle paths that can be executed in a sequence to produce a final output. Computer Scientists would call these PrimePaths "Symbols" or "words" in a formal "Language". In short, an IIDSource of particles will produce the every possible PathProgram (ParticlePath's) and also the Language composed of a countably infinite set Symbols.  
 
 In this framework, we can think of a computer program as a set of recorded particle paths, where each path is a sequence of coin flips that determines the movement of a particle through space over time. 
 

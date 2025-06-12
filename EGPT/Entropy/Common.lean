@@ -23,12 +23,12 @@ import Mathlib.Logic.Equiv.Fin.Basic
 import Mathlib.Logic.Equiv.Defs
 import Mathlib.GroupTheory.Congruence.Basic
 
-import PPNP.Common.Basic
+import EGPT.Core
 
-namespace PPNP.Entropy.Common
+namespace EGPT.Entropy.Common
 
 open BigOperators Fin Real Topology NNReal Filter Nat Function
-open PPNP.Common
+open EGPT
 
 universe u
 
@@ -234,7 +234,7 @@ structure IsEntropyZeroInvariance
     H_func p_ext = H_func p_orig
 
 
--- In PPNP.Entropy.Common.lean, add this structure:
+-- In EGPT.Entropy.Common.lean, add this structure:
 structure IsEntropyZeroOnEmptyDomain
   (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) : Prop where
   apply_to_empty_domain : H_func Fin.elim0 = 0

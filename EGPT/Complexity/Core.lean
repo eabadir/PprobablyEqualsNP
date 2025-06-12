@@ -7,13 +7,13 @@ import Mathlib.Tactic.Sat.FromLRAT
 import Mathlib.Data.List.Range
 import Mathlib.Data.List.FinRange
 
-import PPNP.NumberTheory.Core
-import PPNP.Common.Basic
-import PPNP.Entropy.Common
+import EGPT.NumberTheory.Core
+import EGPT.Core
+import EGPT.Entropy.Common
 
-namespace PPNP.Complexity.Program
+namespace EGPT.Complexity
 
-open PPNP.NumberTheory.Core PPNP.Entropy.Common
+open EGPT.NumberTheory.Core EGPT.Entropy.Common
 
 /-- A single instruction/choice, represented by a Bool.
     Corresponds to one "bit" of choice from an i.i.d. source
@@ -24,16 +24,16 @@ def ComputerInstruction := Bool
     This is conceptually the Turing Machine's input tape. -/
 def ComputerTape := List ComputerInstruction
 
-/-- Represents the abstract state of a single particle or set of particles (by addition) i.e. can be a complex system.
-    The specific structure of SystemState is not crucial for the complexity definition
+/-- Represents the state of a single ChargedParticlePath ≃ EGPT.Int ≃ ℤ  or set of particles (by addition of ℤ ). I.e. by linear additivity adding individual particle paths is equivalent to a larger complex system.
+    The specific structure of ParticlePosition is not crucial for the complexity definition
     focused on tape length, but it's part of the program definition. -/
-structure SystemState where -- Example placeholder definition
-  val : ℤ  --Noting ℤ is List Bool is GeneratedInt_PCA but Lean's simp will handle Int better
+structure ParticlePosition where -- Example placeholder definition
+  val : ℤ  --Noting Int ℤ  is ChargedParticlePath is List Bool but Lean's simp will handle ℤ  better
 
-/-- A ComputerProgram is defined by an initial state and a tape of instructions
+/-- A PathProgram is defined by an initial state and a tape of instructions
     that drives its evolution. -/
-structure ComputerProgram where
-  initial_state : SystemState
+structure PathProgram where
+  initial_state : ParticlePosition
   tape : ComputerTape
 
 /-!
@@ -42,11 +42,9 @@ structure ComputerProgram where
 
 This section formalizes the core EGPT insight: a "program" is not just a
 raw path, but is uniquely defined by its informationally significant outcome
-(its net effect, encoded as a `GeneratedInt_PCA`) and the time over which
-that outcome was achieved (its complexity, a `GNat`).
+(its net effect, encoded as a sum of one or more `ChargedParticlePath`) and the time over which that outcome was achieved (its complexity is just the magnitude `ParticlePath`).
 
-This resolves the ambiguity of the previous program definition and allows for
-a true, sorry-free bijection between programs and information.
+This gives us a true, sorry-free bijection between programs and information.
 ==================================================================
 -/
 
@@ -57,23 +55,23 @@ A `CanonicalComputerProgram` represents the essential information of a
 computational process.
 -/
 structure CanonicalComputerProgram where
-  initial_state    : SystemState
-  -- The compressed outcome of the program's path, encoded as an EGPT integer.
-  canonical_tape   : GeneratedInt_PCA
+  initial_state    : ParticlePosition
+  -- The compressed outcome of the sum of one or more particle paths / programs, encoded as an EGPT integer.
+  canonical_tape   : ChargedParticlePath
   -- The total number of steps taken to achieve the outcome.
-  total_complexity : GNat
+  total_complexity : ParticlePath
 
 /--
-A function to "compress" or "encode" any raw `ComputerProgram` into its
+A function to "compress" or "encode" any raw `PathProgram` into its
 canonical form. It extracts the outcome and the total time.
 -/
-noncomputable def encodeToCanonical (prog : ComputerProgram) : CanonicalComputerProgram :=
+noncomputable def encodeToCanonical (prog : PathProgram) : CanonicalComputerProgram :=
   -- 1. Calculate the final position from the raw tape.
   let final_pos : ℤ := particlePosition prog.tape
   -- 2. Convert this integer outcome to its EGPT representation.
-  let canon_tape : GeneratedInt_PCA := (generatedIntPCAEquivInt.symm final_pos)
+  let canon_tape : ChargedParticlePath := (ParticlePathIntEquiv.symm final_pos)
   -- 3. Get the total runtime (complexity).
-  let total_cplx : GNat := fromNat prog.tape.length
+  let total_cplx : ParticlePath := fromNat prog.tape.length
   -- 4. Construct the canonical program.
   {
     initial_state := prog.initial_state,
@@ -85,25 +83,25 @@ noncomputable def encodeToCanonical (prog : ComputerProgram) : CanonicalComputer
 The "Information" represented by a canonical program is the pair of numbers
 (outcome, runtime) that uniquely defines it.
 -/
-abbrev CanonicalInformation := GeneratedInt_PCA × ComputerTape
+abbrev CanonicalInformation := ChargedParticlePath × ComputerTape
 
 /--
 **The Final EGPT Equivalence Theorem (Program ≃ Information):**
 
 There is a direct, computable, and sorry-free bijection between the original
-`ComputerProgram` structure and the `CanonicalInformation` pair that defines it.
+`PathProgram` structure and the `CanonicalInformation` pair that defines it.
 This formalizes the idea that a program *is* its initial state plus its path.
 -/
-noncomputable def equivProgramToCanonicalInfo : ComputerProgram ≃ CanonicalInformation :=
+noncomputable def equivProgramToCanonicalInfo : PathProgram ≃ CanonicalInformation :=
 {
   toFun := fun prog =>
     -- The forward function encodes the initial state to its GInt form.
-    let initialStateInfo := generatedIntPCAEquivInt.symm prog.initial_state.val
+    let initialStateInfo := ParticlePathIntEquiv.symm prog.initial_state.val
     (initialStateInfo, prog.tape),
 
   invFun := fun info =>
     -- The inverse function decodes the GInt back to a ℤ.
-    let initialStateVal := generatedIntPCAEquivInt info.fst
+    let initialStateVal := ParticlePathIntEquiv info.fst
     {
       initial_state := { val := initialStateVal },
       tape := info.snd
@@ -113,7 +111,7 @@ noncomputable def equivProgramToCanonicalInfo : ComputerProgram ≃ CanonicalInf
     -- Proving `invFun(toFun(p)) = p`.
     intro p
     -- This will succeed with `simp` because we are applying an equivalence
-    -- and its inverse (`generatedIntPCAEquivInt`), which cancel out,
+    -- and its inverse (`ParticlePathIntEquiv`), which cancel out,
     -- and the tape component is passed through directly.
     simp,
 
@@ -125,7 +123,7 @@ noncomputable def equivProgramToCanonicalInfo : ComputerProgram ≃ CanonicalInf
 }
 
 /--
-A `SystemState` is a distribution of particles into a finite number of
+A `SATSystemState` is a distribution of particles into a finite number of
 positions. It is represented by a `Multiset` over `Fin k_positions`, where
 `k_positions` is the number of "boxes". The cardinality of the multiset is
 the number of particles ("balls").
@@ -165,14 +163,14 @@ Axiom: Represents the deterministic evaluation of the program.
 Given a program (initial state + tape), it outputs the final state.
 The specific function `eval` is not defined here, only its existence and type.
 -/
-axiom ComputerProgram.eval (prog : ComputerProgram) : SystemState
+axiom PathProgram.eval (prog : PathProgram) : ParticlePosition
 
 /--
-Defines the computational complexity of a `ComputerProgram` in this model.
+Defines the computational complexity of a `PathProgram` in this model.
 It is defined as the length of its input `ComputerTape`, representing the
 number of i.i.d. binary choices processed.
 -/
-def ComputerProgram.complexity (prog : ComputerProgram) : ℕ :=
+def PathProgram.complexity (prog : PathProgram) : ℕ :=
   prog.tape.length
 
 
@@ -185,12 +183,12 @@ abbrev ProgramTape := List Bool
 **Generalized RECT (Rota's Entropy & Computability Theorem for any Distribution):**
 
 For any system described by a discrete probability distribution `dist`, there
-exists a `ComputerProgram` whose complexity is equivalent to the Shannon
+exists a `PathProgram` whose complexity is equivalent to the Shannon
 entropy of that distribution. This theorem provides the constructive bridge
 from any probability-theoretic decision problem system to a computational one.
 -/
 theorem rect_program_for_dist {k : ℕ} (dist : Fin k → NNReal) (_h_sum : ∑ i, dist i = 1) :
-    ∃ (prog : ComputerProgram), prog.complexity = Nat.ceil (ShannonEntropyOfDist dist) :=
+    ∃ (prog : PathProgram), prog.complexity = Nat.ceil (ShannonEntropyOfDist dist) :=
 by
   -- The required complexity L is the smallest integer number of bits that can
   -- represent the information content H(dist).
@@ -201,8 +199,8 @@ by
   -- the tape would be determined by an optimal compression algorithm (like
   -- Huffman or Arithmetic coding), but for complexity theory, its length is what matters.
   let example_tape := List.replicate L true
-  let initial_st_example : SystemState := { val := 0 }
-  let prog_exists : ComputerProgram := {
+  let initial_st_example : ParticlePosition := { val := 0 }
+  let prog_exists : PathProgram := {
     initial_state := initial_st_example,
     tape := example_tape
   }
@@ -210,7 +208,7 @@ by
 
   -- The proof goal is to show that the complexity of our created program
   -- matches the required complexity L. This is true by construction.
-  simp [ComputerProgram.complexity, L, example_tape, prog_exists]
+  simp [PathProgram.complexity, L, example_tape, prog_exists]
 
 
 /-- Standard Shannon Entropy (base 2) for a system of k equiprobable states. -/
@@ -223,18 +221,18 @@ noncomputable def shannonEntropyOfSystem (k : ℕ) : ℝ :=
 Inverse SCT (Part A): Any program of complexity L corresponds to a single microstate
 in a system of 2^L equiprobable states, which has Shannon Entropy L.
 -/
-theorem invSCT_entropy_of_program (prog : ComputerProgram) :
-    shannonEntropyOfSystem (2^(ComputerProgram.complexity prog)) = ((ComputerProgram.complexity prog) : ℝ) :=
+theorem invSCT_entropy_of_program (prog : PathProgram) :
+    shannonEntropyOfSystem (2^(PathProgram.complexity prog)) = ((PathProgram.complexity prog) : ℝ) :=
 by
   simp only [shannonEntropyOfSystem]
   -- After simp, the goal is:
-  -- (if 0 < 2 ^ (ComputerProgram.complexity prog) then Real.logb 2 (2 ^ (ComputerProgram.complexity prog)) else 0)
-  --   = ↑(ComputerProgram.complexity prog)
+  -- (if 0 < 2 ^ (PathProgram.complexity prog) then Real.logb 2 (2 ^ (PathProgram.complexity prog)) else 0)
+  --   = ↑(PathProgram.complexity prog)
 
-  have h_pow_pos : 0 < 2^(ComputerProgram.complexity prog) := Nat.pow_pos (by norm_num)
+  have h_pow_pos : 0 < 2^(PathProgram.complexity prog) := Nat.pow_pos (by norm_num)
 
   rw [if_pos h_pow_pos]
-  -- Goal is now: Real.logb 2 (2 ^ (ComputerProgram.complexity prog)) = ↑(ComputerProgram.complexity prog)
+  -- Goal is now: Real.logb 2 (2 ^ (PathProgram.complexity prog)) = ↑(PathProgram.complexity prog)
 
   simp [Real.logb_pow]
 
@@ -291,29 +289,29 @@ abbrev InformationContent := ℕ
 For any given amount of information content `L`, there exists a computer program
 whose complexity is exactly `L`.
 
-This is provable by construction using our `GNat` number system.
+This is provable by construction using our `ParticlePath` number system.
 -/
 theorem rect_program_for_information (L : InformationContent) :
-    ∃ (prog : ComputerProgram), prog.complexity = L :=
+    ∃ (prog : PathProgram), prog.complexity = L :=
 by
-  -- 1. In EGPT, a program tape is a `GNat`. A `GNat` of length L
+  -- 1. In EGPT, a program tape is a `ParticlePath`. A `ParticlePath` of length L
   --    is constructed from the natural number L using `fromNat`.
-  let gnat_L : GNat := fromNat L
-  -- A `GNat` is definitionally a `List Bool` satisfying `AllTrue`.
+  let gnat_L : ParticlePath := fromNat L
+  -- A `ParticlePath` is definitionally a `List Bool` satisfying `AllTrue`.
   let tape_L : ComputerTape := gnat_L.val
 
   -- 2. Construct the program with this tape.
-  let prog_exists : ComputerProgram := {
+  let prog_exists : PathProgram := {
     initial_state := { val := 0 },
     tape := tape_L
   }
   use prog_exists
 
   -- 3. Prove its complexity is L.
-  -- The complexity is the tape length, which is the length of the GNat's list.
-  simp [ComputerProgram.complexity, tape_L]
-  -- The length of the GNat from `fromNat L` is L by definition.
-  -- This is proven by `left_inv` in the `equivGNatToNat` equivalence.
+  -- The complexity is the tape length, which is the length of the ParticlePath's list.
+  simp [PathProgram.complexity, tape_L]
+  -- The length of the ParticlePath from `fromNat L` is L by definition.
+  -- This is proven by `left_inv` in the `equivParticlePathToNat` equivalence.
   exact left_inv L
 
 /-!
@@ -322,7 +320,7 @@ by
 
 This section provides the final, general theorem that connects any
 `FiniteIIDSample` (representing a potentially biased physical source)
-to a `ComputerProgram`. It replaces the older, special-case theorems
+to a `PathProgram`. It replaces the older, special-case theorems
 that only handled fair (uniform) sources.
 
 The complexity of the resulting program is not its raw tape length, but
@@ -335,13 +333,13 @@ the source, as calculated by `EfficientPCAEncoder`.
 **Rota's Entropy & Computability Theorem of IID Source: The Generalized Equivalence Theorem (Source ↔ Program):**
 
 For any well-defined information source (`FiniteIIDSample`), there exists a
-`ComputerProgram` whose complexity is precisely the amount of information
+`PathProgram` whose complexity is precisely the amount of information
 (in integer bits) that the source produces.
 
 This is the ultimate expression of RECT in our framework.
 -/
 theorem rect_program_for_biased_source (src : FiniteIIDSample) :
-    ∃ (prog : ComputerProgram), prog.complexity = Nat.ceil (EfficientPCAEncoder src) :=
+    ∃ (prog : PathProgram), prog.complexity = Nat.ceil (EfficientPCAEncoder src) :=
 by
   -- 1. Let H be the total Shannon entropy (information content in bits)
   --    produced by the source. This is calculated by our `EfficientPCAEncoder`.
@@ -366,12 +364,12 @@ by
   -- Therefore, a program of complexity `ceil(H_src)` must exist.
   let L := Nat.ceil H_src
   let example_tape := List.replicate L true
-  let prog_exists : ComputerProgram := {
+  let prog_exists : PathProgram := {
     initial_state := { val := 0 },
     tape := example_tape
   }
   use prog_exists
-  simp [ComputerProgram.complexity, L, example_tape]
+  simp [PathProgram.complexity, L, example_tape]
   aesop
 
 
@@ -381,7 +379,7 @@ This section defines P and NP based on the concrete computational
 model established in Phase 1.
 -/
 
-open PPNP.NumberTheory.Core
+open EGPT.NumberTheory.Core
 
 
 /--
@@ -409,11 +407,11 @@ abbrev Lang_EGPT := EGPT_Input → Bool
 
 /--
 A DMachine is a deterministic verifier. It takes a potential solution
-(a `ComputerProgram` as a certificate) and an input, and decides to
+(a `PathProgram` as a certificate) and an input, and decides to
 accept or reject it.
 -/
 structure DMachine where
-  verify : (certificate : ComputerProgram) → (input : EGPT_Input) → Bool
+  verify : (certificate : PathProgram) → (input : EGPT_Input) → Bool
   -- We can add a field for the machine's own complexity if needed,
   -- but for now we define it externally.
 
@@ -423,8 +421,8 @@ A predicate asserting that a DMachine runs in polynomial time.
 The runtime must be polynomial in the size of the certificate's tape
 and the numerical value of the input.
 -/
-def RunsInPolyTime (complexity_of : ComputerProgram → EGPT_Input → ℕ) : Prop :=
-  ∃ (c k : ℕ), ∀ (cert : ComputerProgram) (input : EGPT_Input),
+def RunsInPolyTime (complexity_of : PathProgram → EGPT_Input → ℕ) : Prop :=
+  ∃ (c k : ℕ), ∀ (cert : PathProgram) (input : EGPT_Input),
     complexity_of cert input ≤ c * (cert.complexity + input)^k + c
 
 /-!
@@ -436,7 +434,7 @@ This predicate formalizes what it means for a program to be a valid physical
 path. It is true if the program's tape satisfies all constraints at every
 intermediate step of its creation (from length 1 to its final length).
 -/
-def CanNDMachineProduce (constraints : List Constraint) (prog : ComputerProgram) : Prop :=
+def CanNDMachineProduce (constraints : List Constraint) (prog : PathProgram) : Prop :=
   ∀ (t : ℕ) (_ht : 0 < t ∧ t ≤ prog.complexity),
     (constraints.all (fun c => c.checker t (prog.tape.take t)))
 
@@ -448,7 +446,7 @@ def CanNDMachineProduce (constraints : List Constraint) (prog : ComputerProgram)
 
 -- This is a predicate on functions, defining what it means to be polynomial.
 -- A full formalization would build this inductively. For now, we state it as a Prop.
-class IsPolynomialEGPT (f : GNat → GNat) : Prop where
+class IsPolynomialEGPT (f : ParticlePath → ParticlePath) : Prop where
   -- For example, one could define this as:
   -- is_poly : ∃ (ops : List GNatOperation), compute_f_with_ops ops = f
   -- where GNatOperation is an enum of {Add, Mul}.
@@ -457,16 +455,16 @@ class IsPolynomialEGPT (f : GNat → GNat) : Prop where
 /--
 A predicate asserting that a complexity function is bounded by an EGPT-polynomial.
 -/
-def IsBoundedByPolynomial (complexity_of : EGPT_Input → GNat) : Prop :=
-  ∃ (p : GNat → GNat), IsPolynomialEGPT p ∧
-    ∀ (input : EGPT_Input), complexity_of input ≤ p (fromNat input) -- `fromNat` converts ℕ to GNat
+def IsBoundedByPolynomial (complexity_of : EGPT_Input → ParticlePath) : Prop :=
+  ∃ (p : ParticlePath → ParticlePath), IsPolynomialEGPT p ∧
+    ∀ (input : EGPT_Input), complexity_of input ≤ p (fromNat input) -- `fromNat` converts ℕ to ParticlePath
 
 /--
 The polynomial time class P_EGPT, redefined using our number-theoretic concept of polynomial time.
 -/
 def P_EGPT_NT : Set Lang_EGPT :=
 { L | ∃ (solver : EGPT_Input → Bool)
-         (complexity : EGPT_Input → GNat),
+         (complexity : EGPT_Input → ParticlePath),
        -- The solver must be bounded by an EGPT-polynomial function.
        IsBoundedByPolynomial complexity ∧
        -- The solver must correctly decide the language.
@@ -479,11 +477,11 @@ The non-deterministically polynomial class NP_EGPT, redefined using our number-t
 def NP_EGPT_NT : Set Lang_EGPT :=
 { L | ∃ (dm : DMachine)
          (constraints : List Constraint)
-         (poly_bound : GNat → GNat) (_h_poly : IsPolynomialEGPT poly_bound),
+         (poly_bound : ParticlePath → ParticlePath) (_h_poly : IsPolynomialEGPT poly_bound),
        ∀ (input : EGPT_Input),
-         L input ↔ ∃ (cert : ComputerProgram),
+         L input ↔ ∃ (cert : PathProgram),
            -- The certificate's complexity is bounded by an EGPT-polynomial function.
-           equivGNatToNat.toFun (fromNat cert.complexity) ≤ equivGNatToNat.toFun (poly_bound (fromNat input)) ∧
+           equivParticlePathToNat.toFun (fromNat cert.complexity) ≤ equivParticlePathToNat.toFun (poly_bound (fromNat input)) ∧
            CanNDMachineProduce constraints cert ∧
            dm.verify cert input
 }
@@ -504,11 +502,11 @@ A `Lang_EGPT_SAT` is a decision problem on combinatorial systems.
 abbrev Lang_EGPT_SAT := EGPT_SAT_Input → Bool
 
 /--
-A `Certificate` for an EGPT-SAT problem is a vector of `ComputerProgram`s,
+A `Certificate` for an EGPT-SAT problem is a vector of `PathProgram`s,
 one for each particle. The certificate represents the full history (the paths)
 that lead to a proposed final state.
 -/
-abbrev Certificate (n_particles : ℕ) := Vector ComputerProgram n_particles
+abbrev Certificate (n_particles : ℕ) := Vector PathProgram n_particles
 
 
 
@@ -569,11 +567,11 @@ The class `NP_EGPT_SAT` contains combinatorial problems for which a "yes"
 answer can be verified in EGPT-polynomial time.
 -/
 def NP_EGPT_SAT : Set Lang_EGPT_SAT :=
-{ L | ∃ (sv : SAT_Verifier) (poly_bound : GNat → GNat) (_h_poly : IsPolynomialEGPT poly_bound),
+{ L | ∃ (sv : SAT_Verifier) (poly_bound : ParticlePath → ParticlePath) (_h_poly : IsPolynomialEGPT poly_bound),
       ∀ (input : EGPT_SAT_Input),
         L input ↔ ∃ (cert : Certificate input.n_particles),
           -- The complexity of each program in the certificate must be polynomially bounded.
-          (cert.toList.all (fun prog => prog.complexity ≤ equivGNatToNat.toFun (poly_bound (fromNat input.n_particles)))) ∧
+          (cert.toList.all (fun prog => prog.complexity ≤ equivParticlePathToNat.toFun (poly_bound (fromNat input.n_particles)))) ∧
           -- The SAT_Verifier must accept the certificate for the given input.
           sv.verify input cert
 }
@@ -584,7 +582,7 @@ directly by a deterministic algorithm in EGPT-polynomial time.
 -/
 def P_EGPT_SAT : Set Lang_EGPT_SAT :=
 { L | ∃ (solver : EGPT_SAT_Input → Bool)
-         (complexity_bound : GNat → GNat) (_h_poly : IsPolynomialEGPT complexity_bound),
+         (complexity_bound : ParticlePath → ParticlePath) (_h_poly : IsPolynomialEGPT complexity_bound),
       -- The solver must be bounded by an EGPT-polynomial function of its input size.
       -- The solver must correctly decide the language.
       (∀ input, L input = solver input)
@@ -607,11 +605,11 @@ def EGPT_SAT_Input.sizeOf (input : EGPT_SAT_Input) : ℕ :=
 
 /--
 A `PolyTimeReducer_EGPT_SAT` encapsulates a function that transforms problem
-instances, along with a proof that this transformation is finitely countable (i.e. solution -> Nat in Lean which implies GNat in the EGPT sense
+instances, along with a proof that this transformation is finitely countable (i.e. solution -> Nat in Lean which implies ParticlePath in the EGPT sense
 -/
 structure PolyTimeReducer_EGPT_SAT where
   transform : EGPT_SAT_Input → EGPT_SAT_Input
-  complexity_bound : GNat → GNat
+  complexity_bound : ParticlePath → ParticlePath
   h_poly : IsPolynomialEGPT complexity_bound
 
 
@@ -664,9 +662,9 @@ abbrev InformationContentR := ℝ
 
 /--
 A `ComputationalDescription` is a deterministic set of instructions that
-encodes the outcome of a process. Alias for `ComputerProgram`.
+encodes the outcome of a process. Alias for `PathProgram`.
 -/
-abbrev ComputationalDescription := ComputerProgram
+abbrev ComputationalDescription := PathProgram
 
 
 -- === The Equivalence Theorems ===
@@ -722,7 +720,7 @@ by
   rw [h_entropy_one, mul_one]
 
 /-!
-### ShannonEntropy ↔ ComputerProgram
+### ShannonEntropy ↔ PathProgram
 -/
 
 /--
@@ -735,7 +733,7 @@ theorem RECT_Entropy_to_Program (H : InformationContentR) :
 by
   let L := Nat.ceil H
   use { initial_state := { val := 0 }, tape := List.replicate L true }
-  simp [ComputerProgram.complexity]
+  simp [PathProgram.complexity]
   aesop
 
 /--
@@ -753,10 +751,10 @@ theorem IRECT_RECT_inverse_for_integer_complexity (L : ℕ) :
       IRECT_Program_to_Entropy prog = (L : ℝ) ∧ prog.complexity = L :=
 by
   use { initial_state := { val := 0 }, tape := List.replicate L true }
-  simp [IRECT_Program_to_Entropy, ComputerProgram.complexity]
+  simp [IRECT_Program_to_Entropy, PathProgram.complexity]
 
 /-!
-### IIDSource ↔ ComputerProgram (The Direct Bridge)
+### IIDSource ↔ PathProgram (The Direct Bridge)
 -/
 
 /--
@@ -792,14 +790,14 @@ by
 ==================================================================
 ### A Hierarchy of EGPT Problem Languages
 
-This section defines specific languages (sets of programs) within the EGPT framework. It allows us to formally distinguish between general programs, constraint-based programs, and SAT problems, all grounded in the same `GNat` representation.
+This section defines specific languages (sets of programs) within the EGPT framework. It allows us to formally distinguish between general programs, constraint-based programs, and SAT problems, all grounded in the same `ParticlePath` representation.
 
 
 **Un-Axiomatizing Constraint Encoding**
 
 Instead of an `equivCNF_to_GNat` axiom we give a constructive
 proof. We achieve this by defining a *syntactic* data structure for CNF
-formulas, proving it can be bijectively encoded to a `GNat`, and then
+formulas, proving it can be bijectively encoded to a `ParticlePath`, and then
 providing an interpreter that gives this syntax its semantic meaning within our "balls and boxes" model.
 ==================================================================
 -/
@@ -838,7 +836,7 @@ abbrev SyntacticCNF_EGPT (k_positions : ℕ) := List (Clause_EGPT k_positions)
 instance denumerable_SyntacticCNF_EGPT (k : ℕ) : Denumerable (SyntacticCNF_EGPT k) :=
   Denumerable.ofEncodableOfInfinite (SyntacticCNF_EGPT k)
 
--- === Step 2: Define the Provable Encoding (SyntacticCNF ≃ GNat) ===
+-- === Step 2: Define the Provable Encoding (SyntacticCNF ≃ ParticlePath) ===
 
 /-
 To encode a `SyntacticCNF_EGPT` as a `List Bool`, we need a canonical mapping.
@@ -854,13 +852,13 @@ since all our components (`List`, `Fin`, `Bool`) are encodable.
 /--
 **The New Equivalence (Un-Axiomatized):**
 There exists a computable bijection between the syntactic representation of a
-CNF formula and the `GNat` type. We state its existence via `Encodable`.
+CNF formula and the `ParticlePath` type. We state its existence via `Encodable`.
 -/
-noncomputable def equivSyntacticCNF_to_GNat {k : ℕ} : SyntacticCNF_EGPT k ≃ GNat :=
+noncomputable def equivSyntacticCNF_to_GNat {k : ℕ} : SyntacticCNF_EGPT k ≃ ParticlePath :=
   -- We use the power of Lean's typeclass synthesis for Denumerable types.
   -- `List`, `Fin k`, and `Bool` are all denumerable, so their product and list
-  -- combinations are also denumerable. `GNat` is denumerable via its equiv to `ℕ`.
-  (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (equivGNatToNat.symm)
+  -- combinations are also denumerable. `ParticlePath` is denumerable via its equiv to `ℕ`.
+  (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (equivParticlePathToNat.symm)
 
 -- === Step 3: Bridge from Syntax to Semantics (The Interpreter) ===
 
@@ -893,16 +891,16 @@ def eval_syntactic_cnf {k : ℕ} (syn_cnf : SyntacticCNF_EGPT k) : CNF_Formula k
 
 /--
 A `ProgramProblem` is the language of all validly encoded computer programs.
-For now, we can consider this to be the set of all `GNat`s, as every `GNat`
+For now, we can consider this to be the set of all `ParticlePath`s, as every `ParticlePath`
 can be interpreted as the tape of some program.
 -/
-abbrev ProgramProblem : Set GNat := Set.univ
+abbrev ProgramProblem : Set ParticlePath := Set.univ
 
 /--
-**REVISED `CNFProgram`:** The language of programs (`GNat`s) that are valid
+**REVISED `CNFProgram`:** The language of programs (`ParticlePath`s) that are valid
 encodings of a *syntactic* CNF formula. This is now fully constructive.
 -/
-def CNFProgram {k : ℕ} : Set GNat :=
+def CNFProgram {k : ℕ} : Set ParticlePath :=
   { gnat | ∃ (s : SyntacticCNF_EGPT k), equivSyntacticCNF_to_GNat.symm gnat = s }
 
 /--
@@ -911,7 +909,7 @@ constraints on final system states. This is conceptually equivalent to
 `CNFProgram` in our "balls and boxes" model, as our constraints are already
 defined on `SATSystemState`s.
 -/
-abbrev StateCheckProgram {k : ℕ} : Set GNat := CNFProgram (k := k)
+abbrev StateCheckProgram {k : ℕ} : Set ParticlePath := CNFProgram (k := k)
 
 
 
@@ -919,10 +917,10 @@ abbrev StateCheckProgram {k : ℕ} : Set GNat := CNFProgram (k := k)
 
 /--
 **CompositeProgram (Addition of Programs):**
-A `CompositeProgram` is formed by the EGPT addition of two `GNat`s, where
+A `CompositeProgram` is formed by the EGPT addition of two `ParticlePath`s, where
 one represents a general program and the other represents a set of constraints.
 This is a polynomial-time operation.
 -/
-def CompositeProgram (prog_gnat : GNat) (constraint_gnat : GNat) : GNat :=
-  -- GNat addition is a polynomial-time operation in EGPT.
-  add_gnat prog_gnat constraint_gnat
+def CompositeProgram (prog_gnat : ParticlePath) (constraint_gnat : ParticlePath) : ParticlePath :=
+  -- ParticlePath addition is a polynomial-time operation in EGPT.
+  add_ParticlePath prog_gnat constraint_gnat

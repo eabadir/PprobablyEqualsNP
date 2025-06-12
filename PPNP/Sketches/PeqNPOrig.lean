@@ -6,11 +6,11 @@ import Mathlib.Data.List.Basic -- For List.sum
 import Mathlib.Data.Set.Defs -- For Set type used by P and NP
 -- Using placeholder axioms for complexity theory results not readily available
 -- or easy to formalize at this level (like poly-time reduction transitivity).
-import PPNP.NumberTheory.Core
-import PPNP.Complexity.Program
-import PPNP.Entropy.Common -- For ShannonEntropyOfDist, stdShannonEntropyLn_uniform_eq_log_card
+import EGPT.NumberTheory.Core
+import EGPT.Complexity.Core
+import EGPT.Entropy.Common -- For ShannonEntropyOfDist, stdShannonEntropyLn_uniform_eq_log_card
 
-open Classical PPNP.Complexity.Program PPNP.NumberTheory.Core
+open Classical EGPT.Complexity EGPT.NumberTheory.Core
 
 namespace PnPProofDetailedV2
 
@@ -21,7 +21,7 @@ Section 1: Foundational Definitions (Complexity, SAT, Entropy)
 -/
 
 -- Basic Types and Complexity Classes
-abbrev Word := PPNP.Complexity.Program.ComputerTape -- which is `List Bool`
+abbrev Word := EGPT.Complexity.ComputerTape -- which is `List Bool`
 instance : Inhabited Word := ⟨sorry⟩ -- Give Word a default value
 -- In EGPT, the input to a decision problem is a natural number `n`, which can
 -- encode any problem instance (e.g., number of particles, number of variables,
@@ -59,39 +59,39 @@ def successWord : Word := [true]
 def combineInput (input cert : Word) : Word := List.append input cert
 
 -- The EGPT definition of polynomial time. It replaces the extrinsic c*n^k formula
--- with a structural definition based on the native EGPT number system (GNat).
+-- with a structural definition based on the native EGPT number system (ParticlePath).
 -- A function f : ℕ → ℕ is considered polynomial-time if it is bounded by a function `p_g`
--- that is itself constructible from a finite number of GNat additions and multiplications,
+-- that is itself constructible from a finite number of ParticlePath additions and multiplications,
 -- as captured by the `IsPolynomialEGPT` class.
 def PolyTime (f : ℕ → ℕ) : Prop :=
-  ∃ (p_g : GNat → GNat),
+  ∃ (p_g : ParticlePath → ParticlePath),
     IsPolynomialEGPT p_g ∧
     ∀ (n : ℕ),
       -- The output of f for a standard Nat `n` must be less than or equal to
       -- the output of the EGPT-polynomial function `p_g` when `p_g` is given
-      -- the GNat equivalent of `n`. We use the bijections to convert between number systems.
-      f n ≤ equivGNatToNat.toFun (p_g (equivGNatToNat.invFun n))
+      -- the ParticlePath equivalent of `n`. We use the bijections to convert between number systems.
+      f n ≤ equivParticlePathToNat.toFun (p_g (equivParticlePathToNat.invFun n))
 
 -- Redefines what it means for a machine to run in polynomial time using the
 -- native EGPT complexity measure. A machine runs in polynomial time if its
 -- time complexity (a Nat) is bounded by an EGPT-polynomial function of its
 -- input size.
 def RunsInPolyTime (m : Machine) : Prop :=
-  ∃ (p_g : GNat → GNat),
+  ∃ (p_g : ParticlePath → ParticlePath),
     IsPolynomialEGPT p_g ∧
     ∀ (w : Word),
       -- The machine's time complexity for a given word `w` (a Nat)
       -- must be less than or equal to the value of the polynomial bound `p_g`
-      -- applied to the size of the word (converted to a GNat).
-      timeComplexity m w ≤ equivGNatToNat.toFun (p_g (equivGNatToNat.invFun (wordLength w)))
+      -- applied to the size of the word (converted to a ParticlePath).
+      timeComplexity m w ≤ equivParticlePathToNat.toFun (p_g (equivParticlePathToNat.invFun (wordLength w)))
 
 -- Complexity Class P
-abbrev P := PPNP.Complexity.Program.P_EGPT_NT
+abbrev P := EGPT.Complexity.P_EGPT_NT
 
 -- Complexity Class NP
-abbrev NP := PPNP.Complexity.Program.NP_EGPT_NT
+abbrev NP := EGPT.Complexity.NP_EGPT_NT
 
-abbrev NPComplete := PPNP.Complexity.Program.EGPT_NPComplete
+abbrev NPComplete := EGPT.Complexity.EGPT_NPComplete
 
 -- In EGPT, Lang is Lang_EGPT = ℕ → Bool.
 -- A reduction is a function `f : ℕ → ℕ` that transforms an input for language L₁
@@ -102,8 +102,8 @@ def PolyTimeReducible (L₁ L₂ : Lang) : Prop :=
   ∃ (f : ℕ → ℕ),
     -- The function `f` must be computable in EGPT-polynomial time.
     -- This is the crucial complexity constraint on the reduction itself.
-    (∃ (p_g : GNat → GNat), IsPolynomialEGPT p_g ∧
-       ∀ n, f n ≤ equivGNatToNat.toFun (p_g (equivGNatToNat.invFun n))) ∧
+    (∃ (p_g : ParticlePath → ParticlePath), IsPolynomialEGPT p_g ∧
+       ∀ n, f n ≤ equivParticlePathToNat.toFun (p_g (equivParticlePathToNat.invFun n))) ∧
     -- The reduction must preserve membership in the language.
     (∀ n, L₁ n ↔ L₂ (f n))
 
@@ -115,7 +115,7 @@ axiom polyTimeReducible_trans {L1 L2 L3 : Lang} :
 
 
 -- Circuits and SAT (Boolean Satisfiability Problem)
-abbrev Circuit (k_positions : ℕ) := PPNP.Complexity.Program.CNF_Formula k_positions
+abbrev Circuit (k_positions : ℕ) := EGPT.Complexity.CNF_Formula k_positions
 -- In EGPT, an "assignment" is not a word but a concrete physical state: a
 -- specific distribution of particles into boxes. This is a `SATSystemState`.
 --
@@ -127,7 +127,7 @@ def evalCircuit {k_positions : ℕ} (c : Circuit k_positions) (assignment : SATS
 
 -- For the context of the SAT problem and its reductions, the "Language" is
 -- a decision problem over EGPT-SAT inputs.
-abbrev SAT_Lang := PPNP.Complexity.Program.Lang_EGPT_SAT
+abbrev SAT_Lang := EGPT.Complexity.Lang_EGPT_SAT
 
 -- The canonical EGPT-SAT problem. The language is true for a given input if and
 -- only if there exists a satisfying assignment (a valid particle distribution).

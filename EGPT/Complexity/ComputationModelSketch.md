@@ -1,6 +1,6 @@
 Okay, this is an excellent set of clarifications that significantly sharpens the model and its connection to core information theory concepts. The idea of NDMachine/DMachine as performing compression/decompression relative to an "IIDPathSource" (an IID source *plus* a starting context/position) is very powerful. The assertion that an NDMachine always completes in polynomial time (because it's essentially just playing out a bounded number of bit choices per sub-program, even if filtered by constraints) is key.
 
-Let's craft a consolidated implementation plan with code stubs for a new `PPNP.Complexity.ComputationalModel.lean` (or similar, to distinguish from the older `Program.lean`).
+Let's craft a consolidated implementation plan with code stubs for a new `EGPT.Complexity.ComputationalModel.lean` (or similar, to distinguish from the older `Program.lean`).
 
 **Core Concepts for This Revision:**
 
@@ -20,23 +20,23 @@ Let's craft a consolidated implementation plan with code stubs for a new `PPNP.C
 
 ---
 
-**Implementation Plan for `PPNP.Complexity.ComputationalModel.lean`**
+**Implementation Plan for `EGPT.Complexity.ComputationalModel.lean`**
 
 ```lean
 import Mathlib.Data.Vector
 import Mathlib.Data.Real.Basic -- For p_true in IIDPathSource
-import PPNP.NumberTheory.Core -- GNat, GInt, ProgramTape, etc.
+import EGPT.NumberTheory.Core -- ParticlePath, GInt, ProgramTape, etc.
 
-namespace PPNP.Complexity.ComputationalModel
+namespace EGPT.Complexity.ComputationalModel
 
-open PPNP.NumberTheory.Core
+open EGPT.NumberTheory.Core
 
 /-!
 # Computational Model based on Emergent Number Theory
 
 This file defines a computational model where:
 - Data and program tapes are `List Bool`.
-- Complexity measures use `GNat`.
+- Complexity measures use `ParticlePath`.
 - Machines operate by generating or verifying these tapes under constraints.
 - The model distinguishes between non-deterministic generation (NDMachine)
   and deterministic verification/processing (DMachine).
@@ -47,17 +47,17 @@ This file defines a computational model where:
 -- I. Core Data Structures (ProgramTape, Views, Constraints)
 --=============================================================================
 
--- ProgramTape, tapeLength, etc. are assumed from PPNP.NumberTheory.Core if defined there,
+-- ProgramTape, tapeLength, etc. are assumed from EGPT.NumberTheory.Core if defined there,
 -- or can be aliased/redefined here.
 -- For clarity, let's assume ProgramTape := List Bool is available.
 
 structure SubProgramView where
   processedTape   : ProgramTape
   currentPosition : GInt -- Net displacement (ones - zeros)
-  -- currentTime    : GNat -- Derivable: fromNat processedTape.length
+  -- currentTime    : ParticlePath -- Derivable: fromNat processedTape.length
 deriving Repr, BEq -- For easier debugging and comparison
 
-def SubProgramView.currentTime (spv : SubProgramView) : GNat :=
+def SubProgramView.currentTime (spv : SubProgramView) : ParticlePath :=
   fromNat spv.processedTape.length
 
 def calculateSubProgramView (tapeSegment : ProgramTape) : SubProgramView :=
@@ -77,13 +77,13 @@ abbrev ConstraintTape := ProgramTape -- Encodes constraint parameters, e.g., (ti
 structure Constraint where
   -- Defines what aspect of a SubProgramView is being constrained
   -- e.g., currentPosition, currentTime, or a pattern in processedTape
-  targetAspect : SubProgramView → GInt -- Or GNat, or Bool if it's a predicate
+  targetAspect : SubProgramView → GInt -- Or ParticlePath, or Bool if it's a predicate
   -- The actual constraint data (e.g., a list of forbidden values for targetAspect)
   constraintData : ConstraintTape
   -- The checking function
   -- Takes: current time (Nat), value of targetAspect, constraintData → Bool (true if valid)
   -- Making checker more general:
-  checker : GNat → SubProgramView → ConstraintTape → Bool
+  checker : ParticlePath → SubProgramView → ConstraintTape → Bool
 deriving Repr -- Constraint itself does not need BEq unless used in sets directly
 
 abbrev ConstraintSet (numConstraints : Nat) := Vector Constraint numConstraints
@@ -95,7 +95,7 @@ abbrev ConstraintSet (numConstraints : Nat) := Vector Constraint numConstraints
 
 structure IIDPathSource where
   p_true         : Real  -- Probability of generating 'true' (0 ≤ p_true ≤ 1)
-  maxLength      : GNat  -- Max number of bits this source can provide
+  maxLength      : ParticlePath  -- Max number of bits this source can provide
   startContext   : SubProgramView -- The state *before* the first bit from this source is drawn
                                   -- Represents "compression" or prior state.
 deriving Repr
@@ -103,8 +103,8 @@ deriving Repr
 -- Helper to get a bit from the source (non-deterministic stand-in for actual random draw)
 -- In a deterministic simulation of an NDMachine, we'd iterate through true/false possibilities.
 -- For complexity, we just care that *a* bit *can* be chosen.
--- def IIDPathSource.canProvideBit (src : IIDPathSource) (currentLength : GNat) : Bool :=
---   equivGNatToNat.toFun currentLength < equivGNatToNat.toFun src.maxLength
+-- def IIDPathSource.canProvideBit (src : IIDPathSource) (currentLength : ParticlePath) : Bool :=
+--   equivParticlePathToNat.toFun currentLength < equivParticlePathToNat.toFun src.maxLength
 
 -- NDMachine will use one IIDPathSource *per sub-program* for generation.
 abbrev SystemPathSources (numSubPrograms : Nat) := Vector IIDPathSource numSubPrograms
@@ -136,12 +136,12 @@ structure NDMachine (numSubPrograms numConstraints : Nat) where
 structure NDSubProgramGeneratorState where
   source        : IIDPathSource
   currentView   : SubProgramView -- The view generated *so far* using this source
-  bitsGenerated : GNat
+  bitsGenerated : ParticlePath
 
 -- Represents the state for the whole system during NDMachine generation
 structure NDSystemGeneratorState (numSubPrograms : Nat) where
   subProgramGenerators : Vector NDSubProgramGeneratorState numSubPrograms
-  allTapesMaxLength    : GNat -- Target length for all tapes
+  allTapesMaxLength    : ParticlePath -- Target length for all tapes
 
 -- Result of one NDMachine step/tick
 inductive NDStepResult (numSubPrograms : Nat)
@@ -154,7 +154,7 @@ def ndMachineRunTick (ndm : NDMachine numSubP numC)
                       (current_gen_state : NDSystemGeneratorState numSubP)
                       (constraints : ConstraintSet numC) : NDStepResult numSubP :=
   if current_gen_state.subProgramGenerators.toList.all
-      (fun gen_state => gen_state.currentView.processedTape.length = equivGNatToNat.toFun current_gen_state.allTapesMaxLength) then
+      (fun gen_state => gen_state.currentView.processedTape.length = equivParticlePathToNat.toFun current_gen_state.allTapesMaxLength) then
     .halted_valid current_gen_state -- All tapes have reached target max length
   else
     -- Try to extend each sub-program's tape by one bit (non-deterministically choosing true or false)
@@ -170,8 +170,8 @@ def ndMachineRunTick (ndm : NDMachine numSubP numC)
       let next_gen_states_opt_list : List (Option NDSubProgramGeneratorState) :=
         current_gen_state.subProgramGenerators.toList.zip choicesForNextTick.toList |>.map
           fun (gen_state, next_bit_choice) =>
-            if gen_state.currentView.processedTape.length < equivGNatToNat.toFun gen_state.source.maxLength &&
-               gen_state.currentView.processedTape.length < equivGNatToNat.toFun current_gen_state.allTapesMaxLength then
+            if gen_state.currentView.processedTape.length < equivParticlePathToNat.toFun gen_state.source.maxLength &&
+               gen_state.currentView.processedTape.length < equivParticlePathToNat.toFun current_gen_state.allTapesMaxLength then
               let tentative_new_tape := gen_state.currentView.processedTape ++ [next_bit_choice]
               let tentative_new_view := calculateSubProgramView tentative_new_tape
               let current_time_nat := tentative_new_view.processedTape.length -- Time for constraint check
@@ -191,7 +191,7 @@ def ndMachineRunTick (ndm : NDMachine numSubP numC)
             { subProgramGenerators := Vector.ofFnAux next_sps_list h_len, allTapesMaxLength := current_gen_state.allTapesMaxLength }
           -- Check if all tapes now at max length after this successful step
           if next_system_gen_state.subProgramGenerators.toList.all
-              (fun gs => gs.currentView.processedTape.length = equivGNatToNat.toFun next_system_gen_state.allTapesMaxLength) then
+              (fun gs => gs.currentView.processedTape.length = equivParticlePathToNat.toFun next_system_gen_state.allTapesMaxLength) then
             .halted_valid next_system_gen_state
           else
             .success next_system_gen_state
@@ -209,7 +209,7 @@ def ndMachineRunTick (ndm : NDMachine numSubP numC)
 def runNDMachine (ndm : NDMachine numSubP numC)
                  (initial_sources : SystemPathSources numSubP)
                  (constraints : ConstraintSet numC)
-                 (targetTapeLength : GNat) : Option (Vector ProgramTape numSubP) :=
+                 (targetTapeLength : ParticlePath) : Option (Vector ProgramTape numSubP) :=
   let initial_gen_state : NDSystemGeneratorState numSubP := {
     subProgramGenerators := initial_sources.map fun src =>
       { source := src, currentView := src.startContext, bitsGenerated := fromNat src.startContext.processedTape.length },
@@ -219,7 +219,7 @@ def runNDMachine (ndm : NDMachine numSubP numC)
   let rec go (ticks_remaining : Nat) (current_state : NDSystemGeneratorState numSubP) : Option (Vector ProgramTape numSubP) :=
     if ticks_remaining = 0 then -- Base case: reached max ticks
       -- Check if all tapes are at target length
-      if current_state.subProgramGenerators.toList.all (fun s => s.currentView.processedTape.length = equivGNatToNat.toFun targetTapeLength) then
+      if current_state.subProgramGenerators.toList.all (fun s => s.currentView.processedTape.length = equivParticlePathToNat.toFun targetTapeLength) then
         some (current_state.subProgramGenerators.map (fun s => s.currentView.processedTape))
       else
         none -- Not all tapes reached target length within allowed ticks (could be due to early maxing out of a source)
@@ -235,7 +235,7 @@ def runNDMachine (ndm : NDMachine numSubP numC)
       | .error => none
 
   -- The number of ticks should be related to targetTapeLength minus any initial tape length
-  let max_ticks_nat := equivGNatToNat.toFun targetTapeLength
+  let max_ticks_nat := equivParticlePathToNat.toFun targetTapeLength
   -- This 'go' assumes a deterministic path. For NP, it's about existence.
   -- So, runNDMachine can't be implemented this simply and constructively for the general NP case.
   -- It becomes a *specification* for NP_Class.
@@ -268,20 +268,20 @@ def dMachineRun (dm : DMachine numSubP numC)
 --=============================================================================
 
 -- Input size for a problem instance (target length, constraints)
-def getInputProblemSize (targetTapeLength : GNat) (constraints : ConstraintSet numC) : GNat :=
+def getInputProblemSize (targetTapeLength : ParticlePath) (constraints : ConstraintSet numC) : ParticlePath :=
   targetTapeLength + constraints.toList.foldl (fun acc c => acc + tapeLength c.constraintData) (fromNat 0)
 
 -- Complexity of an NDMachine run: Number of bits it attempts to generate/check.
 -- NDMachine "always completes in polynomial time" because its operation is bounded
 -- by numSubPrograms * targetTapeLength * numConstraints * avg_checker_complexity.
 -- For NP, we care more about the *verifier's* (DMachine's) complexity.
-def NDMachineEffectiveComplexity (numSubP : Nat) (targetTapeLength : GNat) (numC : Nat) (avgConstraintCheckCost : GNat) : GNat :=
+def NDMachineEffectiveComplexity (numSubP : Nat) (targetTapeLength : ParticlePath) (numC : Nat) (avgConstraintCheckCost : ParticlePath) : ParticlePath :=
   (fromNat numSubP) * targetTapeLength * (fromNat numC) * avgConstraintCheckCost -- Simplified model
 
 -- DMachine complexity: (As in V3)
 def DMachineRunComplexity (dm : DMachine numSubP numC)
                           (tapes_to_check : Vector ProgramTape numSubP)
-                          (constraints : ConstraintSet numC) : GNat :=
+                          (constraints : ConstraintSet numC) : ParticlePath :=
   (tapes_to_check.toList.foldl (fun acc t => acc + tapeLength t) (fromNat 0)) +
   (constraints.toList.foldl (fun acc c => acc + tapeLength c.constraintData) (fromNat 0)) -- Simplified cost
 
@@ -289,17 +289,17 @@ def DMachineRunComplexity (dm : DMachine numSubP numC)
 -- VI. Polynomial Time and Complexity Classes
 --=============================================================================
 
-def PolyTimeGNat (f : GNat → GNat) : Prop := -- As in V3
+def PolyTimeGNat (f : ParticlePath → ParticlePath) : Prop := -- As in V3
 
 def RunsInPolyTimeDMachine (dm : DMachine numSubP numC)
-                           (inputSizeMeasure : Vector ProgramTape numSubP → ConstraintSet numC → GNat) : Prop :=
-  ∃ (p_gnat : GNat → GNat), PolyTimeGNat p_gnat ∧
+                           (inputSizeMeasure : Vector ProgramTape numSubP → ConstraintSet numC → ParticlePath) : Prop :=
+  ∃ (p_gnat : ParticlePath → ParticlePath), PolyTimeGNat p_gnat ∧
     ∀ tapes constraints,
       DMachineRunComplexity dm tapes constraints ≤ p_gnat (inputSizeMeasure tapes constraints)
 
 -- DecisionProblem: Does an NDMachine (with its fixed constraint checkers) accept given a target length and specific constraint data?
 abbrev DecisionProblem (numSubProgs numConstraints : Nat) (ndm_prototype : NDMachine numSubProgs numConstraints) :=
-  (targetTapeLength : GNat) → (concreteConstraintData : ConstraintSet numConstraints) → Bool
+  (targetTapeLength : ParticlePath) → (concreteConstraintData : ConstraintSet numConstraints) → Bool
   -- True if there *exists* a set of initial IIDPathSources (or choices)
   -- such that `ndm_prototype` (using `concreteConstraintData`) generates
   -- tapes of `targetTapeLength` which are then accepted by some final check.
@@ -315,8 +315,8 @@ def P_Class (numSubProgs numConstraints : Nat) : Set (DecisionProblem numSubProg
 def NP_Class (numSubProgs numConstraints : Nat) : Set (DecisionProblem numSubProgs numConstraints ??) :=
   { L_dp | ∃ (ndm_for_L : NDMachine numSubProgs numConstraints) -- NDMachine uses constraints from L_dp call
                (dm_verifier_for_L : DMachine numSubProgs numConstraints) -- Verifier may or may not use constraints again
-               (poly_bound_tape_len_fn : GNat → GNat) -- For certificate tape length based on primary input size
-               (dm_input_size_measure_fn : Vector ProgramTape numSubProgs → ConstraintSet numConstraints → GNat)
+               (poly_bound_tape_len_fn : ParticlePath → ParticlePath) -- For certificate tape length based on primary input size
+               (dm_input_size_measure_fn : Vector ProgramTape numSubProgs → ConstraintSet numConstraints → ParticlePath)
                (h_dm_poly : RunsInPolyTimeDMachine dm_verifier_for_L dm_input_size_measure_fn),
                ∀ targetTapeLength_L constraints_L,
                  -- L_dp is true if...
@@ -324,7 +324,7 @@ def NP_Class (numSubProgs numConstraints : Nat) : Set (DecisionProblem numSubPro
                    -- ...there exists a set of full tapes (the certificate)...
                    ∃ (certificate_tapes : Vector ProgramTape numSubProgs),
                      -- ...where each tape has the polynomially bounded target length...
-                     (∀ i, (certificate_tapes.get i).length = equivGNatToNat.toFun (poly_bound_tape_len_fn (getInputProblemSize targetTapeLength_L constraints_L))) ∧
+                     (∀ i, (certificate_tapes.get i).length = equivParticlePathToNat.toFun (poly_bound_tape_len_fn (getInputProblemSize targetTapeLength_L constraints_L))) ∧
                      -- ...and these tapes could have been produced by the NDMachine under the given constraints...
                      (CanNDMachineProduce ndm_for_L targetTapeLength_L constraints_L certificate_tapes) &&
                      -- ...and the DMachine verifier accepts these tapes (and constraints, if it uses them).
@@ -375,7 +375,7 @@ The "CNF" part is embedded in the `ndm_for_L.constraints` and how its `checkers`
 ensuring that any `certificate_tapes` produced by `CanNDMachineProduce` inherently satisfy these CNF-like rules.
 -/
 
-end PPNP.Complexity.ComputationalModel
+end EGPT.Complexity.ComputationalModel
 ```
 
 ---
@@ -392,7 +392,7 @@ end PPNP.Complexity.ComputationalModel
 **Further Elaboration Needed (for the actual paper/code):**
 
 *   **`fromInt : Int → GInt`:** This needs to be defined in `NumberTheory.Core` if not already there.
-*   **`GNat` and `GInt` Arithmetic:** Ensure addition, comparison, etc., are available for these types.
+*   **`ParticlePath` and `GInt` Arithmetic:** Ensure addition, comparison, etc., are available for these types.
 *   **`CanNDMachineProduce` Predicate:** This is the heart of the NP definition. It's non-constructive for the `∃` part but needs to be a well-defined property. It means there's a sequence of (true/false) choices for each sub-program at each step, consistent with their `IIDPathSource`s (if randomness is modeled) and satisfying all constraints at every intermediate step, leading to the `certificate_tapes`.
 *   **P Class Definition:** Needs a `DeterministicConstrainedGenerator` that explores the state space deterministically but efficiently for P problems.
 *   **"Intelligence does not imply repetitive search in NDMachine":** This is key. The NDMachine makes *one* non-deterministic sequence of choices per "run" (for the existential quantifier). Its polynomial runtime is for *one such path* of generation of length T. The "search" is handled by the `∃` in the NP definition.

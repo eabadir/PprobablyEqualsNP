@@ -240,7 +240,7 @@ This cleanly leveraged Lean 4 idioms (List.replicate) for defining and reasoning
 
 
 
-C. Emergent Integers (GeneratedInt_PCA)
+C. Emergent Integers (ChargedParticlePath)
 
 
 
@@ -248,13 +248,13 @@ Integers naturally emerged as pairs consisting of a magnitude (from emergent nat
 
 
 
-def GeneratedInt_PCA := GeneratedNat_Unary × Bool
+def ChargedParticlePath := GeneratedNat_Unary × Bool
 
 A direct equivalence to Lean’s standard integers (ℤ) was constructed, using existing Mathlib equivalences:
 
 
 
-noncomputable def generatedIntPCAEquivInt : GeneratedInt_PCA ≃ ℤ :=
+noncomputable def ParticlePathIntEquiv : ChargedParticlePath ≃ ℤ :=
 
   (Equiv.prodCongr equivUnaryNat (Equiv.refl Bool)).trans intEquivNatProdBool.symm
 
@@ -268,15 +268,15 @@ This demonstrated that combinational integers fit elegantly into Lean 4’s equi
 
 
 
-D. Emergent Reals (GeneratedReal_PCA)
+D. Emergent Reals (ParticleSystemPDF)
 
 
 
-The culmination was to realize real numbers as characteristic functions (GNat → Bool) on emergent naturals—explicitly reflecting Rota’s discrete continuity concept.
+The culmination was to realize real numbers as characteristic functions (ParticlePath → Bool) on emergent naturals—explicitly reflecting Rota’s discrete continuity concept.
 
 
 
-abbrev GeneratedReal_PCA := GNat → Bool
+abbrev ParticleSystemPDF := ParticlePath → Bool
 
 To rigorously connect this combinational definition to the standard real numbers, you used cardinality arguments provided by Mathlib4:
 
@@ -284,11 +284,11 @@ To rigorously connect this combinational definition to the standard real numbers
 
 lemma cardinal_eq_two_pow_aleph0 :
 
-  Cardinal.mk GeneratedReal_PCA = 2 ^ Cardinal.aleph0 := by
+  Cardinal.mk ParticleSystemPDF = 2 ^ Cardinal.aleph0 := by
 
   calc
 
-    Cardinal.mk GeneratedReal_PCA
+    Cardinal.mk ParticleSystemPDF
 
       = Cardinal.mk (ℕ → Bool) := Cardinal.mk_congr equivFunNat
 
@@ -298,13 +298,13 @@ Subsequently, this established the desired explicit equivalence with the standar
 
 
 
-noncomputable def equivGeneratedReal : GeneratedReal_PCA ≃ ℝ :=
+noncomputable def equivGeneratedReal : ParticleSystemPDF ≃ ℝ :=
 
-  have h : mk GeneratedReal_PCA = mk ℝ := by
+  have h : mk ParticleSystemPDF = mk ℝ := by
 
     calc
 
-      mk GeneratedReal_PCA = 2 ^ aleph0 := cardinal_eq_two_pow_aleph0
+      mk ParticleSystemPDF = 2 ^ aleph0 := cardinal_eq_two_pow_aleph0
 
       _ = #ℝ                            := (Cardinal.mk_real).symm
 

@@ -1,13 +1,13 @@
-import PPNP.Complexity.Program
-import PPNP.Entropy.Physics.BoseEinstein -- For p_UD_fin, card_omega_be, etc.
-import PPNP.Entropy.Common -- For ShannonEntropyOfDist, stdShannonEntropyLn_uniform_eq_log_card
+import EGPT.Complexity.Core
+import EGPT.Physics.BoseEinstein -- For p_UD_fin, card_omega_be, etc.
+import EGPT.Entropy.Common -- For ShannonEntropyOfDist, stdShannonEntropyLn_uniform_eq_log_card
 
-namespace PPNP.Entropy.Physics.PCA -- Photonic Cellular Automata
+namespace EGPT.Physics.PCA -- Photonic Cellular Automata
 
-open PPNP.Complexity.Program
-open PPNP.Entropy.Common
-open PPNP.Entropy.Physics.BE -- For BE-specific definitions
-open PPNP.Entropy.Physics.UniformSystems -- For uniform dist helpers
+open EGPT.Complexity
+open EGPT.Entropy.Common
+open EGPT.Physics.BE -- For BE-specific definitions
+open EGPT.Physics.UniformSystems -- For uniform dist helpers
 
 
 /-!
@@ -15,7 +15,7 @@ open PPNP.Entropy.Physics.UniformSystems -- For uniform dist helpers
 
 This file establishes the core EGPT principle for photonic systems, which are
 governed by Bose-Einstein (BE) statistics. It proves that any BE system has an
-equivalent `ComputerProgram` whose complexity is determined by the system's
+equivalent `PathProgram` whose complexity is determined by the system's
 Shannon entropy.
 
 This file replaces older, more complex encodings with a direct application of
@@ -26,14 +26,14 @@ the generalized Rota's Entropy & Computability Theorem (`rect_program_for_dist`)
 **Theorem (Bose-Einstein System Has Equivalent Program):**
 
 For any Bose-Einstein system defined by `N` states and `M` particles, there
-exists a `ComputerProgram` that can specify one of its microstates. The
+exists a `PathProgram` that can specify one of its microstates. The
 complexity of this program is the smallest integer number of bits required to
 encode the system's total information content, which is its Shannon entropy.
 
 This theorem is the formal statement of `BE Statistics ↔ Computability`.
 -/
 theorem be_system_has_equivalent_program (N M : ℕ) (h_valid : N ≠ 0 ∨ M = 0) :
-    ∃ (prog : ComputerProgram), prog.complexity = Nat.ceil (Real.logb 2 (Nat.multichoose N M)) :=
+    ∃ (prog : PathProgram), prog.complexity = Nat.ceil (Real.logb 2 (Nat.multichoose N M)) :=
 by
   -- 1. Define the probability distribution for the Bose-Einstein system.
   --    From `BoseEinstein.lean`, we know this is a uniform distribution over all

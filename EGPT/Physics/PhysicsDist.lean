@@ -9,23 +9,23 @@ import Mathlib.Data.Sym.Card
 --import Mathlib.Data.Multiset.Bind
 --import Mathlib.Data.Multiset.Basic
 --import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import PPNP.Common.Basic
-import PPNP.Entropy.Common
-import PPNP.Entropy.Physics.Common
-import PPNP.Entropy.RET
-import PPNP.Entropy.Physics.UniformSystems
-import PPNP.Entropy.Physics.BoseEinstein
+import EGPT.Core
+import EGPT.Entropy.Common
+import EGPT.Physics.Common
+import EGPT.Entropy.RET
+import EGPT.Physics.UniformSystems
+import EGPT.Physics.BoseEinstein
 
-namespace PPNP.Entropy.Physics.PhysicsDist
+namespace EGPT.Physics.PhysicsDist
 
-open PPNP.Entropy.RET
+open EGPT.Entropy.RET
 
 open Multiset NNReal
-open PPNP.Common
-open PPNP.Entropy.Common
-open PPNP.Entropy.Physics.Common
-open PPNP.Entropy.Physics.UniformSystems
-open PPNP.Entropy.Physics.BE
+open EGPT
+open EGPT.Entropy.Common
+open EGPT.Physics.Common
+open EGPT.Physics.UniformSystems
+open EGPT.Physics.BE
 
 /-! # Formalizing "Physics Distribution" To Mean A Combinatorial State Spaces, Or, Counting Problem Under Constraints
 
@@ -77,15 +77,15 @@ noncomputable def entropy_of_stat_system (type : StatSystemType) (params : Syste
   match type with
   | StatSystemType.BoseEinstein =>
     -- p_UD_fin is the uniform distribution on Fin (Fintype.card (OmegaUD N M))
-    -- Using PPNP.Entropy.Physics.Common.H_physical_system directly
-    (PPNP.Entropy.Physics.Common.H_physical_system (PPNP.Entropy.Physics.UniformSystems.p_UD_fin params.N params.M) : ℝ)
+    -- Using EGPT.Physics.Common.H_physical_system directly
+    (EGPT.Physics.Common.H_physical_system (EGPT.Physics.UniformSystems.p_UD_fin params.N params.M) : ℝ)
   | StatSystemType.FermiDirac =>
     -- Placeholder: Assume similar structure for FD
-    -- (PPNP.Entropy.Physics.Common.H_physical_system (PPNP.Entropy.Physics.FermiDirac.p_FD_fin params.N params.M) : ℝ)
+    -- (EGPT.Physics.Common.H_physical_system (EGPT.Physics.FermiDirac.p_FD_fin params.N params.M) : ℝ)
     0 -- Placeholder value
   | StatSystemType.MaxwellBoltzmann =>
     -- Placeholder: Assume similar structure for MB
-    -- (PPNP.Entropy.Physics.Common.H_physical_system (PPNP.Entropy.Physics.MaxwellBoltzmann.p_MB_fin params.N params.M) : ℝ)
+    -- (EGPT.Physics.Common.H_physical_system (EGPT.Physics.MaxwellBoltzmann.p_MB_fin params.N params.M) : ℝ)
     0 -- Placeholder value
 
 /--
@@ -97,12 +97,12 @@ noncomputable def shannon_entropy_of_stat_system (type : StatSystemType) (params
     (_h_domain_valid : params.N ≠ 0 ∨ params.M = 0) : ℝ :=
   match type with
   | StatSystemType.BoseEinstein =>
-    stdShannonEntropyLn (PPNP.Entropy.Physics.UniformSystems.p_UD_fin params.N params.M)
+    stdShannonEntropyLn (EGPT.Physics.UniformSystems.p_UD_fin params.N params.M)
   | StatSystemType.FermiDirac =>
-    -- Placeholder: stdShannonEntropyLn (PPNP.Entropy.Physics.FermiDirac.p_FD_fin params.N params.M)
+    -- Placeholder: stdShannonEntropyLn (EGPT.Physics.FermiDirac.p_FD_fin params.N params.M)
     0 -- Placeholder value
   | StatSystemType.MaxwellBoltzmann =>
-    -- Placeholder: stdShannonEntropyLn (PPNP.Entropy.Physics.MaxwellBoltzmann.p_MB_fin params.N params.M)
+    -- Placeholder: stdShannonEntropyLn (EGPT.Physics.MaxwellBoltzmann.p_MB_fin params.N params.M)
     0 -- Placeholder value
 
 /--
@@ -115,14 +115,14 @@ theorem entropy_BE_eq_C_shannon (params : SystemParams)
   -- 1. Unfold definitions
   simp only [entropy_of_stat_system, shannon_entropy_of_stat_system]
   -- Goal is now:
-  -- (PPNP.Entropy.Physics.Common.H_physical_system (p_UD_fin params.N params.M) : ℝ) =
+  -- (EGPT.Physics.Common.H_physical_system (p_UD_fin params.N params.M) : ℝ) =
   --  C_axiom_val * stdShannonEntropyLn (p_UD_fin params.N params.M)
 
   -- 2. This directly matches the statement of H_BE_from_Multiset_eq_C_shannon
   --    Need to ensure the C_axiom_val here is the same as the one used in that theorem.
-  --    `H_BE_from_Multiset_eq_C_shannon` uses `C_constant_real PPNP.Entropy.Physics.Common.H_physical_system_has_Rota_entropy_properties`
+  --    `H_BE_from_Multiset_eq_C_shannon` uses `C_constant_real EGPT.Physics.Common.H_physical_system_has_Rota_entropy_properties`
   --    Our `C_axiom_val` is defined identically.
-  --    `axiomatic_entropy_of_stat_system` now directly uses `PPNP.Entropy.Physics.Common.H_physical_system`.
+  --    `axiomatic_entropy_of_stat_system` now directly uses `EGPT.Physics.Common.H_physical_system`.
   exact H_BE_from_Multiset_eq_C_shannon params.N params.M h_domain_valid
 
 -- Similar theorems for FD and MB would be:
@@ -217,7 +217,7 @@ theorem H_physics_dist_linear_combination_eq_generalized_C_Shannon
   -- This is true by associativity and commutativity of multiplication for Reals.
   ring
 
--- In PPNP.Entropy.Physics.PhysicsDist
+-- In EGPT.Physics.PhysicsDist
 
 structure PhysicsSystemConfig where
   weights   : SystemWeights -- w_BE, w_FD, w_MB

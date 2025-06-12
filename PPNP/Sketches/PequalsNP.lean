@@ -4,20 +4,20 @@ import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Set.Defs
 
-import PPNP.Complexity.Basic
-import PPNP.Entropy.Physics.BoseEinstein -- For H_BE_from_Multiset_eq_C_shannon
-import PPNP.Entropy.Physics.Common -- For H_physical_system, HasRotaEntropyProperties
-import PPNP.Entropy.RET -- For C_constant_real, RotaUniformTheorem
-import PPNP.Entropy.Physics.PhysicsDist -- Placeholder for future generalized PhysicsDist
+import EGPT.Complexity.Basic
+import EGPT.Physics.BoseEinstein -- For H_BE_from_Multiset_eq_C_shannon
+import EGPT.Physics.Common -- For H_physical_system, HasRotaEntropyProperties
+import EGPT.Entropy.RET -- For C_constant_real, RotaUniformTheorem
+import EGPT.Physics.PhysicsDist -- Placeholder for future generalized PhysicsDist
 
-open PPNP.Complexity.Basic
-open PPNP.Entropy.Physics.Common
-open PPNP.Entropy.Physics.BE -- To access specific BE results
-open PPNP.Entropy.RET
-open PPNP.Entropy.Common -- For stdShannonEntropyLn
+open EGPT.Complexity.Basic
+open EGPT.Physics.Common
+open EGPT.Physics.BE -- To access specific BE results
+open EGPT.Entropy.RET
+open EGPT.Entropy.Common -- For stdShannonEntropyLn
 
 /- PPNPlean -/
-namespace PPNP
+namespace EGPT
 /-!
 We need classical logic for manipulating propositions in `if then else`
 within the ShannonEntropy definition, and potentially for complexity class definitions
@@ -162,7 +162,7 @@ theorem P_eq_NP_from_BoseEinstein (h_p_ne_np : P ≠ NP) : False := by
     have red_BE_to_Shannon : BoseEinsteinDecisionProblem <=p ShannonEntropyProblem :=
       BoseEinstein_reduces_to_ShannonEntropyProblem
     have shannon_in_P : ShannonEntropyProblem ∈ P :=
-      ShannonCodingTheorem_P_axiom -- This is an axiom from PPNP.Complexity.Basic
+      ShannonCodingTheorem_P_axiom -- This is an axiom from EGPT.Complexity.Basic
     exact reduction_in_P red_BE_to_Shannon shannon_in_P
 
   -- 2. The BoseEinsteinDecisionProblem is NP-Complete (Proven above)
@@ -175,4 +175,4 @@ theorem P_eq_NP_from_BoseEinstein (h_p_ne_np : P ≠ NP) : False := by
   -- 4. This conclusion (P = NP) contradicts the initial assumption (P ≠ NP).
   exact h_p_ne_np h_p_eq_np
 
-end PPNP
+end EGPT

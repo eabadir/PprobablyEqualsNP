@@ -21,15 +21,14 @@ import Mathlib.Tactic.Linarith -- Inequality solver
 import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
 import Mathlib.Logic.Equiv.Defs -- For Equiv
 
-import PPNP.Common.Basic
-import PPNP.Entropy.Common
+import EGPT.Core
+import EGPT.Entropy.Common
 
 
-namespace PPNP.Entropy.RET
+namespace EGPT.Entropy.RET
 
-open Nat Real NNReal Multiset NNReal Fin Set Finset Filter Function BigOperators Topology     -- Added Function for comp_apply
-open PPNP.Common
-open PPNP.Entropy.Common
+open Nat Real NNReal Multiset NNReal Fin Set Finset Filter Function BigOperators Topology
+open EGPT EGPT.Entropy.Common
 
 
 /-! ### Phase 2: Properties of `f(n) = H(uniform_n)` -/
@@ -266,7 +265,7 @@ lemma cond_add_for_independent_distributions
   -- Need to show (∑ i, prior i * H_func q_const) = H_func q_const
   rw [add_left_cancel_iff] -- Cancels H_func prior from both sides using a standard iff lemma
   -- Goal: (∑ i, prior i * H_func q_const) = H_func q_const
-  -- This is sum_weighted_constant from PPNP.Entropy.RET (already proven)
+  -- This is sum_weighted_constant from EGPT.Entropy.RET (already proven)
   exact sum_weighted_constant hprior_sum_1
 -- This helper can be local to f0_mul_eq_add_f0 proof or kept if generally useful
 -- noncomputable def DependentPairDist_of_independent_helper -- From Phase 2, might not be needed if  is direct.
@@ -689,7 +688,7 @@ lemma k_from_f0_trap_satisfies_pow_bounds_real {H : ∀ {α : Type} [Fintype α]
 
     -- Coerce to Real and divide
     have h_f0b_real_pos : (f0b_nnreal : ℝ) > 0 := by
-      simp only [coe_pos] -- coe_pos is NNReal.coe_pos, needs f0b_nnreal > 0 (as NNReal)
+      simp only [NNReal.coe_pos] -- coe_pos is NNReal.coe_pos, needs f0b_nnreal > 0 (as NNReal)
       exact f0_pos_of_nontrivial_nnreal_version hH_axioms hH_nontrivial hb_ge2
 
     constructor
@@ -945,7 +944,7 @@ theorem RotaUniformTheorem_formula_with_C_constant {H : ∀ {α : Type} [Fintype
         uniformEntropy_ratio_eq_logb hH_axioms h_nontrivial hn_pos (by norm_num : 2 ≥ 2)
 
       have hf02_ne_zero : F02 ≠ 0 := by
-        exact coe_ne_zero.mpr (uniformEntropy_pos_of_nontrivial hH_axioms h_nontrivial (by norm_num))
+        exact NNReal.coe_ne_zero.mpr (uniformEntropy_pos_of_nontrivial hH_axioms h_nontrivial (by norm_num))
       have hlog2_ne_zero : LOG2 ≠ 0 := ne_of_gt (Real.log_pos (by norm_num : (2:ℝ) > 1))
       have hn_real_pos : (n:ℝ) > 0 := Nat.cast_pos.mpr hn_pos
       have h2_real_pos : (2:ℝ) > 0 := by norm_num
@@ -1093,7 +1092,7 @@ lemma sum_P_cond_sigma_def_eq_one_of_pos {n : ℕ} (a_map : Fin n → ℕ) (i : 
     exact sum_uniformDist (Fintype_card_fin_pos (Nat.succ_pos k))
 
 
--- -- FOR REFERENCE IN DEALING WITH ZERO In PPNP.Entropy.Common.lean, add this structure:
+-- -- FOR REFERENCE IN DEALING WITH ZERO In EGPT.Entropy.Common.lean, add this structure:
 -- structure IsEntropyZeroOnEmptyDomain
 --   (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) : Prop where
 --   apply_to_empty_domain : H_func Fin.elim0 = 0
@@ -1146,7 +1145,7 @@ lemma sum_P_cond_sigma_def_eq_one_of_pos {n : ℕ} (a_map : Fin n → ℕ) (i : 
   -- (e.g., X * Y = Y * X), ac_rfl can solve it.
   -- NNReal multiplication is associative and commutative.
   ac_rfl
--- In PPNP.Entropy.RET.lean (or Dev.lean)
+-- In EGPT.Entropy.RET.lean (or Dev.lean)
 
 
 /-! ### New point-wise helper ------------------------------------------ -/
@@ -1429,7 +1428,7 @@ lemma rota_rational_intermediate_formula {n : ℕ} [h_n_ne_zero : NeZero n]
     have h_coe_pos : (x_nnreal : ℝ) > 0 := by
       apply lt_of_le_of_ne (NNReal.coe_nonneg x_nnreal)
       exact Ne.symm h_coe_is_zero -- Use Ne.symm explicitly
-    -- Use Real.log_inv_eq_neg_log (available as log_inv_eq_neg_log in PPNP.Common.Basic),
+    -- Use Real.log_inv_eq_neg_log (available as log_inv_eq_neg_log in EGPT.Basic),
     -- which states log (x⁻¹) = -log x for x > 0.
     -- 1 / x_nnreal is x_nnreal⁻¹
     rw [one_div] -- Change 1 / ↑x_nnreal to (↑x_nnreal)⁻¹

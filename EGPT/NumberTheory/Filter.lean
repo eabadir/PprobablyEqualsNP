@@ -1,5 +1,5 @@
-import PPNP.NumberTheory.Core
-import PPNP.Complexity.Program
+import EGPT.NumberTheory.Core
+import EGPT.Complexity.Core
 import Mathlib.Data.Vector.Basic
 import Mathlib.Data.Rat.Lemmas
 import Mathlib.Data.Fin.Basic
@@ -65,14 +65,14 @@ instance instFintypeVectorBool (k : ℕ) : Fintype (Vector Bool k) :=
 
 
 /-!
-# EGPT: Stochastic Filters and Biised IID Sources
+# EGPT: Stochastic Filters, CNF Constraints, and Biised IID Sources
 
 This file extends the EGPT number theory to formalize the concept of a "filter"
 that acts on a fair, fundamental IID source to produce a new, biased IID source.
 
 The core ideas are:
 1.  **Filters as Information:** A filter is a computable object, a set of
-    constraints represented by a `GNat` via an encoding of a CNF formula.
+    constraints represented by a `ParticlePath` via an encoding of a CNF formula.
     This aligns with the EGPT principle that physical laws are computable information.
 
 2.  **Creating Bias through Information Loss:** The filter operates by rejection
@@ -91,13 +91,12 @@ and the structured, biased probabilities observed in complex physical and
 computational systems.
 -/
 
-namespace PPNP.NumberTheory.Filter
+namespace EGPT.NumberTheory.Filter
 
-open PPNP.NumberTheory.Core PPNP.Complexity.Program
+open EGPT.NumberTheory.Core EGPT.Complexity
 
 -- To handle sources that emit blocks of bits (vectors) instead of single bits.
-class IIDBlockSource (α : Type) where
-  stream : ℕ → α
+abbrev IIDBlockSource (α : Type) := IIDParticleSource α
 
 -- A fair source that produces k-bit vectors, where each vector is equiprobable.
 -- This can be constructed by calling a single-bit IIDParticleSource k times.
@@ -111,7 +110,7 @@ instance FairBlockSource (k : ℕ) : IIDBlockSource (Vector Bool k) where
 ### Section 1: Syntactic Filters as CNF Formulas
 
 We reuse the syntactic CNF definitions from `Program.lean`. A filter *is* a
-CNF formula, represented by a `GNat`. We define an explicit evaluation function
+CNF formula, represented by a `ParticlePath`. We define an explicit evaluation function
 for these syntactic formulas on boolean vectors.
 -/
 
@@ -148,7 +147,7 @@ The resulting distribution is uniform over the set of satisfying assignments.
 -/
 
 /--
-A `RejectionFilter` encapsulates a CNF formula, which is encodable as a `GNat`.
+A `RejectionFilter` encapsulates a CNF formula, which is encodable as a `ParticlePath`.
 This structure represents the physical laws or constraints of a system.
 -/
 structure RejectionFilter (k : ℕ) where
@@ -232,322 +231,3 @@ noncomputable def eventsPMF {k : ℕ} (filter : RejectionFilter k) : PMF (Vector
     intro v hv; simp [f, hv]
   -- Construct the PMF using the mathlib constructor.
   PMF.ofFinset f s h_sum_one h_zero_outside
-
-
-
-/-!
-##############################################################################
-  Rationals as Canonical Bit-String Parameters for a Biased Source
-  ────────────────────────────────────────────────────────────────────────────
-  This definitive EGPT model grounds rational numbers in a universal,
-  computable, and physically intuitive representation.
-
-  1.  **Canonical Form:** A rational number is represented by a unique `List Bool`
-      of the form `{sign bit} ++ {string of 1s} ++ {string of 0s}`. This
-      is the most informationally dense way to encode the parameters (sign, p, q)
-      and is a natural extension of `GNat` and `GeneratedInt_PCA`.
-
-  2.  **Physical Interpretation:** This canonical `List Bool` is not just an
-      abstract number. It is the direct recipe for constructing a
-      `BiasedIIDParticleSource`. The number of 1s is the `p` parameter,
-      and the number of 0s is the `q` parameter.
-
-  3.  **Direct Bijection:** The `toRat` and `fromRat` functions are simple,
-      direct transformations (counting and construction), avoiding the
-      complexities of intermediate sampling or filtering mechanisms. This makes
-      the bijection with Mathlib's `ℚ` clear and provable.
-
-  This model successfully unifies the number-theoretic, computational, and
-  physical aspects of rational numbers within the EGPT framework.
-##############################################################################
--/
-
-/--
-A predicate asserting that a `List Bool` is in the canonical form for a rational.
-The form is `sign :: 1...1 ++ 0...0`. We also enforce that the rational is
-normalized (numerator and denominator are coprime), the denominator is non-zero,
-and zero has a unique non-negative representation.
--/
-def IsCanonicalRat (l : List Bool) : Prop :=
-  ∃ (s : Bool) (p q : ℕ),
-    -- The list has the exact canonical structure.
-    l = [s] ++ List.replicate p true ++ List.replicate q false ∧
-    -- The denominator must be non-zero.
-    q > 0 ∧
-    -- The fraction p/q must be in lowest terms.
-    Nat.Coprime p q ∧
-    -- Canonical Zero: If the numerator is 0, the sign must be non-negative (true).
-    (p = 0 → s = true)
-/--
-A `GeneratedRat_PCA` is a `List Bool` that is proven to be in the canonical,
-normalized form for a rational number. This is the EGPT representation.
--/
-abbrev GeneratedRat_PCA := { l : List Bool // IsCanonicalRat l }
-
--- In PPNP/NumberTheory/Core.lean or your new Rational file
-
-
-
-/--
-Parses the numerator `p` (count of `true`s) from a canonical rational list.
--/
-def getNum (r : GeneratedRat_PCA) : ℕ :=
-  r.val.tail.count true
-
-/--
-Parses the denominator `q` (count of `false`s) from a canonical rational list.
--/
-def getDen (r : GeneratedRat_PCA) : ℕ :=
-  r.val.tail.count false
-
-/--
-Parses the sign bit from a canonical rational list.
-Requires proof that the list is non-empty, which `IsCanonicalRat` provides.
--/
-def getSign (r : GeneratedRat_PCA) : Bool :=
-  -- The existential in `IsCanonicalRat` guarantees the list is non-empty.
-  r.val.head (by { rcases r.property with ⟨s, p, q, h_struct, _, _⟩; rw [h_struct]; simp })
-
-/--
-**`toRat`:** Decodes the abstract mathematical value `p/q` from its canonical
-EGPT `List Bool` representation.
--/
-noncomputable def toRat (r : GeneratedRat_PCA) : ℚ :=
-  let s := getSign r
-  let p := getNum r
-  let q := getDen r
-  let num_int : ℤ := if s then p else -p
-  -- `Rat.mkRat` normalizes, but since our canonical form is already normalized,
-  -- this is equivalent to direct construction.
-  mkRat num_int q
-
-/--
-**`fromRat`:** Encodes a standard `ℚ` into its canonical, normalized EGPT
-`List Bool` representation.
--/
-noncomputable def fromRat (q_in : ℚ) : GeneratedRat_PCA :=
-  let s := decide (0 ≤ q_in.num)
-  -- Mathlib's `q.num` and `q.den` are already normalized (coprime).
-  let p := q_in.num.natAbs
-  let q := q_in.den
-  let l := [s] ++ List.replicate p true ++ List.replicate q false
-  -- We package the list `l` with the proof that it satisfies `IsCanonicalRat`.
-  ⟨l, by
-    use s, p, q
-    constructor
-    · rfl
-    · constructor
-      · exact q_in.den_pos
-      · constructor
-        ·
-          -- `Rat` provides `reduced`, a proof that `q_in.num.natAbs` and `q_in.den` are coprime.
-          have h_coprime : Nat.Coprime p q := by
-            simpa [p, q] using q_in.reduced
-          exact h_coprime
-        · -- Prove the new condition for canonical zero
-          intro hp_eq_zero
-          -- Unfold definitions of s and p
-          dsimp [s, p]
-          -- If p = 0, then q_in.num.natAbs = 0, which means q_in.num = 0.
-          have h_num_zero : q_in.num = 0 := by aesop
-          -- If q_in.num = 0, then `0 ≤ q_in.num` is true.
-          -- By definition, s is `(0 ≤ q_in.num)`, so s is true.
-          rw [h_num_zero]
-          simp
-  ⟩
-
-/--
-**Instantiates the Physical Process:**
-Takes the EGPT description of a rational and creates the corresponding
-`BiasedIIDParticleSource` that generates `true` with probability `p/(p+q)`.
-This version uses a more explicit proof style that matches the provided `Filter.lean`.
--/
-noncomputable def toBiasedSource (r : GeneratedRat_PCA) (seed : ℕ) : IIDParticleSource Bool :=
-  let p := getNum r
-  let q := getDen r
-  -- We need to prove `p + q > 0`. This follows from `q > 0` which is guaranteed
-  -- by the `IsCanonicalRat` property.
-  have h_total_pos : p + q > 0 := by
-    -- 1. Deconstruct the `IsCanonicalRat` proof to get the parameters and properties.
-    rcases r.property with ⟨s_prop, p_prop, q_prop, h_struct, h_q_pos, _⟩
-    -- 2. Prove that our parsed denominator `q` is equal to the `q_prop` from the proof.
-    have h_q_eq : q = q_prop := by
-      -- Unfold the definition of `q` (`getDen r`) and rewrite using
-      -- the canonical structure of the list.
-      dsimp [q, getDen]
-      -- After substituting the structure of `r.val`, we need to
-      -- reassociate the list so that `List.tail_cons` can fire
-      -- (otherwise `::` binds too tightly).  Then `simp` can finish.
-      simp [ h_struct,
-             List.singleton_append,      -- `[s] ++ t = s :: t`
-             List.cons_append,           -- `s :: l₁ ++ l₂ = s :: (l₁ ++ l₂)`
-             List.tail_cons,
-             List.count_append,
-             List.count_replicate,
-             Bool.decEq ]
-    -- 3. The goal is now `p + q > 0`. We substitute `q` with `q_prop`.
-    rw [h_q_eq]
-    -- 4. The `IsCanonicalRat` property gives `h_q_pos : q_prop > 0`.
-    --    Since `p` is a natural number, `p ≥ 0`. The sum is therefore > 0.
-    exact add_pos_of_nonneg_of_pos (Nat.zero_le p) h_q_pos
-  -- Construct the biased source using the parsed parameters and the now-proven hypothesis.
-  mkBiasedIIDParticleSource seed p q h_total_pos
-
--- In the `equivGeneratedRat` definition
-
-noncomputable def equivGeneratedRat : GeneratedRat_PCA ≃ ℚ :=
-{
-  toFun    := toRat,
-  invFun   := fromRat,
-  left_inv := by
-    -- Goal: fromRat (toRat r) = r
-    intro r
-    -- To prove equality of two subtype elements, we prove their values are equal.
-    apply Subtype.ext
-
-    -- Deconstruct the proof `r.property` to get the canonical parameters for `r`.
-    rcases r.property with ⟨s, p, q, h_struct, h_q_pos, h_coprime, h_zero_sign⟩
-
-    -- Goal is now: (fromRat (toRat r)).val = r.val
-
-    -- To simplify the goal, let's establish what `toRat r` is
-    -- in terms of s, p, and q.
-    have h_toRat_r_eq_mkRat : toRat r = mkRat (if s then p else -p) q := by
-      -- Unfold the definition of toRat
-      dsimp [toRat] -- Removed q_equiv from dsimp
-      -- We need to prove getNum r = p, getDen r = q, and getSign r = s.
-      have h_s_loc : getSign r = s := by -- Renamed to avoid conflict if s is used differently
-        dsimp [getSign]; simp [h_struct];
-      have h_p_loc : getNum r = p := by -- Renamed
-        dsimp [getNum]
-        rw [h_struct]
-        rw [List.singleton_append]
-        simp  [List.tail_cons, List.count_append, List.count_replicate, add_zero]
-      have h_q_loc : getDen r = q := by -- Renamed
-        dsimp [getDen]
-        rw [h_struct]
-        rw [List.singleton_append]
-        simp [List.tail_cons, List.count_append, List.count_replicate, zero_add]
-      -- Substitute these back into the definition.
-      rw [h_s_loc, h_p_loc, h_q_loc]
-
-
-    -- Now, let's analyze the LHS: `(fromRat (toRat r)).val`.
-    -- Unfold the definition of `fromRat`.
-    -- `dsimp` will substitute `toRat r` for `q_in` in the body of `fromRat`.
-    dsimp [fromRat]
-    -- The goal now contains terms like `(toRat r).num` and `(toRat r).den`.
-    -- Substitute `toRat r` using our hypothesis.
-    rw [h_toRat_r_eq_mkRat]
-    -- The goal now contains terms like `(mkRat (if s then p else -p) q).num`, etc.
-
-    -- `fromRat` uses the `num` and `den` of its input. Let's find those for `q_equiv`:
-    have h_num_den :
-      (mkRat (if s then (↑p : ℤ) else -(↑p : ℤ)) q).num =
-        (if s then (↑p : ℤ) else -(↑p : ℤ)) ∧
-      (mkRat (if s then (↑p : ℤ) else -(↑p : ℤ)) q).den = q := by
-      let v : ℤ := if s then ↑p else -↑p
-      have hq_pos_int : (0 : ℤ) < (q : ℤ) := by exact_mod_cast h_q_pos
-      -- h_q_ne_zero is not strictly needed here as Rat.mkRat_eq_divInt does not require q ≠ 0.
-      -- The hq_pos_int implies q ≠ 0 for the coprime lemmas.
-      have h_coprime_int :
-        (Int.natAbs v).Coprime (Int.natAbs (q : ℤ)) := by
-        dsimp only [v]
-        rw [Int.natAbs_ofNat q]
-        split_ifs with hs_cond
-        · simp only [Int.natAbs_ofNat]; exact h_coprime
-        · simp only [Int.natAbs_neg, Int.natAbs_ofNat]; exact h_coprime
-
-      constructor
-      · -- Numerator part: (mkRat v q).num = v
-        rw [Rat.mkRat_eq_divInt v q]
-        rw [Rat.divInt_eq_div v ↑q] -- Converts (Rat.divInt v ↑q).num to (v / ↑q).num
-        exact Rat.num_div_eq_of_coprime hq_pos_int h_coprime_int
-      · -- Denominator part: (mkRat v q).den = q
-        rw [Rat.mkRat_eq_divInt v q]
-        rw [Rat.divInt_eq_div v ↑q] -- Goal is now (v / ↑q).den = q
-        -- Rewrite the RHS of the goal to prepare for comparison.
-        rw [← Int.natAbs_ofNat q]    -- Goal becomes (v / ↑q).den = Int.natAbs ↑q
-
-        -- We know `Rat.den_div_eq_of_coprime hq_pos_int h_coprime_int` proves `(v / ↑q).den = Int.natAbs ↑q`.
-        -- `convert` will use this and ask us to prove `Int.natAbs ↑q = Int.natAbs ↑q` (after unification).
-        convert Rat.den_div_eq_of_coprime hq_pos_int h_coprime_int
-        -- New goal: Int.natAbs ↑q = Int.natAbs ↑q (or q = q after simplification)
-        aesop
-        --exact (Int.natAbs_ofNat q).symm
-
-    -- Substitute these known num/den values into the `fromRat` expression.
-    -- Replace `simp [h_num_den]` with explicit rewrites.
-    rw [h_num_den.1, h_num_den.2]
-    rw [h_struct] -- Substitute r.val with its structure
-
-    -- The goal is now to prove equality of two lists:
-    -- `[decide (0 ≤ (if s then p else -↑p))] ++ replicate ((if s then p else -↑p).natAbs) true ++ replicate q false`
-    -- = `[s] ++ replicate p true ++ replicate q false`
-
-    -- Ensure lists are in `h :: t` form for `List.cons_eq_cons`.
-    -- `[h] ++ t` is `h :: t`. `h :: (t1 ++ t2)` is `h :: t1 ++ t2`.
-    -- `simp` with `List.singleton_append` can achieve this, or it might be automatic.
-    -- The current structure after `simp [h_num_den]` and `rw [h_struct]` should be:
-    -- `(decide (...)) :: (replicate ... ++ replicate ...)`
-    -- `s :: (replicate ... ++ replicate ...)`
-    -- So `List.cons_eq_cons` can be applied.
-
-    simp [List.cons_eq_cons]
-    constructor
-    · -- 1. Prove the sign bits are equal:
-      -- `decide (0 ≤ (if s then p else -↑p)) = s`
-      by_cases hs : s
-      · -- Case s = true: Goal is `decide (0 ≤ ↑p) = true`. Since p is Nat, 0 ≤ ↑p is true. decide true = true.
-        -- The problematic line was here.
-        -- If p can be 0, then (0 <= p) is true.
-        aesop
-        --simp [hs, zero_le (p :ℤ)]
-      · -- Case s = false: Goal is `decide (0 ≤ -↑p) = false`.
-        -- This means `¬(0 ≤ -↑p)`, which is `-↑p < 0`, or `↑p > 0`.
-        simp [hs]
-        -- Goal is now `¬(0 ≤ -↑p)`, which simplifies to `p > 0`.
-        -- If `p` were `0`, then `h_zero_sign` would force `s` to be `true`,
-        -- which contradicts our case `hs : ¬s`. So `p` cannot be `0`.
-        have hp_ne_zero : p ≠ 0 := by
-          intro hp_is_zero
-          have hs_must_be_true := h_zero_sign hp_is_zero
-          exact hs hs_must_be_true
-        -- Since p is a Nat, p ≠ 0 implies p > 0.
-        --exact Nat.pos_of_ne_zero hp_ne_zero
-        aesop
-    · -- 2. Prove tails are equal:
-      -- `replicate ((if s then ↑p else -↑p).natAbs) true ++ replicate q false = replicate p true ++ replicate q false`
-      -- Since `replicate q false` is the same on both sides, we can cancel it.
-      --rw [List.append_right_cancel_iff]
-      aesop
-  ,
-  right_inv := by
-    -- (The previous proof for right_inv remains correct)
-    intro q_in
-    simp [ toRat, fromRat, getNum, getSign, getDen,
-       List.count_append, List.count_replicate,
-       List.head_cons, List.tail_cons, List.singleton_append,
-       add_zero, zero_add ]      -- everything here exists
-    -- `fromRat` chooses its numerator as
-    --   if 0 ≤ q_in then |q_in.num| else -|q_in.num|
-    -- We show this is convertible to `q_in.num`, after which
-    -- `Rat.mkRat_self` finishes the proof.
-    by_cases h_nonneg : (0 : ℚ) ≤ q_in
-    ·  -- branch 0 ≤ q_in : the numerator chosen is `|q_in.num| = q_in.num`
-       have : (if (0 : ℚ) ≤ q_in then (|q_in.num|) else -(|q_in.num|)) = q_in.num := by
-         simp [h_nonneg, abs_of_nonneg (Rat.num_nonneg.2 h_nonneg)]
-       simpa [this] using Rat.mkRat_self q_in
-    ·  -- branch q_in < 0 : numerator is `- |q_in.num| = q_in.num`
-       have : (if (0 : ℚ) ≤ q_in then (|q_in.num|) else -(|q_in.num|)) = q_in.num := by
-         have h_lt : q_in < 0 := lt_of_not_ge h_nonneg
-         -- Translate the negativity of the rational to negativity of its numerator.
-         -- `Rat.num_neg_iff_neg` is a lemma in `Mathlib.Data.Rat.Lemmas`
-         -- giving `q.num < 0 ↔ q < 0` when the denominator is positive.
-         have h_num_neg : q_in.num < 0 := by
-           --simpa using (Rat.num_nonneg).2 h_lt
-           simp [Rat.num_nonneg]
-           aesop
-         simp [h_nonneg, abs_of_neg h_num_neg]
-       simpa [this] using Rat.mkRat_self q_in
-}

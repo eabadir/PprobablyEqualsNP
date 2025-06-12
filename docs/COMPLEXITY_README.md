@@ -19,7 +19,7 @@ This document outlines a detailed plan and provides Lean 4 code declarations for
     *   [3.1. `SB_Instance`: Defining Problem Parameters](#31-sb_instance-defining-problem-parameters)
     *   [3.2. Relation to Bose-Einstein Statistics](#32-relation-to-bose-einstein-statistics)
 4.  [Boolean Encoding and Verifier Programs](#4-boolean-encoding-and-verifier-programs)
-    *   [4.1. `ComputerProgram`: A Type for Decision Logic](#41-computerprogram-a-type-for-decision-logic)
+    *   [4.1. `PathProgram`: A Type for Decision Logic](#41-computerprogram-a-type-for-decision-logic)
     *   [4.2. Bar-Position Encoding for Stars and Bars](#42-bar-position-encoding-for-stars-and-bars)
     *   [4.3. `SB_Verifier`: The Stars and Bars Verifier Program](#43-sb_verifier-the-stars-and-bars-verifier-program)
     *   [4.4. `BoseEinstein_Verifier`: Equivalence](#44-boseeinstein_verifier-equivalence)
@@ -102,10 +102,10 @@ The central technical goal is to establish, via an existential proof in Lean 4, 
 
 ### 1.4. Significance for Custom Complexity Types
 This proof is a cornerstone for a user-defined hierarchy of computational complexity types:
-*   **`ComputerProgram`**: Characterizes decision problems via a boolean encoding.
-*   **`HasCNFCertificate`**: A property of a `ComputerProgram` indicating its logic can be expressed by an equivalent CNF formula.
-*   **`NPCProgram`**: Axiomatically defined as a `ComputerProgram` whose verifier is polynomial-time, possesses a CNF certificate, and is SAT-equivalent (NP-hard).
-*   **`SB_Verifier`**: An instantiation of `ComputerProgram` for the Stars and Bars problem.
+*   **`PathProgram`**: Characterizes decision problems via a boolean encoding.
+*   **`HasCNFCertificate`**: A property of a `PathProgram` indicating its logic can be expressed by an equivalent CNF formula.
+*   **`NPCProgram`**: Axiomatically defined as a `PathProgram` whose verifier is polynomial-time, possesses a CNF certificate, and is SAT-equivalent (NP-hard).
+*   **`SB_Verifier`**: An instantiation of `PathProgram` for the Stars and Bars problem.
 
 The successful proof will show `SB_Verifier` has a CNF certificate and is polynomial-time verifiable. While not NP-complete itself (being in P), it shares foundational properties with verifiers for NP problems, making it a key building block for analyzing more complex systems.
 
@@ -139,7 +139,7 @@ These two definitions are equivalent:
 *   **NTM to Verifier**: An accepting computation branch of an NTM (a sequence of choices) can itself serve as the certificate `w`. A DTM verifier `V` can simulate the NTM along the path specified by `w` and accept if that path is an accepting one.
 
 ### 2.4. Certificates (Proof Strings)
-A certificate `w` is an ordinary string `w ∈ Σ*` used as additional input to the verifier. It must be polynomially bounded in the length of the original input `x`. The NTM "guesses" or explores all possible such certificates. Our `ComputerProgram` type, when used as a verifier, takes a boolean assignment (a fixed-length string over `{true, false}`) which acts as this certificate.
+A certificate `w` is an ordinary string `w ∈ Σ*` used as additional input to the verifier. It must be polynomially bounded in the length of the original input `x`. The NTM "guesses" or explores all possible such certificates. Our `PathProgram` type, when used as a verifier, takes a boolean assignment (a fixed-length string over `{true, false}`) which acts as this certificate.
 
 ## 3. Formal Lean 4 Representation of the Stars and Bars Problem
 
@@ -162,16 +162,16 @@ The SB problem is combinatorially equivalent to counting the number of ways to d
 
 ## 4. Boolean Encoding and Verifier Programs
 
-### 4.1. `ComputerProgram`: A Type for Decision Logic
+### 4.1. `PathProgram`: A Type for Decision Logic
 We define a general type for programs that perform a decision based on a boolean assignment.
 ```lean
 /--
-A ComputerProgram models a decision problem's core logic.
+A PathProgram models a decision problem's core logic.
 It takes an assignment of truth values to its `num_vars` variables (the certificate or solution encoding)
 and returns true if the input is "accepted" (e.g., represents a valid solution), false otherwise.
 `num_vars` is the length of the boolean certificate.
 -/
-def ComputerProgram (num_vars : ℕ) := (Fin num_vars → Bool) → Bool
+def PathProgram (num_vars : ℕ) := (Fin num_vars → Bool) → Bool
 ```
 
 ### 4.2. Bar-Position Encoding for Stars and Bars
@@ -207,9 +207,9 @@ This program implements the decision logic for the Stars and Bars problem using 
 The SB_Verifier for a Stars and Bars instance.
 It takes a boolean assignment representing bar positions and checks if it correctly encodes
 a valid distribution by ensuring exactly `num_bars_to_place` variables are true.
-This function IS the `ComputerProgram` for verifying SB solutions under this encoding.
+This function IS the `PathProgram` for verifying SB solutions under this encoding.
 -/
-def SB_Verifier (inst : SB_Instance) : ComputerProgram (num_encoding_vars_for_sb inst) :=
+def SB_Verifier (inst : SB_Instance) : PathProgram (num_encoding_vars_for_sb inst) :=
   -- Case 1: No boxes.
   if h_M_boxes_zero : inst.M_boxes = 0 then
     -- The verifier takes an assignment over `Fin 0` variables (no actual variables).
@@ -247,22 +247,22 @@ This is definitionally equivalent to SB_Verifier.
 The role is to make the physical connection explicit.
 -/
 def BoseEinstein_Verifier (num_states num_particles : ℕ) :
-    ComputerProgram (num_encoding_vars_for_sb { N_balls := num_particles, M_boxes := num_states }) :=
+    PathProgram (num_encoding_vars_for_sb { N_balls := num_particles, M_boxes := num_states }) :=
   SB_Verifier { N_balls := num_particles, M_boxes := num_states }
 ```
 
 ## 5. CNF Representation and Certificates for Cardinality Constraints
 
 ### 5.1. `HasCNFCertificate`: Predicate for CNF Equivalence
-We need a way to state that a `ComputerProgram`'s logic can be expressed by a CNF formula.
+We need a way to state that a `PathProgram`'s logic can be expressed by a CNF formula.
 ```lean
 /--
-A predicate asserting that a ComputerProgram `prog` (with `num_vars` variables)
+A predicate asserting that a PathProgram `prog` (with `num_vars` variables)
 has an equivalent CNF representation `C`.
 This means `prog` accepts an assignment if and only if `C` evaluates to true for that assignment.
 This is crucial for linking problems to SAT and NP structures.
 -/
-def HasCNFCertificate {num_vars : ℕ} (prog : ComputerProgram num_vars) : Prop :=
+def HasCNFCertificate {num_vars : ℕ} (prog : PathProgram num_vars) : Prop :=
   ∃ (C : CNF (Fin num_vars)),  -- There exists a CNF formula C over Fin num_vars variables.
     ∀ (assignment_func : Fin num_vars → Bool), -- For all possible boolean assignments to these variables,
       prog assignment_func ↔ C.eval assignment_func -- prog's output is equivalent to C's evaluation.
@@ -387,7 +387,7 @@ A full formalization would require a model of computation (e.g., Turing Machines
 time complexity definitions. Here, it's treated axiomatically for the framework's purpose.
 Role: Allows us to incorporate the "polynomial-time verifier" aspect of NP problems.
 -/
-axiom IsInP_ComputerProgram {num_vars : ℕ} (prog : ComputerProgram num_vars) : Prop
+axiom IsInP_ComputerProgram {num_vars : ℕ} (prog : PathProgram num_vars) : Prop
 ```
 
 ### 6.2. `NPCProgram`: Capturing NP-Complete Characteristics
@@ -396,7 +396,7 @@ This structure defines problems that exhibit characteristics of NP-complete prob
 /--
 An NPCProgram (NP-Complete characteristics Program) aims to capture NP-Complete problems.
 It is defined by:
-1. `prog`: The ComputerProgram that acts as a verifier for a given certificate
+1. `prog`: The PathProgram that acts as a verifier for a given certificate
    (encoded as a boolean assignment).
 2. `has_cnf_cert`: Proof that `prog` (the verifier) has an equivalent CNF representation.
    This links the verifier's logic to SAT.
@@ -410,7 +410,7 @@ Role: Provides a formal type in Lean for problems believed to be NP-complete,
       based on these structural and axiomatic properties.
 -/
 structure NPCProgram (num_vars : ℕ) :=
-  (prog : ComputerProgram num_vars)
+  (prog : PathProgram num_vars)
   (has_cnf_cert : HasCNFCertificate prog)
   (prog_is_poly_time_verifier : IsInP_ComputerProgram prog)
   (is_sat_equivalent : Prop) -- Abstractly represents NP-Hardness + NP-Membership.
@@ -457,7 +457,7 @@ theorem SB_Verifier_has_CNF_certificate (inst : SB_Instance) :
     HasCNFCertificate (SB_Verifier inst) := by
   -- Unfold definitions of HasCNFCertificate and SB_Verifier.
   unfold HasCNFCertificate SB_Verifier
-  -- Let `N_vars_type_idx` be the number of variables for the `ComputerProgram` type.
+  -- Let `N_vars_type_idx` be the number of variables for the `PathProgram` type.
   let N_vars_type_idx := num_encoding_vars_for_sb inst
   -- Let `K_true_target` be the target number of true variables (bars).
   let K_true_target := num_bars_to_place inst
@@ -537,7 +537,7 @@ This distinction is an important feature of the framework: it allows us to ident
 
 The true value of this framework is in its potential to classify more complex problems, especially those inspired by physics where computational difficulty is often apparent or suspected. For such problems, the goal would be to:
 1.  Define `InstanceData` and a boolean `SolutionEncoding`.
-2.  Construct a `VerifierLogic : ComputerProgram num_vars`.
+2.  Construct a `VerifierLogic : PathProgram num_vars`.
 3.  Prove `HasCNFCertificate VerifierLogic` (potentially reusing `CardinalityCNF`).
 4.  Prove/Axiomatize `IsInP_ComputerProgram VerifierLogic`.
 5.  Crucially, prove/Axiomatize `IsSatEquivalent` (NP-hardness).
@@ -623,7 +623,7 @@ Below are examples, starting with problems whose classical computability is deep
 
 ## 8. Conclusion and Future Directions
 
-The framework presented, centered around `ComputerProgram`, `HasCNFCertificate`, `IsInP_ComputerProgram`, and `NPCProgram`, provides a pathway in Lean 4 to:
+The framework presented, centered around `PathProgram`, `HasCNFCertificate`, `IsInP_ComputerProgram`, and `NPCProgram`, provides a pathway in Lean 4 to:
 1.  Rigorously prove CNF certifiability for specific problem verifiers, as demonstrated for `SB_Verifier`. This establishes a concrete link between combinatorial problems and logical satisfiability.
 2.  Distinguish between problems whose verifiers are in P (like `SB_Verifier`) and potential NP-complete candidates by incorporating an explicit (though axiomatic for now) notion of SAT-equivalence (NP-hardness).
 3.  Offer a structured approach to defining and analyzing the computational complexity of new problems, particularly those from physics that have combinatorial underpinnings or raise profound questions about classical computability.

@@ -3,11 +3,11 @@ import Mathlib.Data.Real.Basic
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Set.Defs
-import PPNP.Entropy.Physics.PhysicsDist -- Added
-import PPNP.Entropy.Common             -- Added
+import EGPT.Physics.PhysicsDist -- Added
+import EGPT.Entropy.Common             -- Added
 import Std.Sat.CNF.Basic
 /- Complexity.lean -/
-namespace PPNP.Complexity.Basic
+namespace EGPT.Complexity.Basic
 /-!
   Section 1: Foundational Definitions (Complexity, SAT, Entropy)
   This module gathers key abstract types, complexity class definitions, and axioms.
@@ -15,10 +15,10 @@ namespace PPNP.Complexity.Basic
 -/
 
 open Classical
-open PPNP.Entropy.Common
-open PPNP.Entropy.Physics.PhysicsDist
-open PPNP.Entropy.Physics.Common
-open PPNP.Common
+open EGPT.Entropy.Common
+open EGPT.Physics.PhysicsDist
+open EGPT.Physics.Common
+open EGPT
 
 
 /-!
@@ -51,10 +51,10 @@ axiom compute (m : Machine) (w : Word) : Option Word
 axiom timeComplexity (m : Machine) (w : Word) : Nat
 
 /--
-A ComputerProgram takes an assignment of truth values to its `num_vars` variables
+A PathProgram takes an assignment of truth values to its `num_vars` variables
 and returns true if the input is "accepted", false otherwise.
 -/
-def ComputerProgram (num_vars : ℕ) := (Fin num_vars → Bool) → Bool
+def PathProgram (num_vars : ℕ) := (Fin num_vars → Bool) → Bool
 
 -- Polynomial Time Definitions [Unchanged]
 def PolyTime (f : Nat → Nat) : Prop :=
@@ -82,9 +82,9 @@ def PolyTimeReducible (L1 L2 : Lang) : Prop :=
 
 
 /--
-A predicate asserting that a ComputerProgram `prog` has an equivalent CNF representation `C`.
+A predicate asserting that a PathProgram `prog` has an equivalent CNF representation `C`.
 -/
-def HasCNFCertificate {num_vars : ℕ} (prog : ComputerProgram num_vars) : Prop :=
+def HasCNFCertificate {num_vars : ℕ} (prog : PathProgram num_vars) : Prop :=
   ∃ (C : CNF (Fin num_vars)),
     ∀ (assignment_func : Fin num_vars → Bool),
       prog assignment_func ↔ C.eval assignment_func
