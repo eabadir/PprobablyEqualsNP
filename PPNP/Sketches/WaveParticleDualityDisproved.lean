@@ -16,7 +16,7 @@ This theorem is the formal statement of `BE Statistics ↔ Computability`.
 
 The approach here was done before the EGPT Number Theory rational ParticlePMF was completed so it takes a more mathematically cumbersome approach:
 For any Bose-Einstein system defined by `N` states and `M` particles, there
-exists a `PathProgram` that can specify its state at arbitrary time t. The
+exists a system of `PathProgram`'s that can specify its state at arbitrary time t (sum of M PathProgram's each a  are themeselves an int ℤ ). The
 complexity of this program is the smallest integer number of bits required to
 encode the system's total information content, which is its Shannon entropy.
 

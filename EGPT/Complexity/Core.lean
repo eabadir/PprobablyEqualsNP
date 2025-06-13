@@ -33,52 +33,12 @@ structure ParticlePosition where -- Example placeholder definition
 /-- A PathProgram is defined by an initial state and a tape of instructions
     that drives its evolution. -/
 structure PathProgram where
-  initial_state : ParticlePosition
+  current_state : ParticlePosition
   tape : ComputerTape
 
-/-!
-==================================================================
-### The Canonical Program and its Equivalence
-
-This section formalizes the core EGPT insight: a "program" is not just a
-raw path, but is uniquely defined by its informationally significant outcome
-(its net effect, encoded as a sum of one or more `ChargedParticlePath`) and the time over which that outcome was achieved (its complexity is just the magnitude `ParticlePath`).
-
-This gives us a true, sorry-free bijection between programs and information.
-==================================================================
--/
-
-
-
-/--
-A `CanonicalComputerProgram` represents the essential information of a
-computational process.
--/
-structure CanonicalComputerProgram where
-  initial_state    : ParticlePosition
-  -- The compressed outcome of the sum of one or more particle paths / programs, encoded as an EGPT integer.
-  canonical_tape   : ChargedParticlePath
-  -- The total number of steps taken to achieve the outcome.
-  total_complexity : ParticlePath
-
-/--
-A function to "compress" or "encode" any raw `PathProgram` into its
-canonical form. It extracts the outcome and the total time.
--/
-noncomputable def encodeToCanonical (prog : PathProgram) : CanonicalComputerProgram :=
-  -- 1. Calculate the final position from the raw tape.
-  let final_pos : ℤ := particlePosition prog.tape
-  -- 2. Convert this integer outcome to its EGPT representation.
-  let canon_tape : ChargedParticlePath := (ParticlePathIntEquiv.symm final_pos)
-  -- 3. Get the total runtime (complexity).
-  let total_cplx : ParticlePath := fromNat prog.tape.length
-  -- 4. Construct the canonical program.
-  {
-    initial_state := prog.initial_state,
-    canonical_tape := canon_tape,
-    total_complexity := total_cplx
-  }
-
+-- Helper to create a new program at a starting position.
+def mkPathProgram (initial_pos : ℤ) : PathProgram :=
+  { tape := [], current_state.val := initial_pos }
 /--
 The "Information" represented by a canonical program is the pair of numbers
 (outcome, runtime) that uniquely defines it.
@@ -96,14 +56,14 @@ noncomputable def equivProgramToCanonicalInfo : PathProgram ≃ CanonicalInforma
 {
   toFun := fun prog =>
     -- The forward function encodes the initial state to its GInt form.
-    let initialStateInfo := ParticlePathIntEquiv.symm prog.initial_state.val
+    let initialStateInfo := ParticlePathIntEquiv.symm prog.current_state.val
     (initialStateInfo, prog.tape),
 
   invFun := fun info =>
     -- The inverse function decodes the GInt back to a ℤ.
     let initialStateVal := ParticlePathIntEquiv info.fst
     {
-      initial_state := { val := initialStateVal },
+      current_state := { val := initialStateVal },
       tape := info.snd
     },
 
@@ -201,7 +161,7 @@ by
   let example_tape := List.replicate L true
   let initial_st_example : ParticlePosition := { val := 0 }
   let prog_exists : PathProgram := {
-    initial_state := initial_st_example,
+    current_state := initial_st_example,
     tape := example_tape
   }
   use prog_exists
@@ -302,7 +262,7 @@ by
 
   -- 2. Construct the program with this tape.
   let prog_exists : PathProgram := {
-    initial_state := { val := 0 },
+    current_state := { val := 0 },
     tape := tape_L
   }
   use prog_exists
@@ -365,7 +325,7 @@ by
   let L := Nat.ceil H_src
   let example_tape := List.replicate L true
   let prog_exists : PathProgram := {
-    initial_state := { val := 0 },
+    current_state := { val := 0 },
     tape := example_tape
   }
   use prog_exists
@@ -471,20 +431,85 @@ def P_EGPT_NT : Set Lang_EGPT :=
        (∀ input, L input = solver input)
 }
 
+-- A predicate on the system's state vector. The NDMachine halts when this is true.
+abbrev TargetStatePredicate (n : ℕ) := (Vector ℤ n) → Bool
+
 /--
-The non-deterministically polynomial class NP_EGPT, redefined using our number-theoretic concept of polynomial time.
+The state of a single particle in an EGPT system, defined by its
+current position and its intrinsic physical law (movement bias).
 -/
-def NP_EGPT_NT : Set Lang_EGPT :=
-{ L | ∃ (dm : DMachine)
-         (constraints : List Constraint)
-         (poly_bound : ParticlePath → ParticlePath) (_h_poly : IsPolynomialEGPT poly_bound),
-       ∀ (input : EGPT_Input),
-         L input ↔ ∃ (cert : PathProgram),
-           -- The certificate's complexity is bounded by an EGPT-polynomial function.
-           equivParticlePathToNat.toFun (fromNat cert.complexity) ≤ equivParticlePathToNat.toFun (poly_bound (fromNat input)) ∧
-           CanNDMachineProduce constraints cert ∧
-           dm.verify cert input
-}
+structure ParticleState where
+  position : ParticlePosition
+  law      : ParticlePMF -- Corresponds to an EGPT.Rat, the particle's bias
+
+/--
+An `NDMachine` represents the initial configuration of an n-particle system.
+It is the "program" for a physical simulation. Its non-determinism comes
+from consuming choices from an IID source for each particle at each time step.
+-/
+structure NDMachine (n : ℕ) where
+  initial_states : Vector ParticleState n -- Added: The initial configuration of particles
+  -- The solve method is the machine's attempt to find a satisfying state.
+  solve : (target : TargetStatePredicate n) → -- Explicit arrow
+          (time_limit : ℕ) →                 -- Explicit arrow
+          (seed : ℕ) →
+          Option (Vector PathProgram n) -- Returns the solution if found
+
+abbrev ExperimentRunner (n : ℕ) := NDMachine n
+
+
+-- The full history of a single particle for `t` steps.
+abbrev ParticleHistory := ComputerTape -- List Bool
+
+-- The history of the entire n-particle system.
+abbrev SystemHistory (n : ℕ) := Vector ParticleHistory n
+
+
+
+/--
+Converts a `SystemHistory` (a set of parallel tapes) into a single,
+serial `PathProgram` by concatenating all tapes. This represents the
+total computational work of the simulation.
+-/
+def prog_of_history {n : ℕ} (hist : SystemHistory n) : PathProgram :=
+  { current_state := { val := 0 }, tape := hist.toList.flatMap id }
+
+-- Implementation of the universal solve function
+noncomputable def ndm_run_solver {n : ℕ}
+    (initial_states : Vector ParticleState n)
+    (target : TargetStatePredicate n)
+    (time_limit : ℕ)
+    (seed : ℕ)
+    : Option (Vector PathProgram n) :=
+  -- Start with fresh programs at their initial positions.
+  let progs_t0 := initial_states.map (fun s => mkPathProgram s.position.val)
+
+  -- Loop for `time_limit` steps.
+  let rec loop (t : ℕ) (current_progs : Vector PathProgram n) : Option (Vector PathProgram n) :=
+    if h_lt : t < time_limit then
+      -- We are still within the time limit; keep simulating.
+      let current_positions := current_progs.map (fun p => p.current_state.val)
+      if target current_positions then
+        some current_progs -- Solution found!
+      else
+        -- Run one more step of the simulation.
+        let next_progs := Vector.ofFn (fun i : Fin n =>
+          let prog := current_progs.get i
+          let law := (initial_states.get i).law
+          let source := toBiasedSource law (seed + i.val * time_limit + t)
+          let choice := source.stream 0
+          { tape := prog.tape.append [choice],
+            current_state := { val := prog.current_state.val + (if choice then 1 else -1) } }
+        )
+        loop (t + 1) next_progs
+    else
+      none -- Reached or exceeded the time limit
+    termination_by
+      time_limit - t
+    decreasing_by
+      simpa using Nat.sub_succ_lt_self time_limit t h_lt
+
+  loop 0 progs_t0
 
 /-!
 ### Pictures of the Past: The "Balls and Boxes" System State
@@ -720,7 +745,7 @@ by
   rw [h_entropy_one, mul_one]
 
 /-!
-### ShannonEntropy ↔ PathProgram
+### Shannon Entropy ↔ PathProgram
 -/
 
 /--
@@ -732,7 +757,7 @@ theorem RECT_Entropy_to_Program (H : InformationContentR) :
     ∃ (prog : ComputationalDescription), prog.complexity = Nat.ceil H :=
 by
   let L := Nat.ceil H
-  use { initial_state := { val := 0 }, tape := List.replicate L true }
+  use { current_state := { val := 0 }, tape := List.replicate L true }
   simp [PathProgram.complexity]
   aesop
 
@@ -750,7 +775,7 @@ theorem IRECT_RECT_inverse_for_integer_complexity (L : ℕ) :
     ∃ (prog : ComputationalDescription),
       IRECT_Program_to_Entropy prog = (L : ℝ) ∧ prog.complexity = L :=
 by
-  use { initial_state := { val := 0 }, tape := List.replicate L true }
+  use { current_state := { val := 0 }, tape := List.replicate L true }
   simp [IRECT_Program_to_Entropy, PathProgram.complexity]
 
 /-!
