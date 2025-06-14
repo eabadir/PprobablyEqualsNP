@@ -8,13 +8,21 @@ import Mathlib.Control.Random
 import Mathlib.Data.Fintype.Vector
 import EGPT.Basic
 
-
 open List
 
 
 namespace EGPT
 
 
+/-!
+# EGPT Number Theory: Numbers Are Physics
+The core axiom of EGPT is that particles move according to a RandomWalk - as they move forward in time step by step, they make a "coin flip" decision to move up or down such as heads = move up, tails = move down. If each heads/tails outcome is recorded we can use binary string of 1's and 0's to capture their path. In Lean we use List Bool as the fundamental type for this binary recording. When the path is walked the next step is independent of history (except the last state/position) - the next step depends only on the current position and the next coin flip. In probability theory each step on the path is said to be "event" in an independent and identically distributed (IID) process, the path formation is called a "memoryless stochastic process" (aka a Markov Process), and the resultant path is called a Markov Chain (or Random Walk).
+
+In short, to describe particle movement and interactions the core encoding we use is a `List Bool`.
+-/
+
+def PathCompress_AllTrue (L : List Bool) : Prop := ∀ x ∈ L, x = true
+abbrev ParticlePath := { L : List Bool // PathCompress_AllTrue L }
 
 
 class IIDParticleSource (α : Type) where
@@ -27,30 +35,40 @@ def CannonicalSymmetricParticlePath := List Bool
 abbrev RandomWalkPath := List Bool
 
 
-instance mkPseudoRandomSource (seed : Nat) : IIDParticleSource Bool :=
-{ stream := fun n =>
-    let gen0 := mkStdGen seed
-    let genN := (List.range n).foldl (fun g _ => (stdNext g).2) gen0
-    (randBool genN).1 }
-
-/-- A biased IID particle source that generates `true` with probability `p / (p + q)` and `false` with probability `q / (p + q)`. -/
-instance mkBiasedIIDParticleSource (seed : Nat) (p : ℕ) (q: ℕ) (_h : p + q > 0) : IIDParticleSource Bool :=
-{ stream := fun n =>
-    let gen0 := mkStdGen seed
-    let genN := (List.range n).foldl (fun g _ => (stdNext g).2) gen0
-    (randBool genN).1 }
-
-
 /-- Calculates the number of `true` choices (e.g., "up-steps") in a path. -/
 def numOnes (p_path : RandomWalkPath) : ℕ :=
   p_path.count true
 
+abbrev ParticlePosition := ℤ
 /--
 Calculates the "position" of a particle after `t` steps,
 defined as (#trues - #falses).
 -/
-def particlePosition (p_path : RandomWalkPath) : ℤ :=
+def calcParticlePosition (initial_pos : ℤ) (p_path : RandomWalkPath) : ℤ :=
   let ones := numOnes p_path
   let path_len := p_path.length
   let zeros := path_len - ones
-  (ones : ℤ) - (zeros : ℤ)
+  let mag_initial := Int.natAbs initial_pos
+  let (ones', zeros') :=
+    if initial_pos >= 0 then
+      (ones + mag_initial, zeros)
+    else
+      (ones, zeros + mag_initial)
+  (ones' : ℤ) - (zeros' : ℤ)
+
+
+
+
+def RandomWalkFromPosition (pos : ParticlePosition): RandomWalkPath :=
+  let sign_bit := decide (pos >= 0)
+  let magnitude := Int.natAbs pos
+  List.append [sign_bit] (List.replicate magnitude true)
+
+/-- A single instruction/choice, represented by a Bool.
+    Corresponds to one "bit" of choice from an i.i.d. source
+    or one step in a binary decision tree. -/
+def ComputerInstruction := Bool
+
+/-- A sequence of choices/instructions forming the "program" or "path description".
+    This is conceptually the Turing Machine's input tape. -/
+def ComputerTape := List ComputerInstruction

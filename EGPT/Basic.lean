@@ -26,7 +26,7 @@ import Mathlib.GroupTheory.Congruence.Basic
 -- Import previous definitions and theorems
 
 
-namespace EGPT
+namespace EGPT.Basic
 
 open BigOperators Fin Real Topology NNReal Filter Nat Set
 
@@ -863,3 +863,47 @@ lemma sum_create_rational_dist_eq_one (n : ℕ) (a : Fin n → ℕ) (N_den : ℕ
 -- We will stop here for this step as requested.
 -- The next steps would involve generalizing DependentPairDist and IsEntropyCondAdd,
 -- then proving `RUE_rational_formula_H_P_rat`.
+
+
+
+/-- Helper lemma to equate real power of 2 with a Nat exponent to the cast of Nat power of 2. -/
+lemma real_two_pow_nat_eq_cast_nat_pow_two (n : ℕ) : (2:ℝ) ^ n = ↑((2:ℕ) ^ n) := by
+  rw [Nat.cast_two.symm] -- Goal: (↑(2:ℕ):ℝ) ^ n = ↑((2:ℕ) ^ n)
+  exact (Nat.cast_pow 2 n).symm
+
+
+
+/-!
+This lemma proves that if you take the ceiling of the base-2 logarithm of k,
+that number of bits is sufficient to represent k states.
+This is the mathematical core of RECT.
+-/
+lemma needed_bits_lemma (k : ℕ) (hk_pos : k > 0) :
+    k ≤ 2 ^ (Nat.ceil (Real.logb 2 k)) :=
+by
+  -- 1. Start with the property that x ≤ ⌈x⌉ for any x.
+  have h_le_ceil : Real.logb 2 k ≤ ↑(Nat.ceil (Real.logb 2 k)) :=
+    Nat.le_ceil _
+
+  -- 2. The function 2^x is monotone for real exponents when the base ≥ 1.
+  --    Apply this to both sides of the inequality.
+  have h_rpow_le : (2 : ℝ) ^ (Real.logb 2 k) ≤ (2 : ℝ) ^ (↑(Nat.ceil (Real.logb 2 k)) : ℝ) :=
+    (Real.rpow_le_rpow_of_exponent_le (by norm_num : 1 ≤ (2:ℝ)) h_le_ceil)
+
+  -- 3. Simplify the left-hand side: 2 ^ (logb 2 k) simplifies to k.
+  have h_k_real_pos : 0 < (k : ℝ) := Nat.cast_pos.mpr hk_pos
+  rw [Real.rpow_logb (by norm_num) (by norm_num) h_k_real_pos] at h_rpow_le
+  -- h_rpow_le is now: `↑k ≤ 2 ^ (↑(Nat.ceil (Real.logb 2 k)))` (with a real exponent)
+
+  -- 4. Convert the real power (rpow) on the RHS to a natural number power (pow).
+  rw [Real.rpow_natCast] at h_rpow_le
+  -- h_rpow_le is now: `↑k ≤ (2:ℝ) ^ (Nat.ceil (Real.logb 2 k))` (HPow with ℕ exponent)
+  let L := Nat.ceil (Real.logb 2 k)
+  -- h_rpow_le is effectively `↑k ≤ (2:ℝ) ^ L`
+
+  -- 5. Rewrite (2:ℝ)^L to ↑(2^L) using the helper lemma.
+  rw [real_two_pow_nat_eq_cast_nat_pow_two L] at h_rpow_le
+  -- h_rpow_le is now: `↑k ≤ ↑(2 ^ L)`
+
+  -- 6. Now the inequality is between two casted Nats, so `Nat.cast_le.mp` applies.
+  exact Nat.cast_le.mp h_rpow_le

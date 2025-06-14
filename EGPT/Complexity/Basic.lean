@@ -8,7 +8,8 @@ import EGPT.Entropy.Common             -- Added
 import Std.Sat.CNF.Basic
 /- Complexity.lean -/
 namespace EGPT.Complexity.Basic
-/-!
+/-! DEPRECATED: This axiomatic non-constructive definition of complexity is replaced by Complexity/Core.lean
+
   Section 1: Foundational Definitions (Complexity, SAT, Entropy)
   This module gathers key abstract types, complexity class definitions, and axioms.
   It now includes a concrete entropy problem based on Bose-Einstein statistics.

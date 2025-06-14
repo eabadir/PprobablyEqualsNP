@@ -10,16 +10,7 @@ import EGPT.Core
 
 namespace EGPT.NumberTheory.Core
 
-open List
-
-/-!
-# EGPT Number Theory: Numbers Are Physics
-The core axiom of EGPT is that particles move according to a RandomWalk - as they move forward in time step by step, they make a "coin flip" decision to move up or down such as heads = move up, tails = move down. If each heads/tails outcome is recorded we can use binary string of 1's and 0's to capture their path. In Lean we use List Bool as the fundamental type for this binary recording. When the path is walked the next step is independent of history (except the last state/position) - the next step depends only on the current position and the next coin flip. In probability theory each step on the path is said to be "event" in an independent and identically distributed (IID) process, the path formation is called a "memoryless stochastic process" (aka a Markov Process), and the resultant path is called a Markov Chain (or Random Walk).
-
-In short, to describe particle movement and interactions the core encoding we use is a `List Bool`.
--/
-
-def PathCompress_AllTrue (L : List Bool) : Prop := ∀ x ∈ L, x = true
+open List EGPT
 
 
 /-!
@@ -28,15 +19,12 @@ def PathCompress_AllTrue (L : List Bool) : Prop := ∀ x ∈ L, x = true
 The "natural numbers" in EGPT can be thought of as the unique paths of random walks which return to their baseline (heads = tails) for the first time. For example, the number 1 is a path [1,0], 2 is [1,1,0,0], etc.. We can represent the same path in shorter form by dropping the trailing zeros and then the sum of 1's is the number itself. This is the canonical form of a natural number in EGPT.
 ##############################################################################
 -/
-abbrev ParticlePath := { L : List Bool // PathCompress_AllTrue L }
-abbrev EGPT.Nat := ParticlePath
 
--- NEW: make the predicate decidable so that the generic
---      `[Encodable {x // p x}]` instance can fire.
-instance (L : List Bool) : Decidable (PathCompress_AllTrue L) := by
-  unfold PathCompress_AllTrue
-  exact List.decidableBAll (fun x => x = true) L
-
+-- make the predicate decidable so that the generic
+-- --      `[Encodable {x // p x}]` instance can fire.
+-- instance (L : List Bool) : Decidable (PathCompress_AllTrue L) := by
+--   unfold PathCompress_AllTrue
+--   exact List.decidableBAll (fun x => x = true) L
 ------------------------------------------------------------
 -- Encodable instance now *does* synthesise
 ------------------------------------------------------------
@@ -52,6 +40,7 @@ def fromNat (n : ℕ) : ParticlePath :=
     intro x h_mem
     rw [List.mem_replicate] at h_mem
     exact h_mem.right⟩
+
 
 lemma left_inv  (n : ℕ) : toNat (fromNat n) = n := by
   simp [toNat, fromNat]
@@ -74,6 +63,19 @@ def add_ParticlePath (path1 path2 : ParticlePath) : ParticlePath :=
   equivParticlePathToNat.invFun (equivParticlePathToNat.toFun path1 + equivParticlePathToNat.toFun path2)
 
 
+instance mkPseudoRandomSource (seed : ℕ) : IIDParticleSource Bool :=
+{ stream := fun n =>
+    let gen0 := mkStdGen seed
+    let genN := (List.range n).foldl (fun g _ => (stdNext g).2) gen0
+    (randBool genN).1 }
+
+/-- A biased IID particle source that generates `true` with probability `p / (p + q)` and `false` with probability `q / (p + q)`. -/
+instance mkBiasedIIDParticleSource (seed : ℕ) (p : ℕ) (q: ℕ) (_h : p + q > 0) : IIDParticleSource Bool :=
+{ stream := fun n =>
+    let gen0 := mkStdGen seed
+    let genN := (List.range n).foldl (fun g _ => (stdNext g).2) gen0
+    (randBool genN).1 }
+
 /-!
 ## Integers As EGPT ChargedParticlePath: A Single Particle Path, with initial direction ("Charge"), for A "Fair" Random Walk
 ##############################################################################
@@ -94,7 +96,7 @@ def ChargedParticlePath : Type := ParticlePath × Bool
 def EGPT.Int := ChargedParticlePath
 
 noncomputable def intEquivNatProdBool : ℤ ≃ ℕ × Bool :=
-  (Equiv.intEquivNat.trans (Equiv.boolProdNatEquivNat.symm)).trans (Equiv.prodComm ℕ Bool).symm   -- citations: ③,④,②
+  (Equiv.intEquivNat.trans (Equiv.boolProdNatEquivNat.symm)).trans (Equiv.prodComm ℕ Bool).symm
 
 noncomputable def ParticlePathIntEquiv : ChargedParticlePath ≃ ℤ :=
   (Equiv.prodCongr equivParticlePathToNat (Equiv.refl Bool)).trans intEquivNatProdBool.symm

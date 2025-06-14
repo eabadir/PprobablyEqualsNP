@@ -14,10 +14,10 @@ import Mathlib.Probability.ProbabilityMassFunction.Monad -- Add this import
 import Mathlib.Data.NNRat.BigOperators
 import Mathlib.Control.Random
 
+namespace EGPT.NumberTheory.Filter
 
+open EGPT.NumberTheory.Core EGPT.Complexity
 
-
-open Classical
 
 /- Equivalence between the `List.Vector` type used by `Equiv.vectorEquivFin`
     and the `Vector` type (array‐based) that we use for bit blocks. -/
@@ -91,9 +91,7 @@ and the structured, biased probabilities observed in complex physical and
 computational systems.
 -/
 
-namespace EGPT.NumberTheory.Filter
 
-open EGPT.NumberTheory.Core EGPT.Complexity
 
 -- To handle sources that emit blocks of bits (vectors) instead of single bits.
 abbrev IIDBlockSource (α : Type) := IIDParticleSource α
