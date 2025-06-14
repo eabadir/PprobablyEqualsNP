@@ -9,11 +9,12 @@ import Mathlib.Data.List.FinRange
 
 import EGPT.NumberTheory.Core
 import EGPT.Core
-
+import Mathlib.Logic.Encodable.Basic -- Added for Encodable.equivEncodable
+import EGPT.NumberTheory.Filter
 
 namespace EGPT.Complexity
 
-open EGPT.NumberTheory.Core
+open EGPT.NumberTheory.Core EGPT.NumberTheory.Filter
 
 
 
@@ -31,24 +32,24 @@ def mkPathProgram (initial_pos : Int) : PathProgram :=
 
 /--
 A `SATSystemState` is a distribution of particles into a finite number of
-positions. It is represented by a `Multiset` over `Fin k_positions`, where
-`k_positions` is the number of "boxes". The cardinality of the multiset is
+positions. It is represented by a `Multiset` over `Fin constrained_position`, where
+`constrained_position` is the number of "boxes". The cardinality of the multiset is
 the number of particles ("balls").
 -/
-abbrev SATSystemState (k_positions : ℕ) := Multiset (Fin k_positions)
+abbrev SATSystemState (constrained_position : ℕ) := Multiset (Fin constrained_position)
 
 /--
 A `ClauseConstraint` is a rule that a `SATSystemState` must satisfy. It is a
 predicate on the distribution of particles.
 This is the EGPT equivalent of a single clause in a CNF formula.
 -/
-abbrev ClauseConstraint (k_positions : ℕ) := SATSystemState k_positions → Bool
+abbrev ClauseConstraint (constrained_position : ℕ) := SATSystemState constrained_position → Bool
 
 /--
 A `CNF_Formula` is a list of `ClauseConstraint`s. A `SATSystemState` is
 satisfying if and only if it satisfies every constraint in the list.
 -/
-abbrev CNF_Formula (k_positions : ℕ) := List (ClauseConstraint k_positions)
+abbrev CNF_Formula (constrained_position : ℕ) := List (ClauseConstraint constrained_position)
 
 /-!
 ### Section 2: The EGPT-SAT Problem
@@ -57,13 +58,112 @@ We define the SAT problem in this combinatorial framework.
 -/
 
 /--
-The input for an EGPT-SAT problem, defined by the number of particles,
-the number of possible positions, and the set of combinatorial constraints.
+The state of a single particle in the SAT model.
+Its 'law' is the probability of it being 'true' in the next state.
+For the simplest model, we can assume a fair coin flip (p=1, q=1).
 -/
-structure EGPT_SAT_Input where
-  n_particles : ℕ
-  k_positions : ℕ
-  cnf : CNF_Formula k_positions
+structure ParticleState_SAT where
+  -- The current boolean value of the particle/variable.
+  value : Bool
+  -- The law governing its next state transition.
+  -- This is a ParticlePMF representing its bias (p, q).
+  law : ParticlePMF
+
+/--
+The input for an EGPT-SAT problem is a syntactic CNF formula,
+which is encodable as a ParticlePath.
+-/
+abbrev EGPT_SAT_Input (k : ℕ) := SyntacticCNF_EGPT k
+
+/--
+A certificate for a SAT problem is a proposed satisfying assignment.
+-/
+abbrev Certificate (k : ℕ) := Vector Bool k
+
+/--
+A DMachine (Deterministic Verifier) for SAT is defined by its action:
+it evaluates a CNF formula against a certificate.
+-/
+def DMachine_SAT_verify {k : ℕ} (input : EGPT_SAT_Input k) (cert : Certificate k) : Bool :=
+  evalCNF input cert
+
+/--
+An NDMachine (Non-Deterministic Solver) is the physical system itself.
+It is defined by the laws (constraints) it operates under.
+Its `solve` method is the concrete `ndm_run_solver`.
+-/
+structure NDMachine_SAT (k : ℕ) where
+  -- The physical laws of the system.
+  constraints : EGPT_SAT_Input k
+  -- The initial state of the k particles/variables (e.g., all false, with fair bias).
+  initial_states : Vector ParticleState_SAT k
+
+
+-- The full history of a single particle for `t` steps.
+abbrev ParticleHistory := ComputerTape -- List Bool
+
+-- The history of the entire n-particle system.
+abbrev SystemHistory (n : ℕ) := Vector ParticleHistory n
+/--
+Converts a `SystemHistory` (a set of parallel tapes) into a single,
+serial `PathProgram` by concatenating all tapes. This represents the
+total computational work of the simulation.
+-/
+def prog_of_history {n : ℕ} (hist : SystemHistory n) : PathProgram :=
+  { current_state := 0, tape := hist.toList.flatMap id }
+
+
+/--
+`advance_state` computes the next system state by flipping a biased coin for each particle.
+This is one step in the parallel Markov process.
+-/
+noncomputable def advance_state {k : ℕ} (current_states : Vector ParticleState_SAT k) (seed : ℕ) : Vector ParticleState_SAT k :=
+  Vector.ofFn (fun i : Fin k =>
+    let particle := current_states.get i
+    -- Use the particle's law (ParticlePMF) to create a biased source for this one step.
+    let source := toBiasedSource particle.law (seed + i.val)
+    let next_value := source.stream 0 -- Generate one new boolean value.
+    { particle with value := next_value }
+  )
+
+/--
+`get_system_state_vector` is a helper to extract the boolean vector from the particle states.
+-/
+def get_system_state_vector {k : ℕ} (states : Vector ParticleState_SAT k) : Vector Bool k :=
+  states.map (fun p => p.value)
+
+/--
+The true EGPT solver. It simulates the system forward, checking constraints at each step.
+It returns the first valid state it encounters.
+This is a non-deterministic search for a satisfying assignment.
+-/
+noncomputable def ndm_run_solver {k : ℕ} (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (Vector Bool k) :=
+  let rec loop (t : ℕ) (current_states : Vector ParticleState_SAT k) : Option (Vector Bool k) :=
+    if t >= time_limit then
+      none -- Timeout
+    else
+      -- 1. Advance all particles by one step according to their individual laws.
+      let next_particle_states := advance_state current_states (seed + t)
+      let next_system_state := get_system_state_vector next_particle_states
+
+      -- 2. Apply the filter: check if the new system state is valid.
+      if evalCNF machine.constraints next_system_state then
+        -- This state is a valid solution. Halt and return it.
+        some next_system_state
+      else
+        -- The state is invalid. Continue the search from this new (but invalid) state.
+        -- A different model could be to "reject" the step and retry from `current_states`.
+        -- Let's stick with the simpler "keep walking" model.
+        loop (t + 1) next_particle_states
+    termination_by time_limit - t
+
+  loop 0 machine.initial_states
+/--
+The `solve` function IS the ndm_run_solver. This becomes the primary
+definition of non-deterministic solving in EGPT.
+-/
+noncomputable def NDMachine_SAT.solve (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (Certificate k) :=
+  ndm_run_solver machine time_limit seed
 
 /--
 Axiom: Represents the deterministic evaluation of the program.
@@ -198,54 +298,19 @@ structure NDMachine (n : ℕ) where
 abbrev ExperimentRunner (n : ℕ) := NDMachine n
 
 
--- The full history of a single particle for `t` steps.
-abbrev ParticleHistory := ComputerTape -- List Bool
 
--- The history of the entire n-particle system.
-abbrev SystemHistory (n : ℕ) := Vector ParticleHistory n
+
 
 -- In EGPT/Complexity/Core.lean (Revised)
 
 -- === Step 1: Define the Syntactic CNF Data Structures ===
-
-/--
-A `Literal_EGPT` represents a single literal (e.g., `xᵢ` or `¬xᵢ`).
-It pairs a box index with a polarity (true for positive, false for negative).
--/
-structure Literal_EGPT (k_positions : ℕ) where
-  box_index : Fin k_positions
-  polarity  : Bool
-
-/-- Helper equivalence for `Literal_EGPT` to a product type. -/
-def Literal_EGPT.equivProd {k_positions : ℕ} : Literal_EGPT k_positions ≃ (Fin k_positions × Bool) :=
-{
-  toFun := fun lit => (lit.box_index, lit.polarity),
-  invFun := fun p => { box_index := p.1, polarity := p.2 },
-  left_inv := fun lit => by cases lit; simp,
-  right_inv := fun p => by cases p; simp
-}
-
-instance Literal_EGPT.encodable {k_positions : ℕ} : Encodable (Literal_EGPT k_positions) :=
-  Encodable.ofEquiv _ (Literal_EGPT.equivProd)
-
-/-- A `Clause_EGPT` is a list of literals, representing their disjunction. -/
-abbrev Clause_EGPT (k_positions : ℕ) := List (Literal_EGPT k_positions)
-
-/--
-A `SyntacticCNF_EGPT` is the data structure for a CNF formula, represented
-as a list of clauses.
--/
-abbrev SyntacticCNF_EGPT (k_positions : ℕ) := List (Clause_EGPT k_positions)
-
-instance denumerable_SyntacticCNF_EGPT (k : ℕ) : Denumerable (SyntacticCNF_EGPT k) :=
-  Denumerable.ofEncodableOfInfinite (SyntacticCNF_EGPT k)
 
 -- === Step 2: Define the Provable Encoding (SyntacticCNF ≃ ParticlePath) ===
 
 /-
 To encode a `SyntacticCNF_EGPT` as a `List Bool`, we need a canonical mapping.
 A simple example scheme:
-- Literal `(box_index, polarity)`: `(encode box_index) ++ [polarity]`
+- Literal `(particle_position, polarity)`: `(encode particle_position) ++ [polarity]`
 - Clause `[L1, L2, ...]`: `(encode L1) ++ [false, true] ++ (encode L2) ++ ...` (using `[false, true]` as a separator)
 - CNF `[C1, C2, ...]`: `(encode C1) ++ [false, false, true] ++ (encode C2) ++ ...` (using a different separator)
 
@@ -268,13 +333,13 @@ noncomputable def equivSyntacticCNF_to_ParticlePath {k : ℕ} : SyntacticCNF_EGP
 
 /--
 `eval_literal` gives the semantic meaning of a syntactic literal.
-e.g., `(box_index:=i, polarity:=true)` means "is box i occupied?".
+e.g., `(particle_position:=i, polarity:=true)` means "is box i occupied?".
 -/
 def eval_literal {k : ℕ} (lit : Literal_EGPT k) (state : SATSystemState k) : Bool :=
   if lit.polarity then
-    (state.count lit.box_index > 0) -- Positive literal: check for occupation
+    (state.count lit.particle_position > 0) -- Positive literal: check for occupation
   else
-    (state.count lit.box_index = 0) -- Negative literal: check for emptiness
+    (state.count lit.particle_position = 0) -- Negative literal: check for emptiness
 
 /--
 `eval_clause` gives the semantic meaning of a syntactic clause.
@@ -305,7 +370,7 @@ abbrev ProgramProblem : Set ParticlePath := Set.univ
 encodings of a *syntactic* CNF formula. This is now fully constructive.
 -/
 def CNFProgram {k : ℕ} : Set ParticlePath :=
-  { gnat | ∃ (s : SyntacticCNF_EGPT k), equivSyntacticCNF_to_ParticlePath.symm gnat = s }
+  { constrained_path | ∃ (s : SyntacticCNF_EGPT k), equivSyntacticCNF_to_ParticlePath.symm constrained_path = s }
 
 /--
 A `StateCheckProgram` is a specific kind of `CNFProgram` that represents

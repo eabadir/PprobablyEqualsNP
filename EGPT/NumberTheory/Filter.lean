@@ -1,5 +1,6 @@
 import EGPT.NumberTheory.Core
-import EGPT.Complexity.Core
+import EGPT.Constraints
+
 import Mathlib.Data.Vector.Basic
 import Mathlib.Data.Rat.Lemmas
 import Mathlib.Data.Fin.Basic
@@ -16,7 +17,7 @@ import Mathlib.Control.Random
 
 namespace EGPT.NumberTheory.Filter
 
-open EGPT.NumberTheory.Core EGPT.Complexity
+open EGPT.NumberTheory.Core EGPT.Constraints
 
 
 /- Equivalence between the `List.Vector` type used by `Equiv.vectorEquivFin`
@@ -72,7 +73,7 @@ that acts on a fair, fundamental IID source to produce a new, biased IID source.
 
 The core ideas are:
 1.  **Filters as Information:** A filter is a computable object, a set of
-    constraints represented by a `ParticlePath` via an encoding of a CNF formula.
+    constraints represented by a `RandomWalk` via an encoding of a CNF formula.
     This aligns with the EGPT principle that physical laws are computable information.
 
 2.  **Creating Bias through Information Loss:** The filter operates by rejection
@@ -107,22 +108,33 @@ instance FairBlockSource (k : ℕ) : IIDBlockSource (Vector Bool k) where
 /-!
 ### Section 1: Syntactic Filters as CNF Formulas
 
-We reuse the syntactic CNF definitions from `Program.lean`. A filter *is* a
-CNF formula, represented by a `ParticlePath`. We define an explicit evaluation function
+A filter *is* a CNF formula, represented by a `RandomWalk`. We define an explicit evaluation function
 for these syntactic formulas on boolean vectors.
 -/
 
+
+
+
+/--
+A `SyntacticCNF_EGPT` is the data structure for a CNF formula, represented
+as a list of clauses.
+-/
+abbrev SyntacticCNF_EGPT (constrained_position : ℕ) := List (Clause_EGPT constrained_position)
+
+instance denumerable_SyntacticCNF_EGPT (k : ℕ) : Denumerable (SyntacticCNF_EGPT k) :=
+  Denumerable.ofEncodableOfInfinite (SyntacticCNF_EGPT k)
+
 /--
 Evaluates a single syntactic literal against a variable assignment vector.
-`assignment.get lit.box_index` fetches the boolean value for the variable.
+`assignment.get lit.particle_position` fetches the boolean value for the variable.
 The literal's polarity determines if we use the value directly or its negation.
 -/
 def evalLiteral {k : ℕ} (lit : Literal_EGPT k) (assignment : Vector Bool k) : Bool :=
-  -- `(assignment.get lit.box_index)` is the value of the variable.
+  -- `(assignment.get lit.particle_position)` is the value of the variable.
   -- `xor` with `¬lit.polarity` implements the conditional negation:
   -- - If polarity is true (positive literal), `¬polarity` is false. `v xor false = v`.
   -- - If polarity is false (negative literal), `¬polarity` is true. `v xor true = ¬v`.
-  xor (assignment.get lit.box_index) (not lit.polarity)
+  xor (assignment.get lit.particle_idx) (not lit.polarity)
 
 /--
 Evaluates a syntactic clause. A clause is satisfied if any of its literals are true.
@@ -145,7 +157,7 @@ The resulting distribution is uniform over the set of satisfying assignments.
 -/
 
 /--
-A `RejectionFilter` encapsulates a CNF formula, which is encodable as a `ParticlePath`.
+A `RejectionFilter` encapsulates a CNF formula, which is encodable as a `RandomWalk`.
 This structure represents the physical laws or constraints of a system.
 -/
 structure RejectionFilter (k : ℕ) where
@@ -186,6 +198,14 @@ noncomputable def distOfRejectionFilter {k : ℕ} (filter : RejectionFilter k) :
   3. The rational value is the ratio of the total probabilities of these events.
 
   This directly uses `mathlib`'s `PMF` type for maximum rigor.
+      Voltage (+) ────┬─── Literal X1 ────┐
+                      │                   │
+                      ├─── Literal ¬X2 ───┤
+                      │                   │─── Clause Output Line
+                      └─── Literal X3 ────┘
+
+ Voltage (+) ── Clause1 ── Clause2 ── Clause3 ──> Final Output Line
+
 ##############################################################################
 -/
 
