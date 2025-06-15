@@ -11,10 +11,10 @@ import EGPT.NumberTheory.Core
 import EGPT.Core
 import Mathlib.Logic.Encodable.Basic -- Added for Encodable.equivEncodable
 import EGPT.NumberTheory.Filter
-
+import EGPT.Constraints
 namespace EGPT.Complexity
 
-open EGPT.NumberTheory.Core EGPT.NumberTheory.Filter
+open EGPT.NumberTheory.Core EGPT.NumberTheory.Filter EGPT.Constraints
 
 
 
@@ -158,6 +158,50 @@ noncomputable def ndm_run_solver {k : ℕ} (machine : NDMachine_SAT k) (time_lim
     termination_by time_limit - t
 
   loop 0 machine.initial_states
+
+
+/--
+The `RejectionFilter.of_satisfying_example` constructor takes a CNF and a single
+satisfying assignment and bundles them into a `RejectionFilter` object.
+-/
+def RejectionFilter.of_satisfying_example {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution_example : Vector Bool k) (h_ex : evalCNF cnf solution_example = true) : RejectionFilter k :=
+  { cnf := cnf,
+    is_satisfiable := ⟨solution_example, by {
+        -- Prove the example is in the satisfying_assignments finset
+        simp only [satisfying_assignments_def, Finset.mem_filter]
+        exact ⟨Finset.mem_univ _, h_ex⟩
+      }⟩
+  }
+
+/--
+**The Revised Solver:** `ndm_run_solver` now returns an `Option (RejectionFilter k)`.
+A `some filter` result means a solution was found, and that solution is now
+packaged inside the filter itself as the proof of `is_satisfiable`.
+-/
+noncomputable def ndm_run_solver_produces_filter {k : ℕ} (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (RejectionFilter k) :=
+  let rec loop (t : ℕ) (current_states : Vector ParticleState_SAT k) : Option (RejectionFilter k) :=
+    if t >= time_limit then
+      none -- Timeout
+    else
+      -- 1. Advance the state
+      let next_particle_states := advance_state current_states (seed + t)
+      let next_system_state := get_system_state_vector next_particle_states
+
+      -- 2. Check the constraints
+      if h_eval : evalCNF machine.constraints next_system_state then
+        -- **Success!** We found a satisfying assignment.
+        -- Use it to construct and return the full RejectionFilter.
+        some (RejectionFilter.of_satisfying_example machine.constraints next_system_state h_eval)
+      else
+        -- Keep searching
+        loop (t + 1) next_particle_states
+    termination_by time_limit - t
+
+  loop 0 machine.initial_states
+
+-- We can now redefine the NDMachine's solve method to use this new function.
+noncomputable def NDMachine_SAT.solve_to_filter (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (RejectionFilter k) :=
+  ndm_run_solver_produces_filter machine time_limit seed
 /--
 The `solve` function IS the ndm_run_solver. This becomes the primary
 definition of non-deterministic solving in EGPT.
@@ -296,100 +340,3 @@ structure NDMachine (n : ℕ) where
           Option (Vector PathProgram n) -- Returns the solution if found
 
 abbrev ExperimentRunner (n : ℕ) := NDMachine n
-
-
-
-
-
--- In EGPT/Complexity/Core.lean (Revised)
-
--- === Step 1: Define the Syntactic CNF Data Structures ===
-
--- === Step 2: Define the Provable Encoding (SyntacticCNF ≃ ParticlePath) ===
-
-/-
-To encode a `SyntacticCNF_EGPT` as a `List Bool`, we need a canonical mapping.
-A simple example scheme:
-- Literal `(particle_position, polarity)`: `(encode particle_position) ++ [polarity]`
-- Clause `[L1, L2, ...]`: `(encode L1) ++ [false, true] ++ (encode L2) ++ ...` (using `[false, true]` as a separator)
-- CNF `[C1, C2, ...]`: `(encode C1) ++ [false, false, true] ++ (encode C2) ++ ...` (using a different separator)
-
-Mathlib's `Encodable` typeclass can build such an encoding automatically,
-since all our components (`List`, `Fin`, `Bool`) are encodable.
--/
-
-/--
-**The New Equivalence (Un-Axiomatized):**
-There exists a computable bijection between the syntactic representation of a
-CNF formula and the `ParticlePath` type. We state its existence via `Encodable`.
--/
-noncomputable def equivSyntacticCNF_to_ParticlePath {k : ℕ} : SyntacticCNF_EGPT k ≃ ParticlePath :=
-  -- We use the power of Lean's typeclass synthesis for Denumerable types.
-  -- `List`, `Fin k`, and `Bool` are all denumerable, so their product and list
-  -- combinations are also denumerable. `ParticlePath` is denumerable via its equiv to `ℕ`.
-  (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (equivParticlePathToNat.symm)
-
--- === Step 3: Bridge from Syntax to Semantics (The Interpreter) ===
-
-/--
-`eval_literal` gives the semantic meaning of a syntactic literal.
-e.g., `(particle_position:=i, polarity:=true)` means "is box i occupied?".
--/
-def eval_literal {k : ℕ} (lit : Literal_EGPT k) (state : SATSystemState k) : Bool :=
-  if lit.polarity then
-    (state.count lit.particle_position > 0) -- Positive literal: check for occupation
-  else
-    (state.count lit.particle_position = 0) -- Negative literal: check for emptiness
-
-/--
-`eval_clause` gives the semantic meaning of a syntactic clause.
-A clause is true if at least one of its literals is true.
--/
-def eval_clause {k : ℕ} (clause : Clause_EGPT k) : ClauseConstraint k :=
-  fun state => clause.any (fun lit => eval_literal lit state)
-
-/--
-`eval_syntactic_cnf` is the main interpreter. It converts a syntactic CNF data
-structure into the semantic `CNF_Formula` (a list of predicate functions).
--/
-def eval_syntactic_cnf {k : ℕ} (syn_cnf : SyntacticCNF_EGPT k) : CNF_Formula k :=
-  syn_cnf.map eval_clause
-
--- === Updated Language Definitions ===
-
-
-/--
-A `ProgramProblem` is the language of all validly encoded computer programs.
-For now, we can consider this to be the set of all `ParticlePath`s, as every `ParticlePath`
-can be interpreted as the tape of some program.
--/
-abbrev ProgramProblem : Set ParticlePath := Set.univ
-
-/--
-**REVISED `CNFProgram`:** The language of programs (`ParticlePath`s) that are valid
-encodings of a *syntactic* CNF formula. This is now fully constructive.
--/
-def CNFProgram {k : ℕ} : Set ParticlePath :=
-  { constrained_path | ∃ (s : SyntacticCNF_EGPT k), equivSyntacticCNF_to_ParticlePath.symm constrained_path = s }
-
-/--
-A `StateCheckProgram` is a specific kind of `CNFProgram` that represents
-constraints on final system states. This is conceptually equivalent to
-`CNFProgram` in our "balls and boxes" model, as our constraints are already
-defined on `SATSystemState`s.
--/
-abbrev StateCheckProgram {k : ℕ} : Set ParticlePath := CNFProgram (k := k)
-
-
-
--- === Program Composition ===
-
-/--
-**CompositeProgram (Addition of Programs):**
-A `CompositeProgram` is formed by the EGPT addition of two `ParticlePath`s, where
-one represents a general program and the other represents a set of constraints.
-This is a polynomial-time operation.
--/
-def CompositeProgram (prog_gnat : ParticlePath) (constraint_gnat : ParticlePath) : ParticlePath :=
-  -- ParticlePath addition is a polynomial-time operation in EGPT.
-  add_ParticlePath prog_gnat constraint_gnat

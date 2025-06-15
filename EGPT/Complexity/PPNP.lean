@@ -10,10 +10,11 @@ import Mathlib.Data.List.FinRange
 import EGPT.NumberTheory.Core
 import EGPT.Core
 import EGPT.Complexity.Core
+import EGPT.Constraints
 import EGPT.NumberTheory.Filter
 namespace EGPT.Complexity
 
-open EGPT.NumberTheory.Core EGPT.Complexity EGPT.NumberTheory.Filter
+open EGPT.NumberTheory.Core EGPT.Complexity EGPT.NumberTheory.Filter EGPT.Constraints
 
 /-!
 ## EGPT COMPLEXITY CLASSES

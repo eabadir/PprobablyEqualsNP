@@ -1,6 +1,3 @@
-import EGPT.NumberTheory.Core
-import EGPT.Constraints
-
 import Mathlib.Data.Vector.Basic
 import Mathlib.Data.Rat.Lemmas
 import Mathlib.Data.Fin.Basic
@@ -14,7 +11,8 @@ import Mathlib.Probability.ProbabilityMassFunction.Constructions -- Add this imp
 import Mathlib.Probability.ProbabilityMassFunction.Monad -- Add this import
 import Mathlib.Data.NNRat.BigOperators
 import Mathlib.Control.Random
-
+import EGPT.NumberTheory.Core
+import EGPT.Constraints
 namespace EGPT.NumberTheory.Filter
 
 open EGPT.NumberTheory.Core EGPT.Constraints
@@ -105,49 +103,7 @@ instance FairBlockSource (k : ℕ) : IIDBlockSource (Vector Bool k) where
     -- Generate a k-length list of Bools and convert to a vector
     Vector.ofFn (fun i : Fin k => baseSource.stream i.val)
 
-/-!
-### Section 1: Syntactic Filters as CNF Formulas
 
-A filter *is* a CNF formula, represented by a `RandomWalk`. We define an explicit evaluation function
-for these syntactic formulas on boolean vectors.
--/
-
-
-
-
-/--
-A `SyntacticCNF_EGPT` is the data structure for a CNF formula, represented
-as a list of clauses.
--/
-abbrev SyntacticCNF_EGPT (constrained_position : ℕ) := List (Clause_EGPT constrained_position)
-
-instance denumerable_SyntacticCNF_EGPT (k : ℕ) : Denumerable (SyntacticCNF_EGPT k) :=
-  Denumerable.ofEncodableOfInfinite (SyntacticCNF_EGPT k)
-
-/--
-Evaluates a single syntactic literal against a variable assignment vector.
-`assignment.get lit.particle_position` fetches the boolean value for the variable.
-The literal's polarity determines if we use the value directly or its negation.
--/
-def evalLiteral {k : ℕ} (lit : Literal_EGPT k) (assignment : Vector Bool k) : Bool :=
-  -- `(assignment.get lit.particle_position)` is the value of the variable.
-  -- `xor` with `¬lit.polarity` implements the conditional negation:
-  -- - If polarity is true (positive literal), `¬polarity` is false. `v xor false = v`.
-  -- - If polarity is false (negative literal), `¬polarity` is true. `v xor true = ¬v`.
-  xor (assignment.get lit.particle_idx) (not lit.polarity)
-
-/--
-Evaluates a syntactic clause. A clause is satisfied if any of its literals are true.
--/
-def evalClause {k : ℕ} (clause : Clause_EGPT k) (assignment : Vector Bool k) : Bool :=
-  clause.any (fun lit => evalLiteral lit assignment)
-
-/--
-Evaluates a syntactic CNF formula. A formula is satisfied if all of its clauses are true.
-This function is the semantic interpreter for our filter.
--/
-def evalCNF {k : ℕ} (cnf : SyntacticCNF_EGPT k) (assignment : Vector Bool k) : Bool :=
-  cnf.all (fun clause => evalClause clause assignment)
 
 /-!
 ### Section 2: The Rejection Filter (Uniform Distribution over SAT)
@@ -160,13 +116,24 @@ The resulting distribution is uniform over the set of satisfying assignments.
 A `RejectionFilter` encapsulates a CNF formula, which is encodable as a `RandomWalk`.
 This structure represents the physical laws or constraints of a system.
 -/
+-- In EGPT/NumberTheory/Filter.lean
+
+-- ... inside the RejectionFilter definition ...
+@[ext]
 structure RejectionFilter (k : ℕ) where
-  /-- The syntactic CNF formula representing the filter's rules. -/
   cnf : SyntacticCNF_EGPT k
-  /-- A proof that the filter is satisfiable, ensuring the filtered source can produce output. -/
-  is_satisfiable : ∃ (assignment : Vector Bool k), evalCNF cnf assignment
+  satisfying_assignments : Finset (Vector Bool k) :=
+    (Finset.univ : Finset (Vector Bool k)).filter (fun v => evalCNF cnf v)
+  is_satisfiable : satisfying_assignments.Nonempty
 
-
+/--
+This lemma allows `simp` to unfold the definition of the `satisfying_assignments` field.
+It states that when a `RejectionFilter` is built with the default value for this field,
+the field is equal to that default value.
+-/
+@[simp]
+lemma satisfying_assignments_def {k} (c : SyntacticCNF_EGPT k) (s) (h) :
+    (RejectionFilter.mk c s h).satisfying_assignments = s := rfl
 
 
 instance instDecidableEqVectorBool (k : ℕ) : DecidableEq (Vector Bool k) :=
@@ -228,6 +195,25 @@ noncomputable def eventsPMF {k : ℕ} (filter : RejectionFilter k) : PMF (Vector
     -- Then apply sum_const and nsmul_eq_mul.
     rw [Finset.sum_congr rfl fun v hv => if_pos hv, Finset.sum_const, nsmul_eq_mul]
     -- Goal is now (s.card : ENNReal) * (s.card : ENNReal)⁻¹ = 1
+
+    -- Tactical Note for rewriting cardinalities:
+    -- Suppose the goal contains `(#{some_set})` (which is `Set.ncard some_set`),
+    -- and you have a hypothesis `h_eq_finset : some_set.toFinset = other_finset`.
+    -- To rewrite `(#{some_set})` to `(other_finset.card)`:
+    -- 1. First, expose the `.toFinset` expression in the goal:
+    --    `rw [Set.ncard_def]` or `simp only [Set.ncard_def]`
+    --    This will change `#{some_set}` into `(some_set.toFinset).card`.
+    -- 2. Then, use your hypothesis:
+    --    `rw [h_eq_finset]`
+    --    This will change `(some_set.toFinset).card` into `(other_finset.card)`.
+    --
+    -- For example, if `S_set` is a set and `S_filter_finset` is a finset,
+    -- and you have `h_S_set_toFinset_eq_S_filter_finset : S_set.toFinset = S_filter_finset`.
+    -- If your goal is `(↑(#{S_set}))⁻¹`, you would apply:
+    --   `simp only [Set.ncard_def]` (or `rw [Set.ncard_def]`)
+    --   `rw [h_S_set_toFinset_eq_S_filter_finset]`
+    -- These rewrites might need to be targeted using `conv` or `nth_rewrite` if they
+    -- occur in subexpressions or if `rw` is too aggressive.
 
     -- Prove s.card ≠ 0 as Nat, then as ENNReal
     -- filter.is_satisfiable (∃ a, evalCNF filter.cnf a = true) implies s.Nonempty

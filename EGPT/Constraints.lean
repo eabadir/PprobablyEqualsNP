@@ -77,10 +77,10 @@ instance Literal_EGPT.encodable {k : ℕ} : Encodable (Literal_EGPT k) :=
 
 
 instance Clause_EGPT.encodable {k : ℕ} : Encodable (Clause_EGPT k) :=
-    inferInstance
+    List.encodable -- Explicitly use List.encodable
 
 instance SyntacticCNF_EGPT.encodable {k : ℕ} : Encodable (SyntacticCNF_EGPT k) :=
-    inferInstance
+    List.encodable -- Explicitly use List.encodable
 
 open Function
 
@@ -106,15 +106,26 @@ instance Clause_EGPT.denumerable {k : ℕ} [Fact (0 < k)] :
   Denumerable.ofEncodableOfInfinite (Clause_EGPT k)
 
 /-- `SyntacticCNF_EGPT` inherits `Infinite` and `Denumerable` in the same way. -/
-instance SyntacticCNF_EGPT.infinite {k : ℕ} [Fact (0 < k)] :
-    Infinite (SyntacticCNF_EGPT k) := by
-  have : Infinite (Clause_EGPT k) := inferInstance
-  -- single-clause list gives an injection
-  exact Infinite.of_injective (fun c : Clause_EGPT k => [c]) (by
-    intro a b h -- h is `[a] = [b]`
-    -- If `[a] = [b]`, then `a = b`. This is `List.singleton_inj`.
-    exact List.singleton_inj.mp h)
+instance SyntacticCNF_EGPT.infinite {k : ℕ} : -- Removed [Fact (0 < k)]
+    Infinite (SyntacticCNF_EGPT k) :=
+  -- SyntacticCNF_EGPT k is List (Clause_EGPT k).
+  -- Clause_EGPT k is List (Literal_EGPT k).
+  -- List (Literal_EGPT k) is Nonempty (it contains []). (via List.instNonempty)
+  -- Therefore, by instInfiniteListOfNonempty, List (Clause_EGPT k) is Infinite.
+  -- This should be found by typeclass inference.
+  inferInstance
 
-instance SyntacticCNF_EGPT.denumerable {k : ℕ} [Fact (0 < k)] :
+instance SyntacticCNF_EGPT.denumerable {k : ℕ} : -- Removed [Fact (0 < k)]
     Denumerable (SyntacticCNF_EGPT k) :=
   Denumerable.ofEncodableOfInfinite (SyntacticCNF_EGPT k)
+
+/--
+**The New Equivalence (Un-Axiomatized):**
+There exists a computable bijection between the syntactic representation of a
+CNF formula and the `ParticlePath` type. We state its existence via `Encodable`.
+-/
+noncomputable def equivSyntacticCNF_to_ParticlePath {k : ℕ} : SyntacticCNF_EGPT k ≃ EGPT.ParticlePath :=
+  -- We use the power of Lean's typeclass synthesis for Denumerable types.
+  -- `List`, `Fin k`, and `Bool` are all denumerable, so their product and list
+  -- combinations are also denumerable. `ParticlePath` is denumerable via its equiv to `ℕ`.
+  (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (EGPT.NumberTheory.Core.equivParticlePathToNat.symm)
