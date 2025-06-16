@@ -125,6 +125,12 @@ structure RejectionFilter (k : ℕ) where
   satisfying_assignments : Finset (Vector Bool k) :=
     (Finset.univ : Finset (Vector Bool k)).filter (fun v => evalCNF cnf v)
   is_satisfiable : satisfying_assignments.Nonempty
+  ax_coherent : ∀ v, v ∈ satisfying_assignments → (evalCNF cnf v = true) := by
+    -- Default proof for ax_coherent:
+    -- Assumes satisfying_assignments is the default value.
+    -- If `v ∈ (Finset.univ).filter (fun x => evalCNF cnf x)`, then `evalCNF cnf v = true`.
+    intros v h_v_in_sa
+    exact (Finset.mem_filter.mp h_v_in_sa).2
 
 /--
 This lemma allows `simp` to unfold the definition of the `satisfying_assignments` field.
@@ -132,8 +138,8 @@ It states that when a `RejectionFilter` is built with the default value for this
 the field is equal to that default value.
 -/
 @[simp]
-lemma satisfying_assignments_def {k} (c : SyntacticCNF_EGPT k) (s) (h) :
-    (RejectionFilter.mk c s h).satisfying_assignments = s := rfl
+lemma satisfying_assignments_def {k} (c : SyntacticCNF_EGPT k) (s) (h) (ax) : -- Added ax
+    (RejectionFilter.mk c s h ax).satisfying_assignments = s := rfl
 
 
 instance instDecidableEqVectorBool (k : ℕ) : DecidableEq (Vector Bool k) :=
@@ -216,9 +222,16 @@ noncomputable def eventsPMF {k : ℕ} (filter : RejectionFilter k) : PMF (Vector
     -- occur in subexpressions or if `rw` is too aggressive.
 
     -- Prove s.card ≠ 0 as Nat, then as ENNReal
-    -- filter.is_satisfiable (∃ a, evalCNF filter.cnf a = true) implies s.Nonempty
+    -- filter.is_satisfiable (now filter.satisfying_assignments.Nonempty) implies s.Nonempty
     have h_s_nonempty : s.Nonempty := by
-      rcases filter.is_satisfiable with ⟨assignment, h_eval_true⟩
+      -- filter.is_satisfiable is filter.satisfying_assignments.Nonempty.
+      -- rcases gives an 'assignment' and proof 'h_mem: assignment ∈ filter.satisfying_assignments'.
+      rcases filter.is_satisfiable with ⟨assignment, h_mem_sa⟩
+      -- We need to show s.Nonempty, so we provide 'assignment' and a proof that 'assignment ∈ s'.
+      -- 's' is defined using `evalCNF filter.cnf v = true`.
+      -- We use `filter.ax_coherent` to prove `evalCNF filter.cnf assignment = true`.
+      have h_eval_true : evalCNF filter.cnf assignment = true :=
+        filter.ax_coherent assignment h_mem_sa
       exact ⟨assignment, Finset.mem_filter.mpr ⟨Finset.mem_univ _, h_eval_true⟩⟩
     have h_s_card_ne_zero_nat : s.card ≠ 0 := by aesop
     have h_s_card_ne_zero_ennreal : (s.card : ENNReal) ≠ 0 := by aesop

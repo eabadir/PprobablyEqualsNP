@@ -6,6 +6,8 @@ import Mathlib.Data.Rat.Lemmas
 import Mathlib.Data.Real.Cardinality
 import Mathlib.Control.Random
 import Mathlib.Data.Fintype.Vector
+import Mathlib.SetTheory.Cardinal.Basic   -- for `mul_eq_self`, `power_self_eq`
+
 import EGPT.Core
 
 namespace EGPT.NumberTheory.Core
@@ -324,10 +326,10 @@ noncomputable def equivParticlePMFtoRational : ParticlePMF ≃ ℚ :=
       have h_coprime_int :
         (Int.natAbs v).Coprime (Int.natAbs (q : ℤ)) := by
         dsimp only [v]
-        rw [Int.natAbs_ofNat q]
+        rw [Int.natAbs_natCast q]
         split_ifs with hs_cond
-        · simp only [Int.natAbs_ofNat]; exact h_coprime
-        · simp only [Int.natAbs_neg, Int.natAbs_ofNat]; exact h_coprime
+        · simp only [Int.natAbs_natCast]; exact h_coprime
+        · simp only [Int.natAbs_neg, Int.natAbs_natCast]; exact h_coprime
 
       constructor
       · -- Numerator part: (mkRat v q).num = v
@@ -338,14 +340,14 @@ noncomputable def equivParticlePMFtoRational : ParticlePMF ≃ ℚ :=
         rw [Rat.mkRat_eq_divInt v q]
         rw [Rat.divInt_eq_div v ↑q] -- Goal is now (v / ↑q).den = q
         -- Rewrite the RHS of the goal to prepare for comparison.
-        rw [← Int.natAbs_ofNat q]    -- Goal becomes (v / ↑q).den = Int.natAbs ↑q
+        rw [← Int.natAbs_natCast q]    -- Goal becomes (v / ↑q).den = Int.natAbs ↑q
 
         -- We know `Rat.den_div_eq_of_coprime hq_pos_int h_coprime_int` proves `(v / ↑q).den = Int.natAbs ↑q`.
         -- `convert` will use this and ask us to prove `Int.natAbs ↑q = Int.natAbs ↑q` (after unification).
         convert Rat.den_div_eq_of_coprime hq_pos_int h_coprime_int
         -- New goal: Int.natAbs ↑q = Int.natAbs ↑q (or q = q after simplification)
         aesop
-        --exact (Int.natAbs_ofNat q).symm
+        --exact (Int.natAbs_natCast q).symm
 
     -- Substitute these known num/den values into the `fromRat` expression.
     -- Replace `simp [h_num_den]` with explicit rewrites.
@@ -468,3 +470,197 @@ noncomputable def equivParticleSystemPMFtoReal : ParticleSystemPDF ≃ ℝ :=
       _                 = #ℝ              := (Cardinal.mk_real).symm
   -- 2) use `Cardinal.eq` to get `Nonempty (G ≃ ℝ)`
   Classical.choice (Cardinal.eq.1 h)
+
+
+/-!
+## Beth Numbers And Higher Cardinalities
+##############################################################################
+EGPT is fundamentally based on Partition Theory which holds that the coarser partitions are the sum of the finer partitions. The hierarchy is not just about increasing cardinality but about re-instantiating the Nat/Rat/Real pattern at higher levels of abstraction.
+
+
+In standard ZFC set theory (which mathlib follows), the Continuum Hypothesis (CH) is the statement that Cardinal.aleph 1 = Cardinal.beth 1 (i.e., ℵ₁ = 2^ℵ₀).
+mathlib does not assume the Continuum Hypothesis. It is independent of ZFC.
+-/
+
+
+
+lemma cardinal_ParticlePath : Cardinal.mk ParticlePath = Cardinal.aleph0 :=
+  -- The cardinality of two types is the same if they are equivalent.
+  -- We have ParticlePath ≃ ℕ (equivParticlePathToNat).
+  -- We need ParticlePath ≃ ULift.{0} ℕ to match the definition of aleph0 in Cardinal.{0}.
+  -- Nat ≃ ULift.{0} Nat is Equiv.ulift.{0,0}.symm.
+  Cardinal.mk_congr (equivParticlePathToNat.trans Equiv.ulift.{0,0}.symm)
+
+
+
+lemma cardinal_ParticleSystemPDF : Cardinal.mk ParticleSystemPDF = Cardinal.beth 1 := by
+  -- We previously proved `cardinal_eq_two_pow_aleph0`:
+  -- Cardinal.mk ParticleSystemPDF = 2 ^ Cardinal.aleph0
+  rw [cardinal_eq_two_pow_aleph0]
+  -- The definition of `beth 1` is exactly `2 ^ (beth 0)`,
+  -- and `beth 0` is `aleph0`.
+  simp [Cardinal.beth_one, Cardinal.beth_zero]
+
+
+
+/-!
+==================================================================
+# The EGPT Number Hierarchy Generator (Corrected & Final)
+
+This file formalizes the "restarting hierarchy" of EGPT number analogues.
+The mutual dependency between level definitions is resolved by defining
+`Nat_L` via direct recursion, and then defining the other types as
+aliases (`abbrev`) of `Nat_L`.
+
+1.  A **Recursive Type Generator**: `Nat_L` is the core recursive
+    definition. `Real_L n` is simply an alias for `Nat_L (n+1)`.
+
+2.  A **Generalized Proof**: A single theorem, proven by induction, that
+    proves the cardinalities of these generated types match the Beth sequence
+    (ℶₙ, ℶₙ, ℶₙ₊₁) for any level `n`.
+==================================================================
+-/
+
+
+/--
+The EGPT "Natural Number" analogue at level `n`. This is the core of the
+recursive hierarchy, defined without mutual dependencies.
+
+- **Base Case (n=0):** The fundamental objects are discrete, countable
+  `ParticlePath`s, with cardinality ℵ₀ = ℶ₀.
+- **Inductive Step (n+1):** The fundamental objects of the next level are
+  functions from the current level's objects to `Bool`. This is equivalent
+  to the power set, generating the next Beth number.
+-/
+def Nat_L : ℕ → Type
+  | 0   => ParticlePath
+  | n+1 => (Nat_L n) → Bool
+
+/--
+The EGPT "Real Number" analogue at level `n`.
+
+This is the power set of the "Naturals" of that level. With our
+definition of `Nat_L`, this is simply an alias for `Nat_L (n+1)`.
+-/
+abbrev Real_L (n : ℕ) : Type := Nat_L (n + 1)
+
+/--
+The EGPT "Rational Number" analogue at level `n`. It represents a ratio or
+relationship between the fundamental objects of that level.
+-/
+abbrev Rat_L (n : ℕ) : Type := Nat_L n × Nat_L n
+
+
+-- === The Generalized Cardinality Proof ===
+
+/--
+**Theorem (The EGPT Hierarchy Cardinality):** For any level `n : ℕ`,
+the cardinalities of the EGPT number analogues follow the Beth sequence:
+- `Nat_L n` has cardinality ℶₙ.
+- `Rat_L n` has cardinality ℶₙ.
+- `Real_L n` has cardinality ℶₙ₊₁.
+-/
+theorem cardinal_of_egpt_level (n : ℕ) :
+    Cardinal.mk (Nat_L n) = beth n ∧
+    Cardinal.mk (Rat_L n) = beth n ∧
+    Cardinal.mk (Real_L n) = beth (n + 1) := by
+  -- We prove this by induction on the level `n`.
+  induction n with
+  | zero =>
+    -- Base Case: n = 0
+    have h_nat_L0_card : Cardinal.mk (Nat_L 0) = beth 0 := by
+      simp [Nat_L, beth_zero, cardinal_ParticlePath]
+
+    constructor
+    · -- Part 1: Prove Cardinal.mk (Nat_L 0) = beth 0
+      exact h_nat_L0_card
+    · constructor
+      · -- Part 2: Prove Cardinal.mk (Rat_L 0) = beth 0
+        simp [Rat_L, Cardinal.mk_prod, h_nat_L0_card, beth_zero, aleph0_mul_aleph0]
+      · -- Part 3:  `Real_L 0 = Nat_L 1 = ParticlePath → Bool`,
+          -- whose cardinality we already computed.
+        simpa [Real_L, Nat_L] using cardinal_ParticleSystemPDF
+
+  | succ k ih =>
+    -- Inductive Step: Assume the theorem holds for `k`. Prove it for `k+1`.
+    -- The induction hypothesis gives us the cardinalities for level `k`.
+    have h_nat_k_card := ih.1
+
+    -- Establish the cardinality of Nat_L (k+1).
+    have h_nat_Lk1_card : Cardinal.mk (Nat_L (k + 1)) = beth (k + 1) := by
+      simp [Nat_L, Cardinal.mk_arrow, h_nat_k_card, Cardinal.mk_bool, beth_succ]
+
+    constructor
+    · -- Part 1: Prove Cardinal.mk (Nat_L (k+1)) = beth (k+1)
+      exact h_nat_Lk1_card
+    · constructor
+      · -- Part 2: Prove Cardinal.mk (Rat_L (k+1)) = beth (k+1)
+        -- The product of two infinite cardinals of size `beth (k+1)` is itself.
+        have : Cardinal.mk (Rat_L (k + 1)) = beth (k + 1) := by
+          calc
+            Cardinal.mk (Rat_L (k + 1))
+                = Cardinal.mk (Nat_L (k + 1)) * Cardinal.mk (Nat_L (k + 1)) := by
+                  simp [Rat_L, Cardinal.mk_prod]
+            _   = (beth (k + 1)) * (beth (k + 1)) := by
+                  simp [h_nat_Lk1_card]
+            _   = beth (k + 1) := by
+                  exact Cardinal.mul_eq_self (Cardinal.aleph0_le_beth (k + 1 : Ordinal))
+        simpa using this
+        --aesop
+
+      · -- Part 3: Prove Cardinal.mk (Real_L (k+1)) = beth (k+2)
+        -- 2^(beth (k+1)) = beth (k+2) by `beth_succ`.
+        simp [Real_L, Nat_L, Cardinal.mk_arrow, h_nat_Lk1_card,
+               Cardinal.mk_bool]
+        aesop
+
+/--
+A higher-order type representing a function between the "Real" spaces of
+two (potentially different) levels.
+-/
+abbrev InterLevelOperator (n m : ℕ) := Real_L n → Real_L m
+
+/--
+**Corollary:** The cardinality of a "System of Systems" operator that maps
+the L0 Real space to itself is `beth 2`.
+-/
+theorem cardinal_L0_operator : Cardinal.mk (InterLevelOperator 0 0) = beth 2 :=
+  by
+    -- `Real_L 0` has cardinality beth 1
+    have h_real_L0_card := (cardinal_of_egpt_level 0).right.right
+    -- `beth 1` is infinite
+    have h_beth1_inf : aleph0 ≤ beth 1 := Cardinal.aleph0_le_beth 1
+    -- κ^κ = 2^κ for infinite κ
+    have h_power : (beth 1) ^ (beth 1) = 2 ^ (beth 1) :=
+      Cardinal.power_self_eq h_beth1_inf
+    -- 2 ^ beth 1 = beth 2
+    have h_beth2 : 2 ^ (beth 1) = beth 2 := by
+      simpa using (Cardinal.beth_succ 1).symm
+    -- Prepare the final chain of equalities
+    have h_prod : (beth 1) ^ (beth 1) = beth 2 := by
+      calc (beth 1) ^ (beth 1)
+        _ = 2 ^ (beth 1) := h_power
+        _ = beth 2       := h_beth2
+
+    -- Cardinality of the operator space is (#Real_L 0)^(#Real_L 0)
+    have : Cardinal.mk (InterLevelOperator 0 0) = (beth 1) ^ (beth 1) := by
+      simpa [InterLevelOperator, Cardinal.mk_arrow, h_real_L0_card]
+
+    -- Conclude with transitivity
+    simpa [this] using h_prod
+
+/-!
+## Example Dimensions in EGPT
+Per the physical observations of Hawking Radiation and the resultant Holographic Principle we see that mathematical dimensions are lossy compressions (operations on "coarser" partitions) of the underlying particle universe. Nat_L 0 is the finest partition of the particle universe (particles are discrete and countable). Nat_L 1 is the next coarser partition consisting of functions as the new fundamental objects - that is functions at L1 are manipulated in the same way as particles at L0. Etc..
+-/
+def QuantumDimension := 0
+def NewtonianClassicalDimension := 1
+def EinsteinGRDimension := 2
+def SpaceTime2D := Real_L QuantumDimension
+def SpaceTime3D := Real_L NewtonianClassicalDimension
+def SpaceTime4D := Real_L EinsteinGRDimension
+def DiscreteCombinatorics := Nat_L QuantumDimension
+def Calculus := Real_L QuantumDimension
+def OrdinaryDifferentialEquations := Real_L NewtonianClassicalDimension
+def PartialDifferentialEquations := Real_L EinsteinGRDimension
+def S3TensorCalculus := Real_L EinsteinGRDimension
