@@ -155,7 +155,7 @@ A `ParticlePMF` is a `List Bool` that is proven to be in the canonical,
 normalized form for a rational number. This is the EGPT representation.
 -/
 abbrev ParticlePMF := { l : List Bool // CanonicalParticlePMF l }
-abbrev EGPT.Rat := ParticlePMF
+def EGPT.Rat := ParticlePMF
 
 -- In EGPT/NumberTheory/Core.lean or your new Rational file
 

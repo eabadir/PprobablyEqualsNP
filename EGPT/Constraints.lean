@@ -1,10 +1,8 @@
--- FILE: EGPT/Constraints.lean
-
 import Mathlib.Data.Vector.Basic
 import Mathlib.Data.Fin.Basic
 import Mathlib.Logic.Encodable.Basic
 import EGPT.NumberTheory.Core -- For ParticlePath and its equivalences
-import Mathlib.Logic.Denumerable
+-- -- import Mathlib.Logic.Denumerable
 namespace EGPT.Constraints
 
 /-!

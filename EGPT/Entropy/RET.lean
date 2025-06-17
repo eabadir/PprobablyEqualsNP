@@ -22,94 +22,14 @@ import Mathlib.Algebra.Ring.Nat -- For Nat.cast_pow
 import Mathlib.Logic.Equiv.Defs -- For Equiv
 
 import EGPT.Core
+import EGPT.Basic
 import EGPT.Entropy.Common
 
 
 namespace EGPT.Entropy.RET
 
 open Nat Real NNReal Multiset NNReal Fin Set Finset Filter Function BigOperators Topology
-open EGPT EGPT.Entropy.Common
-
-
-/-! ### Phase 2: Properties of `f(n) = H(uniform_n)` -/
-
--- Replaced: old `f` definition
-/--
-Defines `f H n = H(uniform distribution on n outcomes)`.
-`H` is an entropy function satisfying `HasRotaEntropyProperties`.
-Requires `n > 0`. Output is `NNReal`.
--/
-noncomputable def f {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func for clarity
-    (_hH_axioms : HasRotaEntropyProperties H_func) {n : ℕ} (hn_pos : n > 0) : NNReal :=
-  let α_n := Fin n
-  have h_card_pos : 0 < Fintype.card α_n := by
-    rw [Fintype.card_fin]
-    exact hn_pos
-  H_func (uniformDist h_card_pos)
-
--- Replaced: old `f0` definition
-/--
-Defines `f0 H n` which extends `f H n` to include `n=0` by setting `f0 H 0 = 0`.
-Output is `NNReal`.
--/
-noncomputable def f0 {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
-    (hH_axioms : HasRotaEntropyProperties H_func) (n : ℕ) : NNReal :=
-  if hn_pos : n > 0 then f hH_axioms hn_pos else 0
-
--- New helper
-/--
-Helper lemma: The uniform distribution on `Fin 1` is `λ _ => 1`.
--/
-lemma uniformDist_fin_one_eq_dist_one :
-    uniformDist (by {rw [Fintype.card_fin]; exact Nat.one_pos} : 0 < Fintype.card (Fin 1)) =
-    (fun (_ : Fin 1) => 1) := by
-  funext x
-  simp only [uniformDist, Fintype.card_fin, Nat.cast_one, inv_one]
-
--- New helper
-/--
-Helper lemma: The distribution `λ (_ : Fin 1) => 1` sums to 1.
--/
-lemma sum_dist_one_fin_one_eq_1 :
-    (∑ (_ : Fin 1), (1 : NNReal)) = 1 := by
-  simp [Finset.sum_const, Finset.card_fin, nsmul_one]
-
-
-
-/--
-If `p_orig` sums to `1` on `Fin n`, the extension that appends a zero at
-index `n` still sums to `1`.  This Lean 4 version uses
-`Fin.sum_univ_castSucc` directly. -/
-lemma sum_p_ext_eq_one_of_sum_p_orig_eq_one
-    {n : ℕ} (p_orig : Fin n → NNReal) (hp : ∑ i, p_orig i = 1) :
-    (∑ i : Fin (n + 1),
-        (if h : (i : ℕ) < n then p_orig (Fin.castLT i h) else 0)) = 1 := by
-  -- Define the extended vector once so we can name it.
-  set p_ext : Fin (n + 1) → NNReal :=
-      fun i => if h : (i : ℕ) < n then p_orig (Fin.castLT i h) else 0
-
-  -- Canonical split of the sum over `Fin (n+1)`.
-  have h_split :
-      (∑ i, p_ext i) =
-        (∑ i : Fin n, p_ext i.castSucc) + p_ext (Fin.last n) := by
-        rw [Fin.sum_univ_castSucc]
-
-  -- The new last entry is zero.
-  have h_last : p_ext (Fin.last n) = 0 := by
-    simp [p_ext]
-
-  -- The first summand coincides with the original sum.
-  have h_cast :
-      (∑ i : Fin n, p_ext i.castSucc) = ∑ i : Fin n, p_orig i := by
-    apply Finset.sum_congr rfl
-    intro i _
-    have : ((i.castSucc : Fin (n + 1)) : ℕ) < n := by
-      rw [Fin.castSucc] -- Goal becomes i.val < n
-      exact i.is_lt         -- Proof of i.val < n
-    simp [p_ext, this, Fin.castLT_castSucc]
-
-  -- Put the pieces together.
-  simp [h_split, h_last, h_cast, hp, p_ext]
+open EGPT EGPT.Basic EGPT.Entropy.Common
 
 
 /--
@@ -890,30 +810,7 @@ theorem uniformEntropy_ratio_eq_logb {H : ∀ {α : Type} [Fintype α], (α → 
   intro m hm_ge1
   exact logarithmic_trapping hH_axioms hH_nontrivial hn_pos (pos_of_one_le hm_ge1) hb_ge2
 
-/--
-The constant `C_H` relating `f0 H n` to `Real.log n`.
-Defined as `(f0 H 2 : ℝ) / Real.log 2` if H is non-trivial, else 0.
-This constant is `Real`-valued.
--/
-noncomputable def C_constant_real {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : HasRotaEntropyProperties H) : Real :=
-  by classical -- Use classical logic to ensure the condition is decidable
-  exact if h_nontrivial : (∃ n' ≥ 1, f0 hH_axioms n' ≠ 0) then
-    (f0 hH_axioms 2 : ℝ) / Real.log 2
-  else
-    0
 
-/-- `C_constant_real` is non-negative. -/
-lemma C_constant_real_nonneg {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
-    (hH_axioms : HasRotaEntropyProperties H) : C_constant_real hH_axioms ≥ 0 := by
-  rw [C_constant_real]
-  split_ifs with h_nontrivial
-  · -- Case: H non-trivial
-    have hf02_real_nonneg : (f0 hH_axioms 2 : ℝ) ≥ 0 := NNReal.coe_nonneg _
-    have hlog2_pos : Real.log 2 > 0 := Real.log_pos (by norm_num : (2:ℝ) > 1)
-    exact div_nonneg hf02_real_nonneg (le_of_lt hlog2_pos)
-  · -- Case: H trivial
-    exact le_refl 0
 
 
 /--
@@ -1737,3 +1634,30 @@ theorem RUE_rational_case {n : ℕ} [h_n_ne_zero : NeZero n]
     _ = C_const_val * stdShannonEntropyLn P_rat_val := by
         rw [congr_arg (C_const_val * ·)] -- Focus on the term being multiplied by C_const_val
         exact (shannon_entropy_rational_identity a N_den h_sum_a_eq_N hN_den_pos P_rat_val rfl).symm
+
+theorem H_canonical_uniform_eq_C_shannon
+    (H_func : ∀ {α_aux : Type} [Fintype α_aux], (α_aux → NNReal) → NNReal)
+    (hH_axioms : HasRotaEntropyProperties H_func)
+    (k : ℕ) (hk_pos : k > 0) :
+    -- Removed 'let p_unif_k := canonicalUniformDist k hk_pos' from the statement
+    (H_func (canonicalUniformDist k hk_pos) : ℝ) = (C_constant_real hH_axioms) * stdShannonEntropyLn (canonicalUniformDist k hk_pos) := by
+  let p_unif_k := canonicalUniformDist k hk_pos
+
+  -- Explicitly show that (H_func p_unif_k : ℝ) is equivalent to (f0 hH_axioms k : ℝ)
+  have h_lhs_eq_f0_val : (H_func p_unif_k : ℝ) = (f0 hH_axioms k : ℝ) := by
+    -- Unfold definitions to show both sides are definitionally equal to
+    -- (H_func (uniformDist (Fintype_card_fin_pos hk_pos)) : ℝ)
+    simp only [p_unif_k, canonicalUniformDist, uniformDist, Fintype_card_fin_pos,
+               f0, f, dif_pos hk_pos]
+    -- At this point, both sides should be identical after simp.
+
+  -- Rewrite the LHS of the main goal using this equality
+  rw [h_lhs_eq_f0_val]
+  -- Now the goal is: (f0 hH_axioms k : ℝ) = (C_constant_real hH_axioms) * stdShannonEntropyLn p_unif_k
+
+  -- Now use RotaUniformTheorem, which applies to (f0 hH_axioms k : ℝ)
+  rw [(RotaUniformTheorem_formula_with_C_constant hH_axioms).right k hk_pos]
+  -- Goal: C_constant_real hH_axioms * Real.log k = C_constant_real hH_axioms * stdShannonEntropyLn p_unif_k
+  -- Need stdShannonEntropyLn p_unif_k = Real.log k
+  rw [stdShannonEntropyLn_canonicalUniform_eq_log_k k hk_pos]
+  -- Goal is now an identity: C * log k = C * log k

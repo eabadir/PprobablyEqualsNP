@@ -9,17 +9,19 @@ import Mathlib.Data.List.FinRange
 
 import EGPT.NumberTheory.Core
 import EGPT.Core
+
 import EGPT.Complexity.Core
+
 import EGPT.Constraints
 import EGPT.NumberTheory.Filter
+
 namespace EGPT.Complexity
 
 open EGPT.NumberTheory.Core EGPT.Complexity EGPT.NumberTheory.Filter EGPT.Constraints
 
 /-!
-## EGPT COMPLEXITY CLASSES
-This section defines P and NP based on the concrete computational
-model established in Phase 1.
+## EGPT P Probably Equals NP
+Within the EGPT framework
 -/
 
 /-!

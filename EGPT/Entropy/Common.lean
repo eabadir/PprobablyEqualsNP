@@ -198,7 +198,7 @@ noncomputable def DependentPairDist
   Fin (N * M) → NNReal :=
   fun k =>
     let k_equiv := Equiv.cast (congrArg Fin (Nat.mul_comm N M)) k
-    let (i, j) := (finProdFinEquiv.symm k_equiv : Fin N × Fin M)
+    let (i, j) := (finProdFinEquiv.symm (Fin.cast (Nat.mul_comm M N) k_equiv))
     prior i * P i j
 
 /-- Coercion for `DependentPairDist`. -/
@@ -367,6 +367,110 @@ theorem stdShannonEntropyLn_uniform_eq_log_card {α : Type*} [Fintype α]
   exact product_coe_inv_coe_mul_log_eq_log hk_pos_nat
 
 
+/-! ### Phase 2: Properties of `f(n) = H(uniform_n)` -/
+
+-- Replaced: old `f` definition
+/--
+Defines `f H n = H(uniform distribution on n outcomes)`.
+`H` is an entropy function satisfying `HasRotaEntropyProperties`.
+Requires `n > 0`. Output is `NNReal`.
+-/
+noncomputable def f {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func for clarity
+    (_hH_axioms : HasRotaEntropyProperties H_func) {n : ℕ} (hn_pos : n > 0) : NNReal :=
+  let α_n := Fin n
+  have h_card_pos : 0 < Fintype.card α_n := by
+    rw [Fintype.card_fin]
+    exact hn_pos
+  H_func (uniformDist h_card_pos)
+
+-- Replaced: old `f0` definition
+/--
+Defines `f0 H n` which extends `f H n` to include `n=0` by setting `f0 H 0 = 0`.
+Output is `NNReal`.
+-/
+noncomputable def f0 {H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal} -- Renamed H to H_func
+    (hH_axioms : HasRotaEntropyProperties H_func) (n : ℕ) : NNReal :=
+  if hn_pos : n > 0 then f hH_axioms hn_pos else 0
+
+-- New helper
+/--
+Helper lemma: The uniform distribution on `Fin 1` is `λ _ => 1`.
+-/
+lemma uniformDist_fin_one_eq_dist_one :
+    uniformDist (by {rw [Fintype.card_fin]; exact Nat.one_pos} : 0 < Fintype.card (Fin 1)) =
+    (fun (_ : Fin 1) => 1) := by
+  funext x
+  simp only [uniformDist, Fintype.card_fin, Nat.cast_one, inv_one]
+
+-- New helper
+/--
+Helper lemma: The distribution `λ (_ : Fin 1) => 1` sums to 1.
+-/
+lemma sum_dist_one_fin_one_eq_1 :
+    (∑ (_ : Fin 1), (1 : NNReal)) = 1 := by
+  simp [Finset.sum_const, Finset.card_fin, nsmul_one]
+
+
+
+/--
+If `p_orig` sums to `1` on `Fin n`, the extension that appends a zero at
+index `n` still sums to `1`.  This Lean 4 version uses
+`Fin.sum_univ_castSucc` directly. -/
+lemma sum_p_ext_eq_one_of_sum_p_orig_eq_one
+    {n : ℕ} (p_orig : Fin n → NNReal) (hp : ∑ i, p_orig i = 1) :
+    (∑ i : Fin (n + 1),
+        (if h : (i : ℕ) < n then p_orig (Fin.castLT i h) else 0)) = 1 := by
+  -- Define the extended vector once so we can name it.
+  set p_ext : Fin (n + 1) → NNReal :=
+      fun i => if h : (i : ℕ) < n then p_orig (Fin.castLT i h) else 0
+
+  -- Canonical split of the sum over `Fin (n+1)`.
+  have h_split :
+      (∑ i, p_ext i) =
+        (∑ i : Fin n, p_ext i.castSucc) + p_ext (Fin.last n) := by
+        rw [Fin.sum_univ_castSucc]
+
+  -- The new last entry is zero.
+  have h_last : p_ext (Fin.last n) = 0 := by
+    simp [p_ext]
+
+  -- The first summand coincides with the original sum.
+  have h_cast :
+      (∑ i : Fin n, p_ext i.castSucc) = ∑ i : Fin n, p_orig i := by
+    apply Finset.sum_congr rfl
+    intro i _
+    have : ((i.castSucc : Fin (n + 1)) : ℕ) < n := by
+      rw [Fin.castSucc] -- Goal becomes i.val < n
+      exact i.is_lt         -- Proof of i.val < n
+    simp [p_ext, this, Fin.castLT_castSucc]
+
+  -- Put the pieces together.
+  simp [h_split, h_last, h_cast, hp, p_ext]
+
+
+/--The constant `C_H` relating `f0 H n` to `Real.log n`.
+Defined as `(f0 H 2 : ℝ) / Real.log 2` if H is non-trivial, else 0.
+This constant is `Real`-valued.
+-/
+noncomputable def C_constant_real {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : HasRotaEntropyProperties H) : Real :=
+  by classical -- Use classical logic to ensure the condition is decidable
+  exact if h_nontrivial : (∃ n' ≥ 1, f0 hH_axioms n' ≠ 0) then
+    (f0 hH_axioms 2 : ℝ) / Real.log 2
+  else
+    0
+
+/-- `C_constant_real` is non-negative. -/
+lemma C_constant_real_nonneg {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
+    (hH_axioms : HasRotaEntropyProperties H) : C_constant_real hH_axioms ≥ 0 := by
+  rw [C_constant_real]
+  split_ifs with h_nontrivial
+  · -- Case: H non-trivial
+    have hf02_real_nonneg : (f0 hH_axioms 2 : ℝ) ≥ 0 := NNReal.coe_nonneg _
+    have hlog2_pos : Real.log 2 > 0 := Real.log_pos (by norm_num : (2:ℝ) > 1)
+    exact div_nonneg hf02_real_nonneg (le_of_lt hlog2_pos)
+  · -- Case: H trivial
+    exact le_refl 0
 
 
 
@@ -722,3 +826,54 @@ by
   -- Unfold definitions and use the previous inverse proof.
   simp [Program_to_IID_Source, IRECT_Program_to_Entropy]
   exact ISCT_SCT_inverse_for_integer_entropy prog.complexity
+
+
+
+/--
+The canonical uniform distribution on `Fin k`.
+Defined as `fun (_ : Fin k) => (k : NNReal)⁻¹`.
+This is a specialization of `uniformDist` for clarity and specific use with `Fin k`.
+-/
+noncomputable def canonicalUniformDist (k : ℕ) (hk_pos : k > 0) : Fin k → NNReal :=
+  uniformDist (Fintype_card_fin_pos hk_pos)
+
+/--
+Proof that `canonicalUniformDist k hk_pos` sums to 1.
+This directly uses `sum_uniformDist` with the appropriate proof of positivity
+for `Fintype.card (Fin k)`.
+-/
+lemma sum_canonicalUniformDist_eq_one (k : ℕ) (hk_pos : k > 0) :
+    (∑ i, canonicalUniformDist k hk_pos i) = 1 := by
+  simp only [canonicalUniformDist] -- Unfold to uniformDist (Fintype_card_fin_pos hk_pos)
+  exact sum_uniformDist (Fintype_card_fin_pos hk_pos)
+
+/--
+Symmetry of `stdShannonEntropyLn`: `stdShannonEntropyLn (p ∘ e) = stdShannonEntropyLn p`
+for an `Equiv e : α ≃ β` between two Fintypes `α` and `β`,
+and a target distribution `p_target : β → NNReal`.
+The sum `∑ x:α, negMulLog(p_target(e x))` is transformed to `∑ y:β, negMulLog(p_target y)`.
+-/
+theorem stdShannonEntropyLn_comp_equiv {α β : Type*} [Fintype α] [Fintype β]
+    (p_target : β → NNReal) (e : α ≃ β) :
+    stdShannonEntropyLn (p_target ∘ e) = stdShannonEntropyLn p_target := by
+  -- Unfold stdShannonEntropyLn on both sides to expose the sums.
+  unfold stdShannonEntropyLn
+  -- LHS: ∑ (x : α), negMulLog ((p_target (e x)) : ℝ)
+  -- RHS: ∑ (y : β), negMulLog ((p_target y) : ℝ)
+  -- Apply Function.comp_apply to the term inside the sum on the LHS.
+  simp_rw [Function.comp_apply]
+  -- LHS is now: ∑ (x : α), negMulLog ((p_target (e x)) : ℝ)
+  -- Let g(y) := negMulLog ((p_target y) : ℝ).
+  -- LHS is ∑ (x : α), g (e x).
+  -- Equiv.sum_comp states: (∑ x, g (e x)) = (∑ y, g y).
+  exact Equiv.sum_comp e (fun (y : β) => negMulLog ((p_target y) : ℝ))
+
+-- We'll continue with `stdShannonEntropyLn_canonicalUniform_eq_log_k` and the main theorem
+-- `H_uniform_mapped_dist_eq_C_shannon` once this part is verified.
+
+lemma stdShannonEntropyLn_canonicalUniform_eq_log_k (k : ℕ) (hk_pos : k > 0) :
+    stdShannonEntropyLn (canonicalUniformDist k hk_pos) = Real.log k := by
+  simp only [canonicalUniformDist] -- Unfold to stdShannonEntropyLn (uniformDist (Fintype_card_fin_pos hk_pos))
+  rw [stdShannonEntropyLn_uniform_eq_log_card (Fintype_card_fin_pos hk_pos)] -- from Entropy.Common
+  -- Goal is Real.log (Fintype.card (Fin k)) = Real.log k
+  rw [Fintype.card_fin k] -- from Mathlib

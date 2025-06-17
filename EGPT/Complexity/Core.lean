@@ -132,32 +132,6 @@ noncomputable def advance_state {k : ℕ} (current_states : Vector ParticleState
 def get_system_state_vector {k : ℕ} (states : Vector ParticleState_SAT k) : Vector Bool k :=
   states.map (fun p => p.value)
 
-/--
-The true EGPT solver. It simulates the system forward, checking constraints at each step.
-It returns the first valid state it encounters.
-This is a non-deterministic search for a satisfying assignment.
--/
-noncomputable def ndm_run_solver {k : ℕ} (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (Vector Bool k) :=
-  let rec loop (t : ℕ) (current_states : Vector ParticleState_SAT k) : Option (Vector Bool k) :=
-    if t >= time_limit then
-      none -- Timeout
-    else
-      -- 1. Advance all particles by one step according to their individual laws.
-      let next_particle_states := advance_state current_states (seed + t)
-      let next_system_state := get_system_state_vector next_particle_states
-
-      -- 2. Apply the filter: check if the new system state is valid.
-      if evalCNF machine.constraints next_system_state then
-        -- This state is a valid solution. Halt and return it.
-        some next_system_state
-      else
-        -- The state is invalid. Continue the search from this new (but invalid) state.
-        -- A different model could be to "reject" the step and retry from `current_states`.
-        -- Let's stick with the simpler "keep walking" model.
-        loop (t + 1) next_particle_states
-    termination_by time_limit - t
-
-  loop 0 machine.initial_states
 
 
 /--
@@ -178,7 +152,7 @@ def RejectionFilter.of_satisfying_example {k : ℕ} (cnf : SyntacticCNF_EGPT k) 
 A `some filter` result means a solution was found, and that solution is now
 packaged inside the filter itself as the proof of `is_satisfiable`.
 -/
-noncomputable def ndm_run_solver_produces_filter {k : ℕ} (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (RejectionFilter k) :=
+noncomputable def ndm_run_solver {k : ℕ} (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (RejectionFilter k) :=
   let rec loop (t : ℕ) (current_states : Vector ParticleState_SAT k) : Option (RejectionFilter k) :=
     if t >= time_limit then
       none -- Timeout
@@ -199,14 +173,11 @@ noncomputable def ndm_run_solver_produces_filter {k : ℕ} (machine : NDMachine_
 
   loop 0 machine.initial_states
 
--- We can now redefine the NDMachine's solve method to use this new function.
-noncomputable def NDMachine_SAT.solve_to_filter (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (RejectionFilter k) :=
-  ndm_run_solver_produces_filter machine time_limit seed
 /--
 The `solve` function IS the ndm_run_solver. This becomes the primary
 definition of non-deterministic solving in EGPT.
 -/
-noncomputable def NDMachine_SAT.solve (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (Certificate k) :=
+noncomputable def NDMachine_SAT.solve (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (RejectionFilter k) :=
   ndm_run_solver machine time_limit seed
 
 /--
@@ -306,6 +277,9 @@ class IsPolynomialEGPT (f : ParticlePath → ParticlePath) : Prop where
   -- is_poly : ∃ (ops : List GNatOperation), compute_f_with_ops ops = f
   -- where GNatOperation is an enum of {Add, Mul}.
   -- For our purposes, we can treat this as a given property.
+
+/-- The identity function on `ParticlePath` is polynomial. -/
+instance IsPolynomialEGPT.id : IsPolynomialEGPT id where
 
 /--
 A predicate asserting that a complexity function is bounded by an EGPT-polynomial.

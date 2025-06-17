@@ -1,17 +1,18 @@
 import Mathlib.Data.Sym.Card
-
+import EGPT.Basic
 import EGPT.Core
+import EGPT.Entropy.RET
 import EGPT.Entropy.Common
 import EGPT.Physics.Common
-import EGPT.Entropy.RET
+
 
 namespace EGPT.Physics.UniformSystems
 
-open EGPT.Entropy.RET
+
 
 open Multiset NNReal
-open EGPT
-open EGPT.Entropy.Common
+open EGPT EGPT.Basic
+open EGPT.Entropy.Common EGPT.Entropy.RET
 open EGPT.Physics.Common
 
 
@@ -19,13 +20,6 @@ open EGPT.Physics.Common
 open Fin Real NNReal Nat Multiset Finset
 
 
-/--
-The canonical uniform distribution on `Fin k`.
-Defined as `fun (_ : Fin k) => (k : NNReal)⁻¹`.
-This is a specialization of `uniformDist` for clarity and specific use with `Fin k`.
--/
-noncomputable def canonicalUniformDist (k : ℕ) (hk_pos : k > 0) : Fin k → NNReal :=
-  uniformDist (Fintype_card_fin_pos hk_pos)
 
 /--
 Proof that `canonicalUniformDist k hk_pos` sums to 1.
@@ -61,12 +55,6 @@ theorem stdShannonEntropyLn_comp_equiv {α β : Type*} [Fintype α] [Fintype β]
 -- We'll continue with `stdShannonEntropyLn_canonicalUniform_eq_log_k` and the main theorem
 -- `H_uniform_mapped_dist_eq_C_shannon` once this part is verified.
 
-lemma stdShannonEntropyLn_canonicalUniform_eq_log_k (k : ℕ) (hk_pos : k > 0) :
-    stdShannonEntropyLn (canonicalUniformDist k hk_pos) = Real.log k := by
-  simp only [canonicalUniformDist] -- Unfold to stdShannonEntropyLn (uniformDist (Fintype_card_fin_pos hk_pos))
-  rw [stdShannonEntropyLn_uniform_eq_log_card (Fintype_card_fin_pos hk_pos)] -- from Entropy.Common
-  -- Goal is Real.log (Fintype.card (Fin k)) = Real.log k
-  rw [Fintype.card_fin k] -- from Mathlib
 
 theorem H_canonical_uniform_eq_C_shannon
     (H_func : ∀ {α_aux : Type} [Fintype α_aux], (α_aux → NNReal) → NNReal)
@@ -246,7 +234,7 @@ Helper lemma for `left_inv_beState_multiset`.
 Shows that the sum of counts over all `j` simplifies to the single term where `j = i`.
 -/
 lemma sum_count_replicate_eq_single_term {N : ℕ} {q : Fin N → ℕ} (i : Fin N) :
-    ∑ j in Finset.univ, Multiset.count i (Multiset.replicate (q j) j) = q i := by
+    ∑ j ∈ Finset.univ, Multiset.count i (Multiset.replicate (q j) j) = q i := by
   -- Use Finset.sum_eq_single to isolate the term where j = i
   -- We need to provide:
   -- 1. The index `a` we want to single out (which is `i`).
@@ -282,7 +270,7 @@ to the definition of `mbStateToMultiset`.
 -/
 lemma count_udStateToMultiset_eq_sum_count_replicate {N M : ℕ} (q : OmegaUD N M) (i : Fin N) :
     Multiset.count i (udStateToMultiset q) =
-      ∑ j in Finset.univ, Multiset.count i (Multiset.replicate (q.val j) j) := by
+      ∑ j ∈ Finset.univ, Multiset.count i (Multiset.replicate (q.val j) j) := by
   -- Unfold the definition of mbStateToMultiset
   simp only [udStateToMultiset]
   -- Goal: count i (∑ j in Finset.univ, Multiset.replicate (q.val j) j) = ...
@@ -434,7 +422,7 @@ variable {α β : Type*} [DecidableEq α] [AddCommMonoid β]
 lemma sum_eq_add_sum_erase {s : Finset α} {a : α} (f : α → β) (h : a ∈ s) :
   ∑ x ∈ s, f x = f a + ∑ x ∈ s.erase a, f x :=
 by
-   rw [←Finset.sum_insert (Finset.not_mem_erase a s)]
+   rw [←Finset.sum_insert (Finset.notMem_erase a s)]
    congr
    exact Eq.symm (Finset.insert_erase h)
 
@@ -880,7 +868,7 @@ theorem H_physical_system_is_rota_uniform (N M : ℕ) (h_domain_valid : N ≠ 0 
     simp only [mul_zero]
   else
     rw [dif_neg hk_eq_1]
-    simp only [EGPT.RealLogNatToNNReal, NNReal.coe_mul, (Real.log_nonneg (Nat.one_le_cast.mpr hk_card_ge1_))]
+    simp only [RealLogNatToNNReal, NNReal.coe_mul, (Real.log_nonneg (Nat.one_le_cast.mpr hk_card_ge1_))]
     have h_shannon_eq_log_k : stdShannonEntropyLn (p_UD_fin N M) = Real.log (k_card_ : ℝ) := by
       rw [p_BE_fin_is_H_physical_system_uniform_input N M h_domain_valid]
       rw [stdShannonEntropyLn_uniform_eq_log_card]

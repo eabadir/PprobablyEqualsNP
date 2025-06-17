@@ -26,12 +26,14 @@ import Mathlib.Data.Nat.Basic -- Basic Nat properties
 import Mathlib.Data.Multiset.Bind
 import Mathlib.Data.Multiset.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import EGPT.Entropy.Common
+
 import EGPT.Core
+import EGPT.Basic
+import EGPT.Entropy.Common
 
 namespace EGPT.Physics.Common
 
-open EGPT.Entropy.Common
+open EGPT EGPT.Basic Entropy.Common
 
 
 
@@ -81,7 +83,7 @@ noncomputable def H_physical_system_uniform_only_calc (k : ℕ) (hk_ge1 : k ≥ 
   if _hk_eq_1 : k = 1 then
     0 -- H(uniform_1) = C * log 1 = 0
   else
-    C_physical_NNReal * EGPT.RealLogNatToNNReal k hk_ge1
+    C_physical_NNReal * RealLogNatToNNReal k hk_ge1
 
 
 /--

@@ -6,11 +6,13 @@ import Mathlib.Data.List.Basic -- For List.sum
 import Mathlib.Data.Set.Defs -- For Set type used by P and NP
 -- Using placeholder axioms for complexity theory results not readily available
 -- or easy to formalize at this level (like poly-time reduction transitivity).
+import EGPT.Core
 import EGPT.NumberTheory.Core
 import EGPT.Complexity.Core
+import EGPT.Complexity.PPNP
 import EGPT.Entropy.Common -- For ShannonEntropyOfDist, stdShannonEntropyLn_uniform_eq_log_card
 
-open Classical EGPT.Complexity EGPT.NumberTheory.Core
+open Classical EGPT EGPT.Complexity EGPT.NumberTheory.Core
 
 namespace PnPProofDetailedV2
 
@@ -21,11 +23,8 @@ Section 1: Foundational Definitions (Complexity, SAT, Entropy)
 -/
 
 -- Basic Types and Complexity Classes
-abbrev Word := EGPT.Complexity.ComputerTape -- which is `List Bool`
-instance : Inhabited Word := ⟨sorry⟩ -- Give Word a default value
--- In EGPT, the input to a decision problem is a natural number `n`, which can
--- encode any problem instance (e.g., number of particles, number of variables,
--- Gödel number of a formula).
+abbrev Word := ComputerTape -- which is `List Bool`
+
 abbrev Input := ℕ
 
 -- A language is a computable decision problem on these natural number inputs.
@@ -58,38 +57,12 @@ def successWord : Word := [true]
 -- The standard way to combine a problem instance and a certificate is concatenation.
 def combineInput (input cert : Word) : Word := List.append input cert
 
--- The EGPT definition of polynomial time. It replaces the extrinsic c*n^k formula
--- with a structural definition based on the native EGPT number system (ParticlePath).
--- A function f : ℕ → ℕ is considered polynomial-time if it is bounded by a function `p_g`
--- that is itself constructible from a finite number of ParticlePath additions and multiplications,
--- as captured by the `IsPolynomialEGPT` class.
-def PolyTime (f : ℕ → ℕ) : Prop :=
-  ∃ (p_g : ParticlePath → ParticlePath),
-    IsPolynomialEGPT p_g ∧
-    ∀ (n : ℕ),
-      -- The output of f for a standard Nat `n` must be less than or equal to
-      -- the output of the EGPT-polynomial function `p_g` when `p_g` is given
-      -- the ParticlePath equivalent of `n`. We use the bijections to convert between number systems.
-      f n ≤ equivParticlePathToNat.toFun (p_g (equivParticlePathToNat.invFun n))
-
--- Redefines what it means for a machine to run in polynomial time using the
--- native EGPT complexity measure. A machine runs in polynomial time if its
--- time complexity (a Nat) is bounded by an EGPT-polynomial function of its
--- input size.
-def RunsInPolyTime (m : Machine) : Prop :=
-  ∃ (p_g : ParticlePath → ParticlePath),
-    IsPolynomialEGPT p_g ∧
-    ∀ (w : Word),
-      -- The machine's time complexity for a given word `w` (a Nat)
-      -- must be less than or equal to the value of the polynomial bound `p_g`
-      -- applied to the size of the word (converted to a ParticlePath).
-      timeComplexity m w ≤ equivParticlePathToNat.toFun (p_g (equivParticlePathToNat.invFun (wordLength w)))
 
 -- Complexity Class P
-abbrev P := EGPT.Complexity.P_EGPT_NT
+abbrev P := EGPT.Complexity.P_EGPT
 
 -- Complexity Class NP
-abbrev NP := EGPT.Complexity.NP_EGPT_NT
+abbrev NP := EGPT.Complexity.NP_EGPT
 
 abbrev NPComplete := EGPT.Complexity.EGPT_NPComplete
 
