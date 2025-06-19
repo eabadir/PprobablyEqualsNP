@@ -29,7 +29,25 @@ def mkPathProgram (initial_pos : Int) : PathProgram :=
   { tape := [], current_state := initial_pos }
 
 
+-- ADD THE NEW HELPER FUNCTION HERE
+namespace PathProgram
 
+/--
+**Updates the tape of a PathProgram, returning a new program.**
+
+This function takes an existing program `prog` and a new `ComputerTape`. It produces
+a new `PathProgram` that has the same initial state as the original but uses the
+new tape as its instructions.
+
+This is a key helper for defining computations. It allows us to treat a `PathProgram`
+as a reusable "machine" and `update_tape` as the mechanism for loading a new
+input tape into that machine before running it.
+-/
+def update_tape (prog : PathProgram) (new_tape : ComputerTape) : PathProgram :=
+  { current_state := prog.current_state,
+    tape := new_tape }
+
+end PathProgram
 /--
 A `SATSystemState` is a distribution of particles into a finite number of
 positions. It is represented by a `Multiset` over `Fin constrained_position`, where
@@ -299,18 +317,3 @@ current position and its intrinsic physical law (movement bias).
 structure ParticleState where
   position : ParticlePosition
   law      : ParticlePMF -- Corresponds to an EGPT.Rat, the particle's bias
-
-/--
-An `NDMachine` represents the initial configuration of an n-particle system.
-It is the "program" for a physical simulation. Its non-determinism comes
-from consuming choices from an IID source for each particle at each time step.
--/
-structure NDMachine (n : ℕ) where
-  initial_states : Vector ParticleState n -- Added: The initial configuration of particles
-  -- The solve method is the machine's attempt to find a satisfying state.
-  solve : (target : TargetStatePredicate n) → -- Explicit arrow
-          (time_limit : ℕ) →                 -- Explicit arrow
-          (seed : ℕ) →
-          Option (Vector PathProgram n) -- Returns the solution if found
-
-abbrev ExperimentRunner (n : ℕ) := NDMachine n

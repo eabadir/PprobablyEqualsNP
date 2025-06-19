@@ -20,7 +20,7 @@ open EGPT.NumberTheory.Core EGPT.Constraints
 
 /- Equivalence between the `List.Vector` type used by `Equiv.vectorEquivFin`
     and the `Vector` type (array‐based) that we use for bit blocks. -/
-private def listVectorEquivVector {α} {n : ℕ} :
+def listVectorEquivVector {α} {n : ℕ} :
     List.Vector α n ≃ Vector α n :=
 { toFun := fun v =>
     match v with

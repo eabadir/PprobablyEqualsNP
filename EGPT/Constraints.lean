@@ -1,6 +1,7 @@
 import Mathlib.Data.Vector.Basic
 import Mathlib.Data.Fin.Basic
 import Mathlib.Logic.Encodable.Basic
+import Mathlib.Logic.Denumerable
 import EGPT.NumberTheory.Core -- For ParticlePath and its equivalences
 -- -- import Mathlib.Logic.Denumerable
 namespace EGPT.Constraints
@@ -127,3 +128,28 @@ noncomputable def equivSyntacticCNF_to_ParticlePath {k : ℕ} : SyntacticCNF_EGP
   -- `List`, `Fin k`, and `Bool` are all denumerable, so their product and list
   -- combinations are also denumerable. `ParticlePath` is denumerable via its equiv to `ℕ`.
   (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (EGPT.NumberTheory.Core.equivParticlePathToNat.symm)
+
+noncomputable def cnfToParticlePMF (full_cnf : Σ k, SyntacticCNF_EGPT k) : EGPT.NumberTheory.Core.ParticlePMF :=
+  -- 1. Encode the entire CNF structure (including k) into a single natural number.
+  let n := Encodable.encode full_cnf
+
+  -- 2. Convert the natural number to a rational using a simple construction
+  -- We can use the fact that every natural number corresponds to a rational
+  let q : ℚ := n
+
+  -- 3. Convert this rational number into its canonical EGPT representation (a ParticlePMF).
+  EGPT.NumberTheory.Core.fromRat q
+
+noncomputable def particlePMFToCnf (pmf : EGPT.NumberTheory.Core.ParticlePMF) : Σ k, SyntacticCNF_EGPT k :=
+  -- 1. Convert the ParticlePMF into its mathlib rational value.
+  let q := EGPT.NumberTheory.Core.toRat pmf
+
+  -- 2. Convert the rational back to a natural number (inverse of the injection we used)
+  -- Since we used simple coercion ℕ → ℚ, we can extract the numerator if denominator is 1
+  let n := q.num.natAbs -- This works for rationals that came from naturals
+
+  -- 3. Decode this natural number back into the full CNF structure.
+  -- The output is an Option; we can get the value because the encoding is total.
+  match Encodable.decode n with
+  | some cnf => cnf
+  | none => ⟨0, []⟩ -- Default empty CNF in case of decode failure

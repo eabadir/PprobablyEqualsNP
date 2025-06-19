@@ -105,13 +105,11 @@ noncomputable def ParticlePathIntEquiv : ChargedParticlePath ≃ ℤ :=
 
 
 /-!
-## Rationals as EGPT ParticlePMF: The Positional Probability of a Single Particle Path Under Constraints (Probabality Mass Function)
+## Rationals as EGPT ParticlePMF: Asymmetric Paths & The Positional Probability of a Single Particle Path Under Constraints (Probabality Mass Function)
 
 ############################################################################
 
-  This definitive EGPT model grounds rational numbers as the compressed state (position) of a system of particles after some finite interval of time, or, equivalently the probability of finding a single particle at a given position after a number of steps in a random walk. This is a significant departure from traditional number theory, where rational numbers are often treated as abstract entities without direct physical interpretation.
-
-  The EGPT ParticlePMF is therefore a lossy compression function. Instead of storing the path of every particle in a large (countably infinite) system of particles, we store probability distribution over the system. For example, for a system of `N` IID particles over t steps, we would need `N * t` bits to store the path of every particle. Instead, we can store the probability distribution of a particles path (ParticlePMF) then we can compute the probabilitic position of N particles at time t for any N and t.
+ While the Integer's corresponded to symmetric compressed paths, our ChargedParticlePaths, we need a representation for asymmetric paths and that is our ParticlePMF and we simply define it as a List Bool representing the "net" heads or tails. As with the ChargedParticlePaths, the leading sign bit allows for compression to just represent whether the 1's represent heads or tails. For example, a particle that goes up two times in a row ("heads") and then down 1 ("tails") is net positive heads and is written [1,1,1,0]. Likewise "down" two times in a row followed by heads once flips the sign bit to 0 [0,1,1,0]. We note that the first part of this represetnation is a string "p" which is ChargedParticlePath and the second part "q" is an inverted ParticlePath. Thus our ParticlePMF can be expressed as p/q where p is an ℤ and q is a ℕ. Unlike the EGPT Naturals (ParticlePath) and Integers (ChargedParticlePath) the ratio of 1's and 0's is the most compressed form for a single particle BUT, we achieve compression by allowing that all asymmetric paths (reorderings) will end in the same position AND allowing that concatenations of the same underlying path have the same ratio and are therefore equivalent to the shortest cananonical represetnation. This is the canonical form of an Rational in EGPT.
 
   1.  **Canonical Form:** A rational number is represented by a unique `List Bool`
       of the form `{sign bit} ++ {string of 1s} ++ {string of 0s}`. This
