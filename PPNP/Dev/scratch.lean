@@ -17,7 +17,7 @@ open EGPT.Physics.PhysicsDist
 open EGPT.Constraints -- Open EGPT.Constraints
 open EGPT.NumberTheory.Filter -- Open for RejectionFilter
 
-/--
+/-- # FROM SCRATCH
 Interprets a ComputerTape as a CNF formula. Each bit of the tape
 constrains the state of the computation particle at the corresponding time step.
 -/
@@ -498,35 +498,6 @@ noncomputable def extractProbabilityDistribution {k : ℕ} (problem : Constraine
   | none => none
   | some filter => some (distOfRejectionFilter filter)
 
--- In EGPT/Complexity/Core.lean or where the new solver is defined
-
 /-!
-### Summary of Revisions
-
-**Key Changes Made:**
-
-1. **Revised `ndm_constrained_path_solver`**:
-   - Now returns `Option (RejectionFilter k)` instead of `Option (List (Vector Bool k))`
-   - Converts the `ConstrainedPathProblem` to a single `SyntacticCNF_EGPT` using `constrainedPathToCNF`
-   - Creates a `RejectionFilter` that captures the probabilistic structure of the solution space
-
-2. **Established Equivalence Functions**:
-   - `constrainedPathToCNF`: Converts `ConstrainedPathProblem` → `SyntacticCNF_EGPT`
-   - `cnfToConstrainedPath`: Converts `SyntacticCNF_EGPT` → `ConstrainedPathProblem`
-
-3. **Theoretical Framework**:
-   - `constrainedPath_equiv_CNF`: Fundamental equivalence theorem
-   - `solver_filter_captures_solutions`: Correctness of the filter representation
-   - `solver_equiv_SAT`: Equivalence with standard SAT solving
-   - `extractProbabilityDistribution`: Connection to probability theory
-
-**Benefits of the New Approach:**
-
-- **Probabilistic Insight**: The `RejectionFilter` reveals the probabilistic structure of the solution space
-- **Unified Framework**: Path problems and SAT problems are now explicitly equivalent
-- **Information Theory**: The filter connects to EGPT's information-theoretic foundations
-- **Scalability**: The approach scales better than explicit path enumeration
-
-**Next Steps:**
-
+# END FROM SCRATCH
 -/

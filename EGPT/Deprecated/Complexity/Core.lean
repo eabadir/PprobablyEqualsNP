@@ -283,42 +283,8 @@ def CanNDMachineProduce (constraints : List Constraint) (prog : PathProgram) : P
     (constraints.all (fun c => c.checker t (prog.tape.take t)))
 
 
-/-!
-###  The Solver and P
--/
 
-
--- This is a predicate on functions, defining what it means to be polynomial.
--- A full formalization would build this inductively. For now, we state it as a Prop.
-class IsPolynomialEGPT (f : ParticlePath → ParticlePath) : Prop where
-  -- For example, one could define this as:
-  -- is_poly : ∃ (ops : List GNatOperation), compute_f_with_ops ops = f
-  -- where GNatOperation is an enum of {Add, Mul}.
-  -- For our purposes, we can treat this as a given property.
-
-/-- The identity function on `ParticlePath` is polynomial. -/
-instance IsPolynomialEGPT.id : IsPolynomialEGPT id where
-
-/--
-A predicate asserting that a complexity function is bounded by an EGPT-polynomial.
--/
-def IsBoundedByPolynomial (complexity_of : EGPT_Input → ParticlePath) : Prop :=
-  ∃ (p : ParticlePath → ParticlePath), IsPolynomialEGPT p ∧
-    ∀ (input : EGPT_Input), complexity_of input ≤ p (fromNat input) -- `fromNat` converts ℕ to ParticlePath
-
-
--- A predicate on the system's state vector. The NDMachine halts when this is true.
-abbrev TargetStatePredicate (n : ℕ) := (Vector ℤ n) → Bool
-
-/--
-The state of a single particle in an EGPT system, defined by its
-current position and its intrinsic physical law (movement bias).
--/
-structure ParticleState where
-  position : ParticlePosition
-  law      : ParticlePMF -- Corresponds to an EGPT.Rat, the particle's bias
-
-
+open EGPT.NumberTheory.Core EGPT.Complexity EGPT.NumberTheory.Filter EGPT.Constraints
 
 /-!
 ## EGPT P Probably Equals NP
@@ -340,6 +306,16 @@ formulas, proving it can be bijectively encoded to a `ParticlePath`, and then
 providing an interpreter that gives this syntax its semantic meaning within our "balls and boxes" model.
 ==================================================================
 -/
+-- This is a predicate on functions, defining what it means to be polynomial.
+-- A full formalization would build this inductively. For now, we state it as a Prop.
+class IsPolynomialEGPT (f : ParticlePath → ParticlePath) : Prop where
+  -- For example, one could define this as:
+  -- is_poly : ∃ (ops : List GNatOperation), compute_f_with_ops ops = f
+  -- where GNatOperation is an enum of {Add, Mul}.
+  -- For our purposes, we can treat this as a given property.
+
+/-- The identity function on `ParticlePath` is polynomial. -/
+instance IsPolynomialEGPT.id : IsPolynomialEGPT id where
 
 -- A language is a set of satisfiable CNF formulas.
 abbrev Lang_EGPT_SAT (k : ℕ) := Set (EGPT_SAT_Input k)
@@ -628,6 +604,59 @@ noncomputable def L_SAT.get_witness {k : ℕ} (cnf : SyntacticCNF_EGPT k) (h_in_
 lemma L_SAT.dest (k : ℕ) (cnf : SyntacticCNF_EGPT k) (h : cnf ∈ L_SAT k) :
   ∃ (assignment : Vector Bool k), evalCNF cnf assignment = true := h
 
+/--
+The Class P_EGPT (Unbiased Problems): The set of all CNF formulas that are
+trivially satisfiable (i.e., tautologies).
+-/
+def P_EGPT_Biased_Language (k : ℕ) : Lang_EGPT_SAT k :=
+{ cnf |
+    -- The CNF is a tautology if its characteristicRational is 1.
+    -- We need to prove it's satisfiable first to construct the filter.
+    (∀ (v : Vector Bool k), evalCNF cnf v = true)
+}
+
+-- Then you can prove that if `cnf ∈ P_EGPT_Biased_Language k`, then `characteristicRational ... = 1`.
+theorem characteristicRational_of_P_lang_is_one {k : ℕ} {cnf : SyntacticCNF_EGPT k}
+  (h : cnf ∈ P_EGPT_Biased_Language k) :
+  ∃ (filter : RejectionFilter k), filter.cnf = cnf ∧ characteristicRational filter = 1 := by
+  -- Construct the satisfying assignments (all assignments since it's a tautology)
+  let satisfying_assignments : Finset (Vector Bool k) := Finset.univ
+  -- Prove this set is nonempty
+  have is_satisfiable : satisfying_assignments.Nonempty := by
+    use Vector.replicate k false
+    simp [satisfying_assignments]
+  -- Prove the coherence axiom
+  have ax_coherent : ∀ v, v ∈ satisfying_assignments → (evalCNF cnf v = true) := by
+    intros v _
+    exact h v
+  -- Construct the filter
+  let filter : RejectionFilter k := {
+    cnf := cnf,
+    satisfying_assignments := satisfying_assignments,
+    is_satisfiable := is_satisfiable,
+    ax_coherent := ax_coherent
+  }
+  use filter
+  constructor
+  · rfl
+  · unfold characteristicRational
+    simp only [satisfying_assignments]
+
+    -- We need to show that card (univ : Finset (Vector Bool k)) = 2^k
+    rw [Finset.card_univ]
+    -- The instance instFintypeVectorBool gives us the Fintype structure
+    -- Use the available card_vector theorem from Fintype via the equivalence
+    have h_eq : Fintype.card (Vector Bool k) = Fintype.card Bool ^ k := by
+      -- Transform to List.Vector via equivalence and then use card_vector
+      have h1 : Fintype.card (Vector Bool k) = Fintype.card (List.Vector Bool k) :=
+        Fintype.card_congr listVectorEquivVector.symm
+      rw [h1]
+      -- Now use the card_vector theorem for List.Vector
+      exact @card_vector Bool _ k
+    rw [h_eq, Fintype.card_bool]
+    simp only [Rat.mkRat_eq_div]
+    norm_cast
+    simp
 
 -- ==================================================================
 -- == Final EGPT NP-Completeness Framework (Add this to your file) ==
@@ -711,6 +740,34 @@ theorem L_SAT_is_NPComplete : NPComplete_EGPT L_SAT :=
   in_NP   := L_SAT_in_NP_EGPT_Concrete,
   is_hard := L_SAT_is_NP_Hard
 }
+
+
+/-!
+###  The Solver and P
+-/
+
+
+
+
+/--
+A predicate asserting that a complexity function is bounded by an EGPT-polynomial.
+-/
+def IsBoundedByPolynomial (complexity_of : EGPT_Input → ParticlePath) : Prop :=
+  ∃ (p : ParticlePath → ParticlePath), IsPolynomialEGPT p ∧
+    ∀ (input : EGPT_Input), complexity_of input ≤ p (fromNat input) -- `fromNat` converts ℕ to ParticlePath
+
+
+-- A predicate on the system's state vector. The NDMachine halts when this is true.
+abbrev TargetStatePredicate (n : ℕ) := (Vector ℤ n) → Bool
+
+/--
+The state of a single particle in an EGPT system, defined by its
+current position and its intrinsic physical law (movement bias).
+-/
+structure ParticleState where
+  position : ParticlePosition
+  law      : ParticlePMF -- Corresponds to an EGPT.Rat, the particle's bias
+
 
 
 /--
@@ -832,7 +889,171 @@ def cnf_for_specific_assignment {k : ℕ} (v : Vector Bool k) : SyntacticCNF_EGP
     -- Each clause is a list containing a single literal.
     [{ particle_idx := i, polarity := v.get i }]
   )
+/--
+A `ConstrainedPathProblem` defines a complete search task within the EGPT framework.
+It specifies the constraints for the starting state, all intermediate states (the "path laws"),
+and the target state.
 
+- `initial_state_cnf`: A CNF whose satisfying assignments are the valid starting points.
+- `path_constraints`: A CNF that every state along the path (after the initial state) must satisfy.
+- `target_constraint`: A CNF that the final state of a successful path must satisfy.
+-/
+structure ConstrainedPathProblem (k : ℕ) where
+  initial_state_cnf : SyntacticCNF_EGPT k
+  path_constraints  : SyntacticCNF_EGPT k
+  target_constraint : SyntacticCNF_EGPT k
+
+/-!
+### Equivalence Between ConstrainedPathProblem and SyntacticCNF_EGPT
+
+The core insight is that any `ConstrainedPathProblem` can be viewed as a single
+`SyntacticCNF_EGPT` formula by combining all its constraint components. This
+establishes the fundamental equivalence between path-finding problems and
+satisfiability problems within the EGPT framework.
+-/
+
+/--
+**Converts a `ConstrainedPathProblem` to an equivalent `SyntacticCNF_EGPT`.**
+
+The conversion combines all three constraint types into a single CNF formula.
+For path problems, we interpret this as: "Find assignments that could represent
+valid states in a solution path" - i.e., states that satisfy at least one of
+the constraint types (initial, path, or target).
+
+The resulting CNF is satisfied by any assignment that could be part of a valid
+solution path to the original constrained path problem.
+-/
+def constrainedPathToCNF {k : ℕ} (problem : ConstrainedPathProblem k) : SyntacticCNF_EGPT k :=
+  -- Combine all three CNF components into one formula
+  -- The disjunction of the three constraint types means an assignment satisfies
+  -- the combined CNF if it satisfies at least one component
+  problem.initial_state_cnf ++ problem.path_constraints ++ problem.target_constraint
+
+/--
+**Converts a `SyntacticCNF_EGPT` to an equivalent `ConstrainedPathProblem`.**
+
+This creates a trivial path problem where:
+- Initial states can be any assignment satisfying the CNF
+- Path constraints are empty (any intermediate state is allowed)
+- Target constraint is the same as the initial constraint
+
+This represents the SAT problem as a trivial path problem where any satisfying
+assignment is both a valid start and end state.
+-/
+def cnfToConstrainedPath {k : ℕ} (cnf : SyntacticCNF_EGPT k) : ConstrainedPathProblem k :=
+{
+  initial_state_cnf := cnf,
+  path_constraints := [], -- Empty CNF (always satisfied)
+  target_constraint := cnf
+}
+
+/--
+The language of solvable constrained path problems. An instance is in the language
+if there *exists* a valid path from a valid start to a valid end.
+-/
+abbrev Lang_EGPT_ConstrainedPath (k : ℕ) := Set (ConstrainedPathProblem k)
+
+/--
+A deterministic verifier for a `ConstrainedPathProblem`. It takes a problem
+description and a certificate (the proposed path) and returns `true` if the
+path is a valid solution.
+-/
+def DMachine_CP_verify {k : ℕ} (problem : ConstrainedPathProblem k) (path_cert : List (Vector Bool k)) : Bool :=
+  match path_cert with
+  | [] => false -- An empty path is not a solution.
+  | initial_state :: rest_of_path =>
+      -- 1. Check if the starting state is valid.
+      let is_start_valid := evalCNF problem.initial_state_cnf initial_state
+      -- 2. Check if every intermediate state obeys the path constraints.
+      let are_intermediate_valid := rest_of_path.all (fun state => evalCNF problem.path_constraints state)
+      -- 3. Check if the final state is a valid target.
+      let is_end_valid := evalCNF problem.target_constraint path_cert.getLast! -- Assumes non-empty
+
+      is_start_valid && are_intermediate_valid && is_end_valid -- Use boolean AND (&&)
+
+/-!
+### Universal Problem Encoding
+
+The following function embodies a core tenet of the EGPT framework: that any
+computational task, no matter how complex, can be represented as a single,
+unambiguous piece of information—a single `ComputerTape`. This tape is conceptually
+equivalent to a single (potentially very large) number.
+-/
+
+/--
+**The Universal Problem Encoder.**
+
+Encodes an entire `ConstrainedPathProblem` into a single, canonical `ComputerTape`.
+This function serializes the three distinct CNF formulas that define the problem
+into one continuous list of booleans.
+
+To ensure the encoding is unambiguous and can be uniquely parsed back into its
+three components, a special delimiter is used to separate the encoded tapes.
+
+**Encoding Format:**
+
+The final tape has the structure:
+`[ <encoded_initial_cnf> ] ++ <DELIMITER> ++ [ <encoded_path_cnf> ] ++ <DELIMITER> ++ [ <encoded_target_cnf> ]`
+
+Where:
+- Each `<encoded_..._cnf>` is generated by the `encodeCNF` function, which creates a
+  self-describing tape for a single `SyntacticCNF_EGPT`.
+- The `<DELIMITER>` is a sequence of three `false` bits `[false, false, false]`. This
+  was chosen because double `false` is already used as a separator within the
+  `encodeCNF` format, so a triple `false` provides a unique, higher-level separator.
+
+The resulting `ComputerTape` is the definitive "program tape" for this specific
+pathfinding problem. Its length serves as the input size for complexity analysis
+(e.g., in the definitions of `P_EGPT_CP` and `NP_EGPT_CP`).
+-/
+noncomputable def encode_pathfinding_problem {k : ℕ} (problem : ConstrainedPathProblem k) : ComputerTape :=
+  -- 1. Define the delimiter that will separate the three encoded CNF tapes.
+  let delimiter : ComputerTape := [false, false, false]
+
+  -- 2. Encode each of the three component CNF formulas into its own ComputerTape
+  --    using the existing `encodeCNF` utility.
+  let tape_initial := encodeCNF problem.initial_state_cnf
+  let tape_path    := encodeCNF problem.path_constraints
+  let tape_target  := encodeCNF problem.target_constraint
+
+  -- 3. Concatenate the three tapes with the delimiter in between to form the
+  --    final, unified problem tape.
+  List.append (List.append tape_initial delimiter) (List.append tape_path (List.append delimiter tape_target))
+
+-- In EGPT/Complexity/Core.lean or a new file
+
+/--
+**The Revised Constrained Path Solver - Returns RejectionFilter.**
+
+Instead of searching for specific paths, this solver converts the
+`ConstrainedPathProblem` into a `RejectionFilter` that represents all valid
+states that could appear in solution paths. This captures the probabilistic
+structure of the solution space rather than finding individual solutions.
+
+The solver creates a filter based on the combined CNF formula that represents
+all constraints from the original path problem. The resulting `RejectionFilter`
+can then be used to generate the probability distribution over valid states.
+-/
+noncomputable def ndm_constrained_path_solver {k : ℕ} (problem : ConstrainedPathProblem k) : Option (RejectionFilter k) :=
+  -- Convert the constrained path problem to a single CNF formula
+  let combined_cnf := constrainedPathToCNF problem
+
+  -- Check if there are any satisfying assignments
+  let satisfying_assignments := (Finset.univ : Finset (Vector Bool k)).filter (fun v => evalCNF combined_cnf v)
+
+  if h_nonempty : satisfying_assignments.Nonempty then
+    -- Create the RejectionFilter
+    let filter : RejectionFilter k := {
+      cnf := combined_cnf,
+      satisfying_assignments := satisfying_assignments,
+      is_satisfiable := h_nonempty,
+      ax_coherent := by
+        intros v h_v_in_sa
+        exact (Finset.mem_filter.mp h_v_in_sa).2
+    }
+    some filter
+  else
+    none -- No solutions exist
 
 
 /--
@@ -953,6 +1174,28 @@ by
     -- Since we know `evalCNF sys assignment = true`, this simplifies to `true ∧ true = true`.
     simp [h_assignment_valid]
 
+-- Updated P_EGPT_CP definition using the new solver
+
+def P_EGPT_CP : Set (Π k, Lang_EGPT_ConstrainedPath k) :=
+{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p),
+      ∀ (k : ℕ) (problem : ConstrainedPathProblem k),
+        (problem ∈ L k) ↔
+          -- The solver succeeds in creating a RejectionFilter
+          ndm_constrained_path_solver problem ≠ none
+}
+
+/--
+The class NP_EGPT_CP: Problems for which a "yes" instance has a path certificate
+whose length is bounded by a polynomial in the size of the problem description.
+-/
+def NP_EGPT_CP : Set (Π k, Lang_EGPT_ConstrainedPath k) :=
+{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p),
+      ∀ (k : ℕ) (problem : ConstrainedPathProblem k),
+        (problem ∈ L k) ↔ ∃ (path_cert : List (Vector Bool k)),
+          -- The certificate (path) must be of polynomial length.
+          path_cert.length ≤ p ((encode_pathfinding_problem problem).length) ∧
+          DMachine_CP_verify problem path_cert = true
+}
 
 
 
@@ -990,248 +1233,20 @@ by
   simp [potential_next_state]
 
 
-/-!
-## EGPT P Probably Equals NP
-Within the EGPT framework
--/
-
 
 /-!
-### The EGPT Tableau: A Physical Certificate for NP
-
-This file formalizes the EGPT concept of a "self-recording tableau." It defines
-a satisfying assignment's certificate not as an abstract object, but as the
-physical information (the sum of particle paths) required to navigate the
-computational state space and verify that the assignment satisfies every
-constraint clause.
+### Additional Theorems for the Revised Framework
 -/
-
-/--
-**Calculates the EGPT "Path Cost" to verify a single literal.**
-
-In the EGPT model, verifying the `i`-th literal in a `k`-variable system
-requires a computational path of complexity `i`. This represents the
-information needed to "address" or "focus on" the `i`-th component of the
-state vector.
-
-The path is a `ParticlePath` (EGPT Natural Number), making the cost a
-direct, physical quantity.
--/
-def PathToConstraint {k : ℕ} (l : Literal_EGPT k) : ParticlePath :=
-  -- The complexity is the index of the particle/variable being constrained.
-  fromNat l.particle_idx.val
-
-/--
-**The EGPT Satisfying Tableau.**
-
-This structure is the EGPT formalization of an NP certificate. It bundles:
-1.  `assignment`: The proposed solution (`Vector Bool k`).
-2.  `witness_paths`: A list of `ParticlePath`s. For each clause in the original
-    CNF, this list contains the path to the *specific literal* that was
-    satisfied by the assignment. This is the "proof of work."
-3.  `h_valid`: A proof that the assignment is indeed a valid solution.
--/
-structure SatisfyingTableau (k : ℕ) where
-  cnf : SyntacticCNF_EGPT k
-  assignment : Vector Bool k
-  witness_paths : List ParticlePath
-  h_valid : evalCNF cnf assignment = true
-
-/--
-**Measures the complexity of a Satisfying Tableau.**
-
-The complexity is not an abstract polynomial but a concrete natural number:
-the sum of the complexities (lengths) of all the witness paths. This is the
-total information cost required to specify the complete proof of satisfaction.
--/
-def SatisfyingTableau.complexity {k : ℕ} (tableau : SatisfyingTableau k) : ℕ :=
-  (tableau.witness_paths.map toNat).sum
-
-/--
-**Constructs a Satisfying Tableau from a known solution.**
-
-This is the core constructive function. Given a CNF and a proven satisfying
-assignment, it generates the canonical Tableau. It does this by iterating
-through each clause, finding the first literal that satisfies it (which is
-guaranteed to exist), and recording the `PathToConstraint` for that literal.
--/
-noncomputable def constructSatisfyingTableau {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) : SatisfyingTableau k :=
-  let assignment := solution.val
-  let h_valid := solution.property
-
-  -- For each clause, find the path to the literal that makes it true.
-  let witness_paths := cnf.map (fun clause =>
-    -- Since the assignment is valid, each clause must be satisfied.
-    -- This means `clause.any (evalLiteral · assignment)` is true.
-    -- Therefore, there MUST be a literal in the clause that evaluates to true.
-    -- We use `find?` to get the first such literal.
-    let witness_literal_opt := clause.find? (fun lit => evalLiteral lit assignment)
-    -- We know this is `some`, so we can extract the path.
-    -- If it were `none`, something is wrong with our `h_valid` premise.
-    match witness_literal_opt with
-    | some lit => PathToConstraint lit
-    | none => fromNat 0 -- Should be unreachable if h_valid is correct.
-  )
-
-  {
-    cnf := cnf,
-    assignment := assignment,
-    witness_paths := witness_paths,
-    h_valid := h_valid
-  }
-
-/--
-**Theorem: The complexity of a canonical Tableau is the sum of the path costs
-to its witness literals.**
-
-This theorem makes the user's intuition formal and provable. It confirms that
-the "size of a satisfying Tableau" is precisely the sum of the EGPT natural
-numbers (`ParticlePath`s) representing the work needed to verify each clause.
--/
-theorem tableauComplexity_eq_sum_of_paths {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) :
-  let tableau := constructSatisfyingTableau cnf solution
-  tableau.complexity = (tableau.witness_paths.map toNat).sum :=
-by
-  -- The proof is by definition.
-  intro tableau
-  simp [SatisfyingTableau.complexity]
 
 
 /--
-**The Definitive EGPT NP Class.**
+**Connection to Probability Theory**
 
-A language `L` (a set of CNF problems) is in `NP_EGPT` if for every "yes"
-instance `cnf ∈ L`, there exists a `SatisfyingTableau` whose complexity
-is polynomially bounded by the length of the encoded problem `encodeCNF cnf`.
-
-This definition replaces abstract polynomial bounds with a concrete, physical
-measure: the total information cost of the witness paths needed to verify
-the solution.
+This function demonstrates how to extract a probability distribution from the
+solution structure discovered by the solver.
 -/
-def NP_EGPT_Tableau : Set (Π k, Lang_EGPT_SAT k) :=
-{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p),
-      ∀ (k : ℕ) (input_cnf : SyntacticCNF_EGPT k),
-        (input_cnf ∈ L k) ↔ ∃ (tableau : SatisfyingTableau k),
-          -- The tableau must be for the correct CNF
-          tableau.cnf = input_cnf ∧
-          -- The tableau's complexity must be polynomially bounded by the input size
-          tableau.complexity ≤ p (encodeCNF input_cnf).length
-          -- Note: tableau.h_valid is already guaranteed by the SatisfyingTableau structure
-}
-
-/--
-**Helper Lemma: The cost to verify a single clause is bounded by `k`.**
-
-The "cost" is the EGPT ParticlePath to the witness literal. Its complexity is
-the literal's variable index, which is always less than `k`.
--/
-lemma cost_of_witness_le_k {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) (clause : Clause_EGPT k) (h_clause_in_cnf : clause ∈ cnf) :
-  -- The cost is the complexity of the path to the witness literal.
-  -- We define it using the `find?` operation from the tableau construction.
-  let witness_literal_opt := clause.find? (fun lit => evalLiteral lit solution.val)
-  -- The property we want to prove about this cost:
-  match witness_literal_opt with
-  | some lit => (PathToConstraint lit).val.length ≤ k
-  | none => 0 ≤ k -- This case is unreachable, so any true statement suffices.
-:= by
-  -- Let's deconstruct the `solution` into the assignment vector and the validity proof.
-  let assignment := solution.val
-  have h_valid_assignment : evalCNF cnf assignment = true := solution.property
-
-  -- Unfold the definition of `evalCNF` to use the validity proof.
-  unfold evalCNF at h_valid_assignment
-  -- `h_valid_assignment` is now `cnf.all (fun c => evalClause c assignment) = true`.
-  -- Since our `clause` is in `cnf`, it must be satisfied.
-  have h_clause_is_sat : evalClause clause assignment = true := by
-    rw [List.all_eq_true] at h_valid_assignment
-    exact h_valid_assignment clause h_clause_in_cnf
-
-  -- Unfold `evalClause` to show that *some* literal in it must be true.
-  unfold evalClause at h_clause_is_sat
-  -- `h_clause_is_sat` is now `clause.any (fun lit => evalLiteral lit assignment) = true`.
-
-  -- The `find?` operation will return `some` if there's a literal that evaluates to true.
-  -- We can directly work with the match expression in the goal
-  cases h_find_result : clause.find? (fun lit => evalLiteral lit assignment) with
-  | none =>
-    -- This case should be impossible - if no literal is found, but clause.any returns true
-    rw [List.any_eq_true] at h_clause_is_sat
-    obtain ⟨lit, h_mem, h_eval⟩ := h_clause_is_sat
-    -- Show contradiction: if find? returns none, then no element satisfies the predicate
-    have h_find_none := List.find?_eq_none.mp h_find_result
-    have h_not_eval := h_find_none lit h_mem
-    rw [h_eval] at h_not_eval
-    exact absurd rfl h_not_eval
-  | some witness_lit =>
-    -- This is the main case. We need to prove `(PathToConstraint witness_lit).val.length ≤ k`.
-    simp only [PathToConstraint, toNat, fromNat, List.length_replicate]
-    -- The goal simplifies to `witness_lit.particle_idx.val ≤ k`.
-    -- Since `witness_lit.particle_idx` is of type `Fin k`, its value is strictly less than k.
-    have h_lt : witness_lit.particle_idx.val < k := witness_lit.particle_idx.isLt
-    -- `a < b` implies `a ≤ b` for natural numbers.
-    exact Nat.le_of_lt h_lt
-
-
-
--- Helper lemma: The complexity of the path to any literal is bounded by k
-lemma path_complexity_le_k {k : ℕ} (clause : Clause_EGPT k) (solution : Vector Bool k) :
-  (toNat (match clause.find? (fun lit => evalLiteral lit solution) with
-   | some lit => fromNat lit.particle_idx.val
-   | none => fromNat 0)) ≤ k := by
-  cases h_find : clause.find? (fun lit => evalLiteral lit solution) with
-  | none =>
-    simp only [toNat, fromNat, List.length_replicate]
-    exact Nat.zero_le k
-  | some witness_lit =>
-    simp only [toNat, fromNat, List.length_replicate]
-    exact Nat.le_of_lt witness_lit.particle_idx.isLt
-
--- Final, clean proof of the main theorem.
-theorem tableauComplexity_upper_bound {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) :
-  (constructSatisfyingTableau cnf solution).complexity ≤ cnf.length * k :=
-by
-  -- We'll use a simple approach: bound each element and use list induction
-  have h_bound_element : ∀ clause ∈ cnf,
-    (toNat (match clause.find? (fun lit => evalLiteral lit solution.val) with
-    | some lit => fromNat lit.particle_idx.val
-    | none => fromNat 0)) ≤ k := by
-    intro clause _
-    exact path_complexity_le_k clause solution.val
-
-  -- Use induction on cnf to prove the sum bound
-  unfold constructSatisfyingTableau SatisfyingTableau.complexity
-  simp [PathToConstraint, List.map_map, Function.comp]
-
-  induction cnf with
-  | nil => simp
-  | cons head tail ih =>
-    simp [List.map_cons, List.sum_cons, List.length_cons]
-    have h_head : (toNat (match head.find? (fun lit => evalLiteral lit solution.val) with
-      | some lit => fromNat lit.particle_idx.val
-      | none => fromNat 0)) ≤ k := path_complexity_le_k head solution.val
-
-    -- For the inductive step
-    have h_tail : (tail.map (toNat ∘ fun clause =>
-      match clause.find? (fun lit => evalLiteral lit solution.val) with
-      | some lit => fromNat lit.particle_idx.val
-      | none => fromNat 0)).sum ≤ tail.length * k := by
-      -- First, we need to show that our solution works for the tail
-      have h_tail_sat : evalCNF tail solution.val = true := by
-        have h_full_sat := solution.property
-        unfold evalCNF at h_full_sat ⊢
-        -- Use the fact that if (a && b) = true, then b = true
-        rw [List.all_cons] at h_full_sat
-        simp only [Bool.and_eq_true] at h_full_sat
-        exact h_full_sat.2
-
-      -- Create a solution specifically for the tail
-      let tail_solution : { v : Vector Bool k // evalCNF tail v = true } := ⟨solution.val, h_tail_sat⟩
-
-      -- Apply the inductive hypothesis
-      apply ih tail_solution
-
-      -- Prove that each clause in tail satisfies the bound
-      intro clause h_mem_tail
-      exact path_complexity_le_k clause solution.val
-
-    linarith [h_head, h_tail]
+noncomputable def extractProbabilityDistribution {k : ℕ} (problem : ConstrainedPathProblem k) :
+  Option (Vector Bool k → ℚ) :=
+  match ndm_constrained_path_solver problem with
+  | none => none
+  | some filter => some (distOfRejectionFilter filter)

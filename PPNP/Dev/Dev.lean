@@ -1,251 +1,247 @@
 import EGPT.Core
 import EGPT.Complexity.Core
-import EGPT.Complexity.PPNP
 import EGPT.Entropy.Common
 import EGPT.Physics.PhysicsDist
+import EGPT.NumberTheory.Core -- For ParticlePath, fromNat, toNat
+
+open EGPT EGPT.Complexity EGPT.NumberTheory.Core EGPT.Constraints
 
 /-!
-==================================================================
-# EGPT Complexity Aliases
+### The EGPT Tableau: A Physical Certificate for NP
 
-This file provides a compatibility layer that maps the abstract concepts
-from the deprecated `Complexity/Basic.lean` to the concrete, constructive
-definitions of the EGPT framework.
-
-This allows higher-level proofs (like `PequalsNP.lean`) to use the familiar,
-classical-style names while being backed by the rigorous, constructive EGPT
-formalism. This file replaces the need to import `EGPT.Complexity.Basic`.
-==================================================================
+This file formalizes the EGPT concept of a "self-recording tableau." It defines
+a satisfying assignment's certificate not as an abstract object, but as the
+physical information (the sum of particle paths) required to navigate the
+computational state space and verify that the assignment satisfies every
+constraint clause.
 -/
 
-namespace EGPT.Complexity.Alias
+/--
+**Calculates the EGPT "Path Cost" to verify a single literal.**
 
-open EGPT
-open EGPT.Complexity
-open EGPT.Entropy.Common
-open EGPT.Physics.PhysicsDist
-open List
+In the EGPT model, verifying the `i`-th literal in a `k`-variable system
+requires a computational path of complexity `i`. This represents the
+information needed to "address" or "focus on" the `i`-th component of the
+state vector.
 
--- Note: We are aliasing types from EGPT.Complexity.Core and PPNP, which should be imported.
-
-/-! ### Core Computational Primitives -/
-
--- `Word` was an abstract axiom. In EGPT, the fundamental "word" or "tape" is a `List Bool`.
-abbrev Word := EGPT.ComputerTape
-
--- The `Machine` axiom is replaced by the concept of a computable function.
--- A `Machine`'s action is `Word → Option Word`.
-abbrev Machine := Word → Option Word
-
--- `wordLength` is simply `List.length`.
-def wordLength (w : Word) : Nat := w.length
-
--- `combineInput` is `List.append`.
-def combineInput (input cert : Word) : Word := List.append input cert
-
--- `successWord` can be a canonical simple word.
-def successWord : Word := [true]
-
--- `compute` is just function application.
-def compute (m : Machine) (w : Word) : Option Word := m w
-
--- `timeComplexity` is defined as the length of the program tape.
-def timeComplexity (_m : Machine) (w : Word) : Nat := w.length
-
-/-! ### Complexity Class Definitions -/
-
--- A `Lang` was `Word → Prop`. In EGPT, a decision problem is `Input → Bool`, where `Input` is `ℕ`.
--- We can create a mapping. A `Word` can be encoded to `ℕ` (e.g., via `equivParticlePathToNat`),
--- and an `Input` (`ℕ`) can be encoded to a `Word` (`fromNat`).
--- For compatibility, we can define `Lang` as it was.
-abbrev Lang := Word → Prop
-
--- `RunsInPolyTime` is a concrete predicate on an EGPT `Machine`.
--- It asserts that the machine's runtime (here, simply input size, but could be
--- more complex) is bounded by a polynomial in the length of the input word.
--- This replaces the abstract axiom with a definition based on `IsPolynomialNat`
--- from `EGPT.Complexity.PPNP`.
-abbrev RunsInPolyTime := EGPT.Complexity.RunsInPolyTime
-
--- The class P is the set of languages decidable by a deterministic machine in polynomial time.
--- This definition now uses our concrete `RunsInPolyTime`.
-abbrev P := P_EGPT
-
--- The class NP is the set of languages for which a proposed solution (certificate)
--- can be verified by a deterministic machine in polynomial time.
-abbrev NP := NP_EGPT
-
-
-/-!
-REMAINDER NEED TO BE UPDATED TO NEW EGPT DEFINITIONS from EGPT.Core, Complexity.Core, Complexity.PPNP, Entropy.Common, etc.
+The path is a `ParticlePath` (EGPT Natural Number), making the cost a
+direct, physical quantity.
 -/
-/-! ### Reducibility Theorems -/
+def PathToConstraint {k : ℕ} (l : Literal_EGPT k) : ParticlePath :=
+  -- The complexity is the index of the particle/variable being constrained.
+  fromNat l.particle_idx.val
+
+/--
+**The EGPT Satisfying Tableau.**
+
+This structure is the EGPT formalization of an NP certificate. It bundles:
+1.  `assignment`: The proposed solution (`Vector Bool k`).
+2.  `witness_paths`: A list of `ParticlePath`s. For each clause in the original
+    CNF, this list contains the path to the *specific literal* that was
+    satisfied by the assignment. This is the "proof of work."
+3.  `h_valid`: A proof that the assignment is indeed a valid solution.
+-/
+structure SatisfyingTableau (k : ℕ) where
+  cnf : SyntacticCNF_EGPT k
+  assignment : Vector Bool k
+  witness_paths : List ParticlePath
+  h_valid : evalCNF cnf assignment = true
+
+/--
+**Measures the complexity of a Satisfying Tableau.**
+
+The complexity is not an abstract polynomial but a concrete natural number:
+the sum of the complexities (lengths) of all the witness paths. This is the
+total information cost required to specify the complete proof of satisfaction.
+-/
+def SatisfyingTableau.complexity {k : ℕ} (tableau : SatisfyingTableau k) : ℕ :=
+  (tableau.witness_paths.map toNat).sum
+
+/--
+**Constructs a Satisfying Tableau from a known solution.**
+
+This is the core constructive function. Given a CNF and a proven satisfying
+assignment, it generates the canonical Tableau. It does this by iterating
+through each clause, finding the first literal that satisfies it (which is
+guaranteed to exist), and recording the `PathToConstraint` for that literal.
+-/
+noncomputable def constructSatisfyingTableau {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) : SatisfyingTableau k :=
+  let assignment := solution.val
+  let h_valid := solution.property
+
+  -- For each clause, find the path to the literal that makes it true.
+  let witness_paths := cnf.map (fun clause =>
+    -- Since the assignment is valid, each clause must be satisfied.
+    -- This means `clause.any (evalLiteral · assignment)` is true.
+    -- Therefore, there MUST be a literal in the clause that evaluates to true.
+    -- We use `find?` to get the first such literal.
+    let witness_literal_opt := clause.find? (fun lit => evalLiteral lit assignment)
+    -- We know this is `some`, so we can extract the path.
+    -- If it were `none`, something is wrong with our `h_valid` premise.
+    match witness_literal_opt with
+    | some lit => PathToConstraint lit
+    | none => fromNat 0 -- Should be unreachable if h_valid is correct.
+  )
+
+  {
+    cnf := cnf,
+    assignment := assignment,
+    witness_paths := witness_paths,
+    h_valid := h_valid
+  }
+
+/--
+**Theorem: The complexity of a canonical Tableau is the sum of the path costs
+to its witness literals.**
+
+This theorem makes the user's intuition formal and provable. It confirms that
+the "size of a satisfying Tableau" is precisely the sum of the EGPT natural
+numbers (`ParticlePath`s) representing the work needed to verify each clause.
+-/
+theorem tableauComplexity_eq_sum_of_paths {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) :
+  let tableau := constructSatisfyingTableau cnf solution
+  tableau.complexity = (tableau.witness_paths.map toNat).sum :=
+by
+  -- The proof is by definition.
+  intro tableau
+  simp [SatisfyingTableau.complexity]
 
 
 /--
-A language `L1` is **polynomially reducible** to `L2` in the EGPT framework if there
-exists a polynomial-time computable function `f` that transforms any instance `w1`
-of `L1` into an instance `f(w1)` of `L2`, such that `w1` is a "yes" instance for `L1`
-if and only if `f(w1)` is a "yes" instance for `L2`.
+**The Definitive EGPT NP Class.**
 
-This is implemented by leveraging the `IsPolynomialEGPT_Reducer` class, which operates
-on the canonical `UniversalCNF` representation of the problems. The reduction function
-`f` effectively maps one set of physical laws (one CNF) to another.
+A language `L` (a set of CNF problems) is in `NP_EGPT` if for every "yes"
+instance `cnf ∈ L`, there exists a `SatisfyingTableau` whose complexity
+is polynomially bounded by the length of the encoded problem `encodeCNF cnf`.
+
+This definition replaces abstract polynomial bounds with a concrete, physical
+measure: the total information cost of the witness paths needed to verify
+the solution.
 -/
-def PolyTimeReducible (L1 L2 : Lang) : Prop :=
-  ∃ (f : UniversalCNF → UniversalCNF),
-    IsPolynomialEGPT_Reducer f ∧
-    (∀ (ucnf : UniversalCNF),
-      -- The input `Word` for L1 corresponds to the encoding of ucnf.
-      let w1 : Word := encodeCNF ucnf.2
-      -- The output `Word` for L2 corresponds to the encoding of f(ucnf).
-      let w2 : Word := encodeCNF (f ucnf).2
-      -- The core reduction property: membership is preserved by the transformation.
-      (L1 w1 ↔ L2 w2)
-    )
+def NP_EGPT_Tableau : Set (Π k, Lang_EGPT_SAT k) :=
+{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p),
+      ∀ (k : ℕ) (input_cnf : SyntacticCNF_EGPT k),
+        (input_cnf ∈ L k) ↔ ∃ (tableau : SatisfyingTableau k),
+          -- The tableau must be for the correct CNF
+          tableau.cnf = input_cnf ∧
+          -- The tableau's complexity must be polynomially bounded by the input size
+          tableau.complexity ≤ p (encodeCNF input_cnf).length
+          -- Note: tableau.h_valid is already guaranteed by the SatisfyingTableau structure
+}
 
 /--
-**Axiom (Composition of Reducers):** If `f1` is a polynomial-time EGPT reducer
-and `f2` is also a polynomial-time EGPT reducer, then their composition `f2 ∘ f1`
-is also a polynomial-time EGPT reducer.
+**Helper Lemma: The cost to verify a single clause is bounded by `k`.**
 
-This is a standard result in computational complexity. If the complexity of `f1` is
-bounded by a polynomial `p1` and `f2` by `p2`, the complexity of the composition
-is bounded by the polynomial `p2 ∘ p1`, which is itself a polynomial.
+The "cost" is the EGPT ParticlePath to the witness literal. Its complexity is
+the literal's variable index, which is always less than `k`.
 -/
-axiom IsPolynomialEGPT_Reducer_composition {f1 f2 : UniversalCNF → UniversalCNF} :
-  IsPolynomialEGPT_Reducer f1 → IsPolynomialEGPT_Reducer f2 → IsPolynomialEGPT_Reducer (f2 ∘ f1)
+lemma cost_of_witness_le_k {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) (clause : Clause_EGPT k) (h_clause_in_cnf : clause ∈ cnf) :
+  -- The cost is the complexity of the path to the witness literal.
+  -- We define it using the `find?` operation from the tableau construction.
+  let witness_literal_opt := clause.find? (fun lit => evalLiteral lit solution.val)
+  -- The property we want to prove about this cost:
+  match witness_literal_opt with
+  | some lit => (PathToConstraint lit).val.length ≤ k
+  | none => 0 ≤ k -- This case is unreachable, so any true statement suffices.
+:= by
+  -- Let's deconstruct the `solution` into the assignment vector and the validity proof.
+  let assignment := solution.val
+  have h_valid_assignment : evalCNF cnf assignment = true := solution.property
 
-/--
-**Theorem (Transitivity of Polynomial-Time Reducibility):**
-If a language `L1` is reducible to `L2`, and `L2` is reducible to `L3`, then `L1`
-is reducible to `L3`.
--/
-theorem polyTimeReducible_trans {L1 L2 L3 : Lang} :
-  (L1 <=p L2) → (L2 <=p L3) → (L1 <=p L3) := by
-  -- 1. Unpack the two existing reductions.
-  -- The first reduction gives a function f1: L1 → L2.
-  rintros ⟨f1, h_poly1, h_equiv1⟩
-  -- The second reduction gives a function f2: L2 → L3.
-  rintros ⟨f2, h_poly2, h_equiv2⟩
+  -- Unfold the definition of `evalCNF` to use the validity proof.
+  unfold evalCNF at h_valid_assignment
+  -- `h_valid_assignment` is now `cnf.all (fun c => evalClause c assignment) = true`.
+  -- Since our `clause` is in `cnf`, it must be satisfied.
+  have h_clause_is_sat : evalClause clause assignment = true := by
+    rw [List.all_eq_true] at h_valid_assignment
+    exact h_valid_assignment clause h_clause_in_cnf
 
-  -- 2. Construct the new reduction function `f_comp` by composing f1 and f2.
-  let f_comp := f2 ∘ f1
-  use f_comp
+  -- Unfold `evalClause` to show that *some* literal in it must be true.
+  unfold evalClause at h_clause_is_sat
+  -- `h_clause_is_sat` is now `clause.any (fun lit => evalLiteral lit assignment) = true`.
 
-  -- 3. Prove that the composite function is a valid reduction.
-  constructor
-  · -- Part A: Prove that the composite function is a polynomial-time reducer.
-    -- This follows directly from our composition axiom.
-    exact IsPolynomialEGPT_Reducer_composition h_poly1 h_poly2
-  · -- Part B: Prove that the reduction preserves membership (L1 ↔ L3).
-    intro ucnf
-    -- We can chain the equivalences from the two original reductions.
-    calc
-      -- The L1-instance `w1` is in L1...
-      L1 (encodeCNF ucnf.2)
-      -- ...iff the L2-instance `w2 = f1(w1)` is in L2 (by the first reduction).
-      ↔ L2 (encodeCNF (f1 ucnf).2) := by apply h_equiv1
-      -- ...iff the L3-instance `w3 = f2(w2)` is in L3 (by the second reduction).
-      ↔ L3 (encodeCNF (f2 (f1 ucnf)).2) := by apply h_equiv2
-    -- Since f_comp = f2 ∘ f1, this completes the proof.
-
-axiom reduction_in_P {L1 L2 : Lang} : (L1 <=p L2) → L2 ∈ P → L1 ∈ P
-
-axiom reducible_in_NP {L1 L2 : Lang} : (L1 <=p L2) → L2 ∈ NP → L1 ∈ NP
-
--- We will stop here as requested. The next section would cover SAT.
-
-/-! ### Reducibility -/
-
--- We can keep the original PolyTimeReducible for now if it's too complex to replace,
--- but a concrete EGPT version would be based on EGPT-polynomial functions.
--- For now, let's keep the axiom to minimize friction.
--- Note: PequalsNP.lean uses this name, so we must provide it.
-axiom polyTimeReducible_trans {L1 L2 L3 : Lang} :
-  (L1 <=p L2) → (L2 <=p L3) → (L1 <=p L3)
-axiom reduction_in_P {L1 L2 : Lang} : (L1 <=p L2) → L2 ∈ P → L1 ∈ P
-axiom reducible_in_NP {L1 L2 : Lang} : (L1 <=p L2) → L2 ∈ NP → L1 ∈ NP
+  -- The `find?` operation will return `some` if there's a literal that evaluates to true.
+  -- We can directly work with the match expression in the goal
+  cases h_find_result : clause.find? (fun lit => evalLiteral lit assignment) with
+  | none =>
+    -- This case should be impossible - if no literal is found, but clause.any returns true
+    rw [List.any_eq_true] at h_clause_is_sat
+    obtain ⟨lit, h_mem, h_eval⟩ := h_clause_is_sat
+    -- Show contradiction: if find? returns none, then no element satisfies the predicate
+    have h_find_none := List.find?_eq_none.mp h_find_result
+    have h_not_eval := h_find_none lit h_mem
+    rw [h_eval] at h_not_eval
+    exact absurd rfl h_not_eval
+  | some witness_lit =>
+    -- This is the main case. We need to prove `(PathToConstraint witness_lit).val.length ≤ k`.
+    simp only [PathToConstraint, toNat, fromNat, List.length_replicate]
+    -- The goal simplifies to `witness_lit.particle_idx.val ≤ k`.
+    -- Since `witness_lit.particle_idx` is of type `Fin k`, its value is strictly less than k.
+    have h_lt : witness_lit.particle_idx.val < k := witness_lit.particle_idx.isLt
+    -- `a < b` implies `a ≤ b` for natural numbers.
+    exact Nat.le_of_lt h_lt
 
 
-/-! ### SAT Problem -/
 
--- `Circuit` was abstract. It's now `SyntacticCNF_EGPT`.
--- The problem is about satisfiability of the CNF.
-abbrev Circuit (k : ℕ) := EGPT.Constraints.SyntacticCNF_EGPT k
+-- Helper lemma: The complexity of the path to any literal is bounded by k
+lemma path_complexity_le_k {k : ℕ} (clause : Clause_EGPT k) (solution : Vector Bool k) :
+  (toNat (match clause.find? (fun lit => evalLiteral lit solution) with
+   | some lit => fromNat lit.particle_idx.val
+   | none => fromNat 0)) ≤ k := by
+  cases h_find : clause.find? (fun lit => evalLiteral lit solution) with
+  | none =>
+    simp only [toNat, fromNat, List.length_replicate]
+    exact Nat.zero_le k
+  | some witness_lit =>
+    simp only [toNat, fromNat, List.length_replicate]
+    exact Nat.le_of_lt witness_lit.particle_idx.isLt
 
--- `encodeCircuit` and `decodeCircuit` are now concrete.
-noncomputable def encodeCircuit {k} (c : Circuit k) : Word :=
-  EGPT.Complexity.encodeCNF c
+-- Final, clean proof of the main theorem.
+theorem tableauComplexity_upper_bound {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) :
+  (constructSatisfyingTableau cnf solution).complexity ≤ cnf.length * k :=
+by
+  -- We'll use a simple approach: bound each element and use list induction
+  have h_bound_element : ∀ clause ∈ cnf,
+    (toNat (match clause.find? (fun lit => evalLiteral lit solution.val) with
+    | some lit => fromNat lit.particle_idx.val
+    | none => fromNat 0)) ≤ k := by
+    intro clause _
+    exact path_complexity_le_k clause solution.val
 
-noncomputable def decodeCircuit (w : Word) : Option (Σ k, Circuit k) :=
-  let n := (equivParticlePathToNat.toFun ⟨w, by simp [PathCompress_AllTrue, w]⟩) -- Simplified proof
-  Encodable.decode n
+  -- Use induction on cnf to prove the sum bound
+  unfold constructSatisfyingTableau SatisfyingTableau.complexity
+  simp [PathToConstraint, List.map_map, Function.comp]
 
--- `evalCircuit` is now `evalCNF`.
-def evalCircuit {k} (c : Circuit k) (assignment : Vector Bool k) : Bool :=
-  EGPT.Constraints.evalCNF c assignment
+  induction cnf with
+  | nil => simp
+  | cons head tail ih =>
+    simp [List.map_cons, List.sum_cons, List.length_cons]
+    have h_head : (toNat (match head.find? (fun lit => evalLiteral lit solution.val) with
+      | some lit => fromNat lit.particle_idx.val
+      | none => fromNat 0)) ≤ k := path_complexity_le_k head solution.val
 
--- The SAT_problem is a language over `Word`. A word `w` is in the language
--- if it decodes to a satisfiable circuit.
-def SAT_problem : Lang := fun w =>
-  match decodeCircuit w with
-  | none => false -- Invalid encoding is not in the language.
-  | some ⟨k, cnf⟩ => ∃ (assignment : Vector Bool k), evalCircuit cnf assignment = true
+    -- For the inductive step
+    have h_tail : (tail.map (toNat ∘ fun clause =>
+      match clause.find? (fun lit => evalLiteral lit solution.val) with
+      | some lit => fromNat lit.particle_idx.val
+      | none => fromNat 0)).sum ≤ tail.length * k := by
+      -- First, we need to show that our solution works for the tail
+      have h_tail_sat : evalCNF tail solution.val = true := by
+        have h_full_sat := solution.property
+        unfold evalCNF at h_full_sat ⊢
+        -- Use the fact that if (a && b) = true, then b = true
+        rw [List.all_cons] at h_full_sat
+        simp only [Bool.and_eq_true] at h_full_sat
+        exact h_full_sat.2
 
--- We prove that this definition of SAT is NP-Complete.
-def NPComplete (L : Lang) : Prop :=
-  L ∈ NP ∧ ∀ L' ∈ NP, L' <=p L
+      -- Create a solution specifically for the tail
+      let tail_solution : { v : Vector Bool k // evalCNF tail v = true } := ⟨solution.val, h_tail_sat⟩
 
--- The EGPT_CookLevin_Theorem proves L_SAT is NP-complete. We need to bridge this.
--- The core idea is that any NP problem can be reduced to checking satisfiability
--- of the CNF encoding of its verifier. This is the essence of the classical proof.
--- We can axiomatically state this for our aliased `SAT_problem`.
-axiom CookLevin : NPComplete SAT_problem
+      -- Apply the inductive hypothesis
+      apply ih tail_solution
 
+      -- Prove that each clause in tail satisfies the bound
+      intro clause h_mem_tail
+      exact path_complexity_le_k clause solution.val
 
-/-! ### Entropy and Physics Problems -/
-
--- The abstract `ShannonEntropyProblem` is now a concrete problem about the
--- information content of a distribution.
--- We can define it as the decision problem: "Given a physical system configuration `w`,
--- is its Shannon entropy greater than a threshold `t`?"
--- This is precisely `PhysicsShannonEntropyDecisionProblem` from `Basic.lean`.
-
--- We need to define the encoding/decoding functions first.
--- A `PhysicsSystemConfig` from `PhysicsDist.lean` contains all necessary info.
-abbrev PhysicalSystemDesc := PhysicsSystemConfig
-
--- Encoding can be defined using the EGPT number bijections.
--- A full encoding is complex, so we can keep this abstract for the alias.
-axiom encodeConfigThreshold (config : PhysicsSystemConfig) (t : Real) : Word
-axiom decodeConfigThreshold (w : Word) : Option (PhysicsSystemConfig × Real)
-
--- This is the concrete language for the Shannon entropy problem.
-noncomputable def ShannonEntropyProblem : Lang := fun w =>
-  match decodeConfigThreshold w with
-  | none => false
-  | some (config, t) => (generalized_shannon_entropy_for_config config) / Real.log 2 ≥ t
-
--- This axiom is now a THEOREM in EGPT.
--- `RECT` (`rect_program_for_dist`) shows that the information content (entropy)
--- defines a program tape whose length is `ceil(H)`. Checking this is P-time.
-theorem ShannonCodingTheorem_P_axiom : ShannonEntropyProblem ∈ P :=
-  sorry -- Proof requires formalizing a P-time machine for the decision problem.
-        -- This is the main remaining axiomatic gap. For now, we keep it as an axiom
-        -- to match the structure of PequalsNP.lean.
-
--- This was `PhysicsShannonEntropyDecisionProblem_reduces_to_ShannonEntropyProblem`.
--- In our aliased view, they are essentially the same problem, so the reduction is trivial.
-theorem Physics_reduces_to_Shannon :
-  ShannonEntropyProblem <=p ShannonEntropyProblem := by
-  -- A trivial reduction where the function f is the identity.
-  sorry -- Placeholder for a formal reduction proof.
-
-/-! ### The Final P vs NP Axiom -/
-
--- This axiom remains, as it's a standard hypothesis in complexity theory proofs.
-axiom P_and_NPComplete_implies_P_eq_NP (L : Lang) :
-  L ∈ P → NPComplete L → P = NP
-
-end EGPT.Complexity.Alias
+    linarith [h_head, h_tail]
