@@ -34,6 +34,43 @@ open EGPT EGPT.Complexity EGPT.NumberTheory.Core
 universe u
 
 
+/-- A PathProgram is defined by an initial state and a tape of instructions
+    that drives its evolution. -/
+structure PathProgram where
+  current_state : ℤ
+  tape : ComputerTape
+
+-- Helper to create a new program at a starting position.
+def mkPathProgram (initial_pos : Int) : PathProgram :=
+  { tape := [], current_state := initial_pos }
+
+
+-- ADD THE NEW HELPER FUNCTION HERE
+namespace PathProgram
+/--
+Defines the computational complexity of a `PathProgram` in this model.
+It is defined as the length of its input `ComputerTape`, representing the
+number of i.i.d. binary choices processed.
+-/
+def complexity (prog : PathProgram) : ℕ :=
+  prog.tape.length
+/--
+**Updates the tape of a PathProgram, returning a new program.**
+
+This function takes an existing program `prog` and a new `ComputerTape`. It produces
+a new `PathProgram` that has the same initial state as the original but uses the
+new tape as its instructions.
+
+This is a key helper for defining computations. It allows us to treat a `PathProgram`
+as a reusable "machine" and `update_tape` as the mechanism for loading a new
+input tape into that machine before running it.
+-/
+def update_tape (prog : PathProgram) (new_tape : ComputerTape) : PathProgram :=
+  { current_state := prog.current_state,
+    tape := new_tape }
+
+end PathProgram
+
 
 /-!
 ==================================================================

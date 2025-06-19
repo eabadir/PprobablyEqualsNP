@@ -501,3 +501,38 @@ noncomputable def extractProbabilityDistribution {k : ℕ} (problem : Constraine
 /-!
 # END FROM SCRATCH
 -/
+
+lemma encodeLiteral_nonempty {k : ℕ} (l : Literal_EGPT k) : 0 < (encodeLiteral l).length := by
+  unfold encodeLiteral
+  simp [encodeNat, List.length_append, List.length_cons, List.length_replicate]
+
+-- Helper lemma for proving properties of foldl with append
+lemma foldl_append_flatten {β} (init : List β) (l : List (List β)) :
+  List.foldl List.append init l = List.append init (List.flatten l) := by
+  induction l generalizing init with
+  | nil => simp [List.foldl, List.flatten, List.append_nil]
+  | cons h t ih =>
+    simp only [List.foldl, List.flatten]
+    rw [ih (List.append init h)]
+    simp [List.append_assoc]
+
+-- Helper lemma to relate foldl with append to flatten and map
+lemma foldl_append_flatten_map {α β} (g : α → List β) (c : List α) :
+  List.foldl (fun acc l => List.append acc (g l)) [] c = List.flatten (c.map g) := by
+  induction c with
+  | nil => simp [List.foldl, List.map, List.flatten]
+  | cons head tail ih =>
+    simp [List.foldl, List.map, List.flatten, ih]
+
+lemma length_encodeClause_eq_sum_of_lengths {k : ℕ} (c : Clause_EGPT k) :
+  (encodeClause c).length = List.sum (c.map (fun l => (encodeLiteral l).length + 1)) := by
+  let g : Literal_EGPT k → List Bool := fun l => List.append (encodeLiteral l) [false]
+  have h_eq_join_map : encodeClause c = List.flatten (c.map g) := by
+    unfold encodeClause
+    exact foldl_append_flatten_map g c
+  rw [h_eq_join_map]
+  rw [List.length_flatten]
+  simp only [List.map_map]
+  congr 1
+  ext l
+  simp [g, Function.comp, List.length_append, List.length_cons, List.length_nil]

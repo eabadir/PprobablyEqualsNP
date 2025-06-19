@@ -18,57 +18,6 @@ open EGPT.NumberTheory.Core EGPT.NumberTheory.Filter EGPT.Constraints
 
 
 
-/-- A PathProgram is defined by an initial state and a tape of instructions
-    that drives its evolution. -/
-structure PathProgram where
-  current_state : ℤ
-  tape : ComputerTape
-
--- Helper to create a new program at a starting position.
-def mkPathProgram (initial_pos : Int) : PathProgram :=
-  { tape := [], current_state := initial_pos }
-
-
--- ADD THE NEW HELPER FUNCTION HERE
-namespace PathProgram
-
-/--
-**Updates the tape of a PathProgram, returning a new program.**
-
-This function takes an existing program `prog` and a new `ComputerTape`. It produces
-a new `PathProgram` that has the same initial state as the original but uses the
-new tape as its instructions.
-
-This is a key helper for defining computations. It allows us to treat a `PathProgram`
-as a reusable "machine" and `update_tape` as the mechanism for loading a new
-input tape into that machine before running it.
--/
-def update_tape (prog : PathProgram) (new_tape : ComputerTape) : PathProgram :=
-  { current_state := prog.current_state,
-    tape := new_tape }
-
-end PathProgram
-/--
-A `SATSystemState` is a distribution of particles into a finite number of
-positions. It is represented by a `Multiset` over `Fin constrained_position`, where
-`constrained_position` is the number of "boxes". The cardinality of the multiset is
-the number of particles ("balls").
--/
-abbrev SATSystemState (constrained_position : ℕ) := Multiset (Fin constrained_position)
-
-/--
-A `ClauseConstraint` is a rule that a `SATSystemState` must satisfy. It is a
-predicate on the distribution of particles.
-This is the EGPT equivalent of a single clause in a CNF formula.
--/
-abbrev ClauseConstraint (constrained_position : ℕ) := SATSystemState constrained_position → Bool
-
-/--
-A `CNF_Formula` is a list of `ClauseConstraint`s. A `SATSystemState` is
-satisfying if and only if it satisfies every constraint in the list.
--/
-abbrev CNF_Formula (constrained_position : ℕ) := List (ClauseConstraint constrained_position)
-
 /-!
 ### Section 2: The EGPT-SAT Problem
 
@@ -93,28 +42,6 @@ which is encodable as a ParticlePath.
 -/
 abbrev EGPT_SAT_Input (k : ℕ) := SyntacticCNF_EGPT k
 
-/--
-A certificate for a SAT problem is a proposed satisfying assignment.
--/
-abbrev Certificate (k : ℕ) := Vector Bool k
-
-/--
-A DMachine (Deterministic Verifier) for SAT is defined by its action:
-it evaluates a CNF formula against a certificate.
--/
-def DMachine_SAT_verify {k : ℕ} (input : EGPT_SAT_Input k) (cert : Certificate k) : Bool :=
-  evalCNF input cert
-
-/--
-An NDMachine (Non-Deterministic Solver) is the physical system itself.
-It is defined by the laws (constraints) it operates under.
-Its `solve` method is the concrete `ndm_run_solver`.
--/
-structure NDMachine_SAT (k : ℕ) where
-  -- The physical laws of the system.
-  constraints : EGPT_SAT_Input k
-  -- The initial state of the k particles/variables (e.g., all false, with fair bias).
-  initial_states : Vector ParticleState_SAT k
 
 
 -- The full history of a single particle for `t` steps.
@@ -122,14 +49,6 @@ abbrev ParticleHistory := ComputerTape -- List Bool
 
 -- The history of the entire n-particle system.
 abbrev SystemHistory (n : ℕ) := Vector ParticleHistory n
-/--
-Converts a `SystemHistory` (a set of parallel tapes) into a single,
-serial `PathProgram` by concatenating all tapes. This represents the
-total computational work of the simulation.
--/
-def prog_of_history {n : ℕ} (hist : SystemHistory n) : PathProgram :=
-  { current_state := 0, tape := hist.toList.flatMap id }
-
 
 /--
 `advance_state` computes the next system state by flipping a biased coin for each particle.
@@ -165,60 +84,9 @@ def RejectionFilter.of_satisfying_example {k : ℕ} (cnf : SyntacticCNF_EGPT k) 
       }⟩
   }
 
-/--
-**The Revised Solver:** `ndm_run_solver` now returns an `Option (RejectionFilter k)`.
-A `some filter` result means a solution was found, and that solution is now
-packaged inside the filter itself as the proof of `is_satisfiable`.
--/
-noncomputable def ndm_run_solver {k : ℕ} (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (RejectionFilter k) :=
-  let rec loop (t : ℕ) (current_states : Vector ParticleState_SAT k) : Option (RejectionFilter k) :=
-    if t >= time_limit then
-      none -- Timeout
-    else
-      -- 1. Advance the state
-      let next_particle_states := advance_state current_states (seed + t)
-      let next_system_state := get_system_state_vector next_particle_states
-
-      -- 2. Check the constraints
-      if h_eval : evalCNF machine.constraints next_system_state then
-        -- **Success!** We found a satisfying assignment.
-        -- Use it to construct and return the full RejectionFilter.
-        some (RejectionFilter.of_satisfying_example machine.constraints next_system_state h_eval)
-      else
-        -- Keep searching
-        loop (t + 1) next_particle_states
-    termination_by time_limit - t
-
-  loop 0 machine.initial_states
-
-/--
-The `solve` function IS the ndm_run_solver. This becomes the primary
-definition of non-deterministic solving in EGPT.
--/
-noncomputable def NDMachine_SAT.solve (machine : NDMachine_SAT k) (time_limit : ℕ) (seed : ℕ) : Option (RejectionFilter k) :=
-  ndm_run_solver machine time_limit seed
-
-/--
-Axiom: Represents the deterministic evaluation of the program.
-Given a program (initial state + tape), it outputs the final state.
-The specific function `eval` is not defined here, only its existence and type.
--/
-def PathProgram.eval (prog : PathProgram) := calcParticlePosition prog.current_state prog.tape
-
-/--
-Defines the computational complexity of a `PathProgram` in this model.
-It is defined as the length of its input `ComputerTape`, representing the
-number of i.i.d. binary choices processed.
--/
-def PathProgram.complexity (prog : PathProgram) : ℕ :=
-  prog.tape.length
-
 
 -- A ProgramTape is the fundamental data structure for a path/program.
 abbrev ProgramTape := List Bool
-
-
-open EGPT.NumberTheory.Core
 
 
 /--
@@ -258,29 +126,6 @@ structure DMachine where
 
 
 
-
-/--
-A predicate asserting that a DMachine runs in polynomial time.
-`complexity_of` is a function that measures the runtime.
-The runtime must be polynomial in the size of the certificate's tape
-and the numerical value of the input.
--/
-def RunsInPolyTime (complexity_of : PathProgram → EGPT_Input → ℕ) : Prop :=
-  ∃ (c k : ℕ), ∀ (cert : PathProgram) (input : EGPT_Input),
-    complexity_of cert input ≤ c * (cert.complexity + input)^k + c
-
-/-!
-### The Non-Deterministic Generator and NP
--/
-
-/--
-This predicate formalizes what it means for a program to be a valid physical
-path. It is true if the program's tape satisfies all constraints at every
-intermediate step of its creation (from length 1 to its final length).
--/
-def CanNDMachineProduce (constraints : List Constraint) (prog : PathProgram) : Prop :=
-  ∀ (t : ℕ) (_ht : 0 < t ∧ t ≤ prog.complexity),
-    (constraints.all (fun c => c.checker t (prog.tape.take t)))
 
 
 /-!
@@ -344,33 +189,6 @@ providing an interpreter that gives this syntax its semantic meaning within our 
 -- A language is a set of satisfiable CNF formulas.
 abbrev Lang_EGPT_SAT (k : ℕ) := Set (EGPT_SAT_Input k)
 
-/--
-The class NP_EGPT: Problems for which a "yes" instance has a
-polynomial-time verifiable certificate.
--/
-def NP_EGPT : Set (Π k, Lang_EGPT_SAT k) :=
-{ L | ∃ (poly_bound : ParticlePath → ParticlePath) (_h_poly : IsPolynomialEGPT poly_bound),
-      ∀ (k : ℕ) (input : EGPT_SAT_Input k),
-        (input ∈ L k) ↔ ∃ (cert : Certificate k),
-          -- The verifier is our DMachine. Its runtime is poly in the size of the input + cert.
-          -- We just need to assert the certificate itself is of poly size.
-          cert.size ≤ (equivParticlePathToNat (poly_bound (equivSyntacticCNF_to_ParticlePath input))) ∧
-          DMachine_SAT_verify input cert = true
-}
-
-/--
-The class P_EGPT: Problems for which the NDMachine (physical reality)
-finds a solution in polynomial time.
--/
-def P_EGPT : Set (Π k, Lang_EGPT_SAT k) :=
-{ L | ∃ (machine_builder : ∀ k, EGPT_SAT_Input k → NDMachine_SAT k)
-         (poly_bound : ParticlePath → ParticlePath) (_h_poly : IsPolynomialEGPT poly_bound),
-      ∀ (k : ℕ) (input : EGPT_SAT_Input k),
-        (input ∈ L k) ↔ ∃ (seed : ℕ), -- There exists a lucky path
-          let machine := machine_builder k input
-          let time_limit := equivParticlePathToNat (poly_bound (equivSyntacticCNF_to_ParticlePath input))
-          machine.solve time_limit seed ≠ none
-}
 
 
 -- The core idea is to represent numbers in unary using `true`s
@@ -392,7 +210,7 @@ def encodeClause {k : ℕ} (c : Clause_EGPT k) : ComputerTape :=
 **The Universal CNF Encoder.**
 
 Encodes a `SyntacticCNF_EGPT k` into a single `ComputerTape`.
-The format is: `unary(k) ++ [F,F] ++ encoded_clauses`.
+The format is: List.append to get `unary(k) ++ [F,F] ++ encoded_clauses`.
 A double `false` separates `k` from the body, and clauses are also
 separated by a double `false`.
 -/
@@ -532,20 +350,6 @@ physical framework.
 def IsPolynomialNat (p : ℕ → ℕ) : Prop :=
   ∃ (c k_exp : ℕ), ∀ n, p n ≤ c * n^k_exp + c
 
-/--
-The class NP_EGPT (Revised): Problems for which a "yes" instance has a
-certificate whose size is polynomially bounded by the *concrete encoding length*
-of the input instance.
--/
-def NP_EGPT_Concrete : Set (Π k, Lang_EGPT_SAT k) :=
-{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p), -- A standard polynomial on Nats
-      ∀ (k : ℕ) (input : SyntacticCNF_EGPT k),
-        (input ∈ L k) ↔ ∃ (cert : Certificate k),
-          -- The size of the certificate (k) is bounded by a polynomial
-          -- of the concrete length of the encoded input.
-          k ≤ p (encodeCNF input).length ∧
-          DMachine_SAT_verify input cert = true
-}
 
 
 
@@ -565,52 +369,54 @@ def L_SAT (k : ℕ) : Lang_EGPT_SAT k :=
 
 -- This should go in a central complexity file, like EGPT/Complexity/Core.lean
 
+-- In EGPT/Complexity/PPNP.lean or a dedicated complexity definitions file
+
 /--
-A function `f` that transforms one CNF problem into another is **polynomial in EGPT**
-if there exists a polynomial-time algorithm that can compute the transformation
-on their concrete `ComputerTape` encodings.
+**A Polynomial-Time EGPT Reducer.**
+
+This class defines what it means for a function `f`, which transforms one
+CNF problem into another, to be "polynomial-time" within the EGPT framework.
+
+The EGPT definition of efficiency is based on information content, which is
+measured by the length of the `ComputerTape` that encodes a problem. A reduction
+`f` is considered efficient (polynomial-time) if the length of its output tape
+is bounded by a polynomial function of the length of its input tape.
+
+This definition avoids abstract Turing Machines and instead relies on the
+concrete, physical measure of program size.
 -/
-class IsPolynomialEGPT_CNF_Reducer (f : UniversalCNF → UniversalCNF) : Prop where
-  poly_complexity : ∃ (complexity_fn : PathProgram → EGPT_Input → ℕ),
-    RunsInPolyTime complexity_fn ∧
+class IsPolynomialEGPT_Reducer (f : UniversalCNF → UniversalCNF) : Prop where
+  /-- The core property: there exists a polynomial `p` on natural numbers
+  that bounds the growth of the output tape length relative to the input
+  tape length. -/
+  is_poly : ∃ (p : ℕ → ℕ) (_hp : IsPolynomialNat p),
     ∀ (ucnf : UniversalCNF),
-      ∃ (result_tape : ComputerTape),
-        result_tape = encodeCNF (f ucnf).2 ∧
-        result_tape.length ≤ complexity_fn (mkPathProgram 0) (encodeCNF ucnf.2).length
--- Note: The polynomial-time property ensures the transformation can be computed efficiently
--- The result_tape represents the encoded output of applying f to the input CNF
-
+      (encodeCNF (f ucnf).2).length ≤ p (encodeCNF ucnf.2).length
 
 /--
-Theorem: `L_SAT` is in `NP_EGPT` (Concrete Version).
+**Instance for the Identity Reducer.**
 
-**Proof:** We use our concrete encoding size theorem `encodeCNF_size_ge_k`.
-The size of the certificate is `k`. The size of the input is `(encodeCNF input).length`.
-We proved `k ≤ (encodeCNF input).length`. Therefore, `k` is bounded by the
-identity function `p(n) = n`, which is a polynomial.
+The identity function (`id`) is a trivial example of a polynomial-time reducer.
+This instance serves as a sanity check, demonstrating that the class is
+well-defined. The output length is identical to the input length, which is
+bounded by the simple polynomial `p(n) = n`.
 -/
-theorem L_SAT_in_NP_EGPT_Concrete : (L_SAT : Π k, Lang_EGPT_SAT k) ∈ NP_EGPT_Concrete := by
-  unfold NP_EGPT_Concrete
-  use (fun n => n)
-  exact ⟨⟨1, 1, fun n => by simp [pow_one]⟩,
-    fun k input => by {
-      unfold L_SAT
-      constructor
-      · intro h_exists_a
-        rcases h_exists_a with ⟨assignment, h_eval⟩
-        use assignment
-        constructor
-        · exact encodeCNF_size_ge_k k input
-        · unfold DMachine_SAT_verify; exact h_eval
-      · intro h_exists_c
-        rcases h_exists_c with ⟨certificate, _, h_verify⟩
-        use certificate
-        unfold DMachine_SAT_verify at h_verify
-        exact h_verify
-    }⟩
-
--- This should be placed right after the definition of L_SAT.
-
+instance IsPolynomialEGPT_Reducer.id : IsPolynomialEGPT_Reducer id where
+  is_poly := by
+    -- 1. Provide the polynomial `p(n) = n` and its proof that it's polynomial.
+    use (fun n => n), ⟨1, 1, fun n => by
+      -- Goal: (fun n => n) n ≤ 1 * n^1 + 1
+      simp only [Function.id_def, pow_one, one_mul]
+      -- Goal: n ≤ n + 1
+      exact Nat.le_add_right n 1
+    ⟩
+    -- 2. Prove that the inequality holds for all `ucnf`.
+    intro ucnf
+    -- The goal is `(encodeCNF (id ucnf).2).length ≤ (encodeCNF ucnf.2).length`.
+    -- Since `id ucnf` is just `ucnf`, this is `length ≤ length`.
+    simp only [id_eq]
+    -- This is true by reflexivity of `≤`.
+    exact le_refl _
 /--
 **Destructor for `L_SAT` membership.**
 
@@ -637,80 +443,16 @@ lemma L_SAT.dest (k : ℕ) (cnf : SyntacticCNF_EGPT k) (h : cnf ∈ L_SAT k) :
 ### Final Definitions for Reducibility and NP-Completeness
 -/
 
-/--
-A function `f` that transforms one `UniversalCNF` problem into another is a
-**Polynomial-Time EGPT Reducer** if the physical process to compute it has a
-polynomially-bounded information cost (Shannon Entropy).
 
-For simplicity and to focus on the logical structure, we state this as a
-high-level property. A deeper dive would involve defining an EGPT virtual machine.
--/
-class IsPolynomialEGPT_Reducer (f : UniversalCNF → UniversalCNF) : Prop where
-  is_poly : ∃ (p : ℕ → ℕ) (_hp : IsPolynomialNat p),
-    ∀ (ucnf : UniversalCNF),
-      -- The complexity of the output encoding is polynomially bounded by the input encoding.
-      (encodeCNF (f ucnf).2).length ≤ p (encodeCNF ucnf.2).length
+-- In EGPT/Complexity/PPNP.lean
 
-/--
-A language `L` is **NP-Complete in EGPT** if it is in `NP_EGPT_Concrete` and any
-other language in `NP_EGPT_Concrete` can be reduced to it via a
-polynomial-time EGPT reducer.
--/
-structure NPComplete_EGPT (L : Π k, Lang_EGPT_SAT k) : Prop where
-  in_NP   : (L : Π k, Lang_EGPT_SAT k) ∈ NP_EGPT_Concrete
-  is_hard : ∀ (L' : Π k, Lang_EGPT_SAT k), L' ∈ NP_EGPT_Concrete →
-              ∃ (f : UniversalCNF → UniversalCNF),
-                IsPolynomialEGPT_Reducer f ∧
-                (∀ ucnf : UniversalCNF,
-                  (ucnf.2 ∈ L' ucnf.1) ↔ ((f ucnf).2 ∈ L (f ucnf).1)
-                )
+
 
 /-!
 ### The EGPT Cook-Levin Theorem: `L_SAT` is the Universal Bias
 -/
 
-/--
-**Axiom (The Universal Bias Compiler):**
-Any verifiable bias (a problem `L'` in `NP_EGPT_Concrete`) can be compiled into the
-universal language of bias (`L_SAT`). This compilation function `f` is a
-polynomial-time EGPT reducer.
 
-This is the EGPT equivalent of the Cook-Levin theorem's core argument. It posits
-that CNF is a universal language for describing verifiable computational constraints.
--/
-axiom universal_bias_compiler :
-  ∀ (L' : Π k, Lang_EGPT_SAT k), L' ∈ NP_EGPT_Concrete →
-    ∃ (f : UniversalCNF → UniversalCNF),
-      IsPolynomialEGPT_Reducer f ∧
-      (∀ ucnf, (ucnf.2 ∈ L' ucnf.1) ↔ ((f ucnf).2 ∈ L_SAT (f ucnf).1))
-
-/--
-**Theorem: `L_SAT` is NP-Hard.**
-
-This follows directly from the `universal_bias_compiler` axiom, which states
-that `L_SAT` can serve as the target for a reduction from any NP problem.
--/
-theorem L_SAT_is_NP_Hard :
-  ∀ (L' : Π k, Lang_EGPT_SAT k), L' ∈ NP_EGPT_Concrete →
-    ∃ (f : UniversalCNF → UniversalCNF),
-      IsPolynomialEGPT_Reducer f ∧
-      (∀ ucnf, (ucnf.2 ∈ L' ucnf.1) ↔ ((f ucnf).2 ∈ L_SAT (f ucnf).1)) :=
-by
-  -- The proof is a direct application of the axiom.
-  intro L' hL'
-  exact universal_bias_compiler L' hL'
-
-/--
-**Main Theorem: `L_SAT` is NP-Complete in EGPT.**
-
-This theorem formalizes the idea that `L_SAT` is the universal problem for
-describing all possible verifiable physical biases.
--/
-theorem L_SAT_is_NPComplete : NPComplete_EGPT L_SAT :=
-{
-  in_NP   := L_SAT_in_NP_EGPT_Concrete,
-  is_hard := L_SAT_is_NP_Hard
-}
 
 
 /--
@@ -1119,6 +861,26 @@ def NP_EGPT_Tableau : Set (Π k, Lang_EGPT_SAT k) :=
           -- Note: tableau.h_valid is already guaranteed by the SatisfyingTableau structure
 }
 
+/--
+**Predicate for NP-Completeness in EGPT.**
+
+A language `L` is NP-Complete if it satisfies two conditions:
+1.  `L` is in the class `NP_EGPT_Tableau`.
+2.  `L` is NP-hard, meaning any other language `L'` in `NP_EGPT_Tableau` can be
+    reduced to `L` via a polynomial-time EGPT reducer.
+
+This definition replaces the previous `structure` to avoid type-inference issues
+and provide a more direct way of stating this property.
+-/
+def IsNPComplete_EGPT (L : Π k, Lang_EGPT_SAT k) : Prop :=
+  -- Condition 1: The language is in NP.
+  (L ∈ NP_EGPT_Tableau) ∧
+  -- Condition 2: The language is NP-hard.
+  (∀ (L' : Π k, Lang_EGPT_SAT k), L' ∈ NP_EGPT_Tableau →
+    ∃ (f : UniversalCNF → UniversalCNF),
+      IsPolynomialEGPT_Reducer f ∧
+      (∀ ucnf : UniversalCNF,
+        (ucnf.2 ∈ L' ucnf.1) ↔ ((f ucnf).2 ∈ L (f ucnf).1)))
 /--
 **Helper Lemma: The cost to verify a single clause is bounded by `k`.**
 
