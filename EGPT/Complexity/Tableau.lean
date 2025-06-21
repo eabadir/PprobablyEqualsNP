@@ -6,7 +6,21 @@ import EGPT.NumberTheory.Core -- For ParticlePath, fromNat, toNat
 
 open EGPT EGPT.Complexity EGPT.NumberTheory.Core EGPT.Constraints
 
+/--
+**The Unified EGPT NP Class (`NP_EGPT_Canonical`)**
 
+A language `L` over canonical problems is in NP if, for every "yes" instance,
+there exists a `SatisfyingTableau` whose complexity (the physical information
+cost of its proof) is polynomially bounded by the information content of the
+problem's encoding.
+-/
+def NP_EGPT_CanonicalOld : Set (Π k, Set (CanonicalCNF k)) :=
+{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p),
+      ∀ (k : ℕ) (input_ccnf : CanonicalCNF k),
+        (input_ccnf ∈ L k) ↔ ∃ (tableau : SatisfyingTableau k),
+          tableau.cnf = input_ccnf.val ∧
+          tableau.complexity ≤ p (encodeCNF input_ccnf.val).length
+}
 /-
 This theorem proves that the language of all satisfiable CNF formulas meets the
 EGPT definition of an NP problem. The certificate is a `SatisfyingTableau`, and
@@ -177,21 +191,7 @@ def L_SAT_Canonical (k : ℕ) : Set (CanonicalCNF k) :=
 ### Section 2: The Unified NP Class
 -/
 
-/--
-**The Unified EGPT NP Class (`NP_EGPT_Canonical`)**
 
-A language `L` over canonical problems is in NP if, for every "yes" instance,
-there exists a `SatisfyingTableau` whose complexity (the physical information
-cost of its proof) is polynomially bounded by the information content of the
-problem's encoding.
--/
-def NP_EGPT_CanonicalOld : Set (Π k, Set (CanonicalCNF k)) :=
-{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p),
-      ∀ (k : ℕ) (input_ccnf : CanonicalCNF k),
-        (input_ccnf ∈ L k) ↔ ∃ (tableau : SatisfyingTableau k),
-          tableau.cnf = input_ccnf.val ∧
-          tableau.complexity ≤ p (encodeCNF input_ccnf.val).length
-}
 
 /--
 The universal polynomial verifier for the EGPT NP class.

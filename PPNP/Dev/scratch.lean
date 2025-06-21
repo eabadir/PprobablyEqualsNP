@@ -1,538 +1,748 @@
-import Mathlib.Data.Finset.Basic
-import EGPT.Core
-import EGPT.Complexity.Core
-import EGPT.Complexity.PPNP
-import EGPT.Entropy.Common
-import EGPT.Physics.PhysicsDist
-import EGPT.Constraints -- Add this import
-import EGPT.NumberTheory.Core -- Add this import
-import EGPT.NumberTheory.Filter -- Add this for RejectionFilter
-import Mathlib.Data.List.Basic -- Keep this import
+import Mathlib.Data.Vector.Basic
+import Mathlib.Data.Fin.Basic
+import Mathlib.Logic.Encodable.Basic
+import Mathlib.Logic.Denumerable
+import EGPT.NumberTheory.Core -- For ParticlePath and its equivalences
+-- -- import Mathlib.Logic.Denumerable
+namespace EGPT.Constraints
 
-
-open EGPT Finset
-open EGPT.Complexity
-open EGPT.Entropy.Common
-open EGPT.Physics.PhysicsDist
-open EGPT.Constraints -- Open EGPT.Constraints
-open EGPT.NumberTheory.Filter -- Open for RejectionFilter
-
-/-- # FROM SCRATCH
-Interprets a ComputerTape as a CNF formula. Each bit of the tape
-constrains the state of the computation particle at the corresponding time step.
--/
-def constraints_from_tape (tape : ComputerTape) : SyntacticCNF_EGPT 1 :=
-  -- List.map a tape of length N into N unit clauses.
-  tape.zipIdx.map (fun (instruction, t) =>
-    -- At time `t`, the `instruction` bit becomes a constraint.
-    -- Example constraint: `polarity` = `instruction`.
-    -- This creates a CNF: (x₀=tape[0]) ∧ (x₁=tape[1]) ∧ ...
-    [{ particle_idx := ⟨0, by simp⟩, polarity := instruction }]
-  )
-
-
-/--
-**Computes a Potential Next State via a Memoryless Random Walk.**
-
-This is the core state transition function of the EGPT physical model. It
-defines one step of a parallel Markov process. It is "potential" because it
-represents the raw physical evolution, before any constraints are applied.
-
-The function is memoryless: the next state candidate depends *only* on the
-`current_state` and the `seed` for randomness, not on any prior history.
-
-1.  It converts the input boolean vector (`current_state`) into a vector of
-    `ParticleState_SAT`, where each particle is assigned a fundamental, unbiased
-    physical law (a fair coin, represented by the EGPT rational `1/1`).
-2.  It calls `advance_state`, which performs `k` parallel, independent, and
-    identically distributed (IID) "coin flips" to generate the next state.
-3.  It returns the resulting boolean vector.
--/
-noncomputable def potential_next_state {k : ℕ} (current_state : Vector Bool k) (seed : ℕ) : Vector Bool k :=
-  -- 1. Create the particle state vector (value + law) from the boolean vector.
-  --    The law `fromRat 1` represents a fair 1/1 coin, the fundamental IID source.
-  let particle_states := Vector.ofFn (fun i => {
-    value := current_state.get i,
-    law   := EGPT.NumberTheory.Core.fromRat 1
-  })
-
-  -- 2. Advance the state using the memoryless `advance_state` function.
-  let next_particle_states := advance_state particle_states seed
-
-  -- 3. Extract just the boolean values for the resulting state vector.
-  get_system_state_vector next_particle_states
-
-/--
-**The EGPT Non-deterministic Machine (`NDTM_A`) Runner.**
-
-This function embodies the EGPT model of non-deterministic computation. It does
-not simulate a Turing Machine abstractly; instead, it models computation as a
-physical process: a "computation particle" attempting a random walk through a
-state space, where its path is constrained by a set of physical laws.
-
-- **The Machine's "Program":** The `constraints` (`SyntacticCNF_EGPT k`) are the
-  program. They define the physical laws of the computational universe.
-- **Non-determinism:** The `seed` provides the source of randomness for the
-  particle's walk. A different seed leads to a different computational path.
-  The problem is "accepted" if there *exists* any seed that finds a valid path.
-- **Execution:** The machine performs a random walk with rejection sampling.
-  At each time step, it generates a potential next state. If the state obeys
-  the constraints, the path is extended. If not, the step is rejected, and
-  the machine attempts a new random move from its previous state.
-
-The output is `some path` if a valid computational history of `time_limit`
-steps is found, and `none` otherwise.
--/
-noncomputable def NDTM_A_run {k : ℕ} (constraints : SyntacticCNF_EGPT k) (time_limit : ℕ) (seed : ℕ) : Option (List (Vector Bool k)) :=
-  -- === Phase 1: Initialization ===
-  -- The NDTM must start in a valid state. We find all satisfying assignments
-  -- and pick the first one as a valid starting point.
-  let satisfying_states := (Finset.univ : Finset (Vector Bool k)).filter (fun v => evalCNF constraints v)
-  let initial_state_opt := satisfying_states.toList.head?
-
-  match initial_state_opt with
-  | none =>
-    -- No state satisfies the constraints. The computational space is empty, so no path can exist.
-    none
-  | some initial_state =>
-    -- A valid starting state was found. Begin the random walk.
-
-    -- === Phase 2: The Recursive Random Walk ===
-    let rec loop (t : ℕ) (current_path : List (Vector Bool k)) (current_seed : ℕ) : Option (List (Vector Bool k)) :=
-      -- The head of the path is always the current state for the next step.
-      -- This is safe because `current_path` is initialized as `[initial_state]`.
-      let current_state := current_path.head!
-
-      -- Check for successful termination. A path of length `time_limit` has been found.
-      if t >= time_limit then
-        -- We have successfully constructed a valid path of the required length.
-        some (current_path.reverse) -- Reverse to get chronological order [start, ..., end].
-      else
-        -- Propose a non-deterministic next state using the memoryless transition function.
-        let next_candidate := potential_next_state current_state current_seed
-
-        -- Verify the candidate against the physical laws (constraints).
-        if evalCNF constraints next_candidate then
-          -- **Accept:** The state is valid. Extend the path and continue the walk from the new state.
-          let new_path := next_candidate :: current_path
-          loop (t + 1) new_path (current_seed + 1)
-        else
-          -- **Reject:** The state is invalid. The path is not extended.
-          -- Try a new random choice from the *same* `current_state`.
-          loop (t + 1) current_path (current_seed + 1)
-    termination_by time_limit - t
-
-    -- Start the execution loop from t=0 with a path containing only the valid initial state.
-    loop 0 [initial_state] seed
-
-/--
-**Creates a CNF formula that is uniquely satisfied by the given state vector `v`.**
-The formula is a conjunction of `k` unit clauses, where the `i`-th clause fixes
-the `i`-th variable to its value in `v`. For example, for `v = [true, false]`,
-the CNF is `(x₀) ∧ (¬x₁)`.
--/
-def cnf_for_specific_assignment {k : ℕ} (v : Vector Bool k) : SyntacticCNF_EGPT k :=
-  List.ofFn (fun i : Fin k =>
-    -- Each clause is a list containing a single literal.
-    [{ particle_idx := i, polarity := v.get i }]
-  )
-/--
-A `ConstrainedPathProblem` defines a complete search task within the EGPT framework.
-It specifies the constraints for the starting state, all intermediate states (the "path laws"),
-and the target state.
-
-- `initial_state_cnf`: A CNF whose satisfying assignments are the valid starting points.
-- `path_constraints`: A CNF that every state along the path (after the initial state) must satisfy.
-- `target_constraint`: A CNF that the final state of a successful path must satisfy.
--/
-structure ConstrainedPathProblem (k : ℕ) where
-  initial_state_cnf : SyntacticCNF_EGPT k
-  path_constraints  : SyntacticCNF_EGPT k
-  target_constraint : SyntacticCNF_EGPT k
-
+open NumberTheory.Core
 /-!
-### Equivalence Between ConstrainedPathProblem and SyntacticCNF_EGPT
+==================================================================
+# EGPT Constraint Syntax
 
-The core insight is that any `ConstrainedPathProblem` can be viewed as a single
-`SyntacticCNF_EGPT` formula by combining all its constraint components. This
-establishes the fundamental equivalence between path-finding problems and
-satisfiability problems within the EGPT framework.
+This file defines the canonical, syntactic data structures for representing
+physical constraints in the EGPT framework. These constraints are expressed
+as Boolean formulas in Conjunctive Normal Form (CNF).
+
+This file is the single source of truth for these definitions and is
+intended to be imported by both the NumberTheory and Complexity modules.
+==================================================================
 -/
 
 /--
-**Converts a `ConstrainedPathProblem` to an equivalent `SyntacticCNF_EGPT`.**
-
-The conversion combines all three constraint types into a single CNF formula.
-For path problems, we interpret this as: "Find assignments that could represent
-valid states in a solution path" - i.e., states that satisfy at least one of
-the constraint types (initial, path, or target).
-
-The resulting CNF is satisfied by any assignment that could be part of a valid
-solution path to the original constrained path problem.
+A `Literal_EGPT` represents a single literal (e.g., `xᵢ` or `¬xᵢ`).
+It pairs a particle/variable index with a polarity.
 -/
-def constrainedPathToCNF {k : ℕ} (problem : ConstrainedPathProblem k) : SyntacticCNF_EGPT k :=
-  -- Combine all three CNF components into one formula
-  -- The disjunction of the three constraint types means an assignment satisfies
-  -- the combined CNF if it satisfies at least one component
-  problem.initial_state_cnf ++ problem.path_constraints ++ problem.target_constraint
+structure Literal_EGPT (k : ℕ) where
+  particle_idx : Fin k
+  polarity     : Bool
 
-/--
-**Converts a `SyntacticCNF_EGPT` to an equivalent `ConstrainedPathProblem`.**
-
-This creates a trivial path problem where:
-- Initial states can be any assignment satisfying the CNF
-- Path constraints are empty (any intermediate state is allowed)
-- Target constraint is the same as the initial constraint
-
-This represents the SAT problem as a trivial path problem where any satisfying
-assignment is both a valid start and end state.
--/
-def cnfToConstrainedPath {k : ℕ} (cnf : SyntacticCNF_EGPT k) : ConstrainedPathProblem k :=
+/-- Helper equivalence for `Literal_EGPT` to a product type. -/
+def Literal_EGPT.equivProd {constrained_position : ℕ} : Literal_EGPT constrained_position ≃ (Fin constrained_position × Bool) :=
 {
-  initial_state_cnf := cnf,
-  path_constraints := [], -- Empty CNF (always satisfied)
-  target_constraint := cnf
+  toFun := fun lit => (lit.particle_idx, lit.polarity),
+  invFun := fun p => { particle_idx := p.1, polarity := p.2 },
+  left_inv := fun lit => by cases lit; simp,
+  right_inv := fun p => by cases p; simp
 }
 
-/--
-The language of solvable constrained path problems. An instance is in the language
-if there *exists* a valid path from a valid start to a valid end.
--/
-abbrev Lang_EGPT_ConstrainedPath (k : ℕ) := Set (ConstrainedPathProblem k)
+/-- A `Clause_EGPT` is a list of literals, representing their disjunction. -/
+abbrev Clause_EGPT (k : ℕ) := List (Literal_EGPT k)
 
 /--
-A deterministic verifier for a `ConstrainedPathProblem`. It takes a problem
-description and a certificate (the proposed path) and returns `true` if the
-path is a valid solution.
+A `SyntacticCNF_EGPT` is the data structure for a CNF formula, represented
+as a list of clauses. This is the concrete representation of a physical law.
 -/
-def DMachine_CP_verify {k : ℕ} (problem : ConstrainedPathProblem k) (path_cert : List (Vector Bool k)) : Bool :=
-  match path_cert with
-  | [] => false -- An empty path is not a solution.
-  | initial_state :: rest_of_path =>
-      -- 1. Check if the starting state is valid.
-      let is_start_valid := evalCNF problem.initial_state_cnf initial_state
-      -- 2. Check if every intermediate state obeys the path constraints.
-      let are_intermediate_valid := rest_of_path.all (fun state => evalCNF problem.path_constraints state)
-      -- 3. Check if the final state is a valid target.
-      let is_end_valid := evalCNF problem.target_constraint path_cert.getLast! -- Assumes non-empty
+abbrev SyntacticCNF_EGPT (k : ℕ) := List (Clause_EGPT k)
 
-      is_start_valid && are_intermediate_valid && is_end_valid -- Use boolean AND (&&)
+-- === Syntactic Interpreter ===
+
+/--
+`evalLiteral` evaluates a single syntactic literal against a variable assignment vector.
+-/
+def evalLiteral {k : ℕ} (lit : Literal_EGPT k) (assignment : Vector Bool k) : Bool :=
+  -- `xor` with `¬lit.polarity` implements the conditional negation:
+  -- - If polarity is true, ¬polarity is false. `v xor false = v`.
+  -- - If polarity is false, ¬polarity is true. `v xor true = ¬v`.
+  xor (assignment.get lit.particle_idx) (not lit.polarity)
+
+/--
+`evalClause` evaluates a syntactic clause. A clause is satisfied if any of its literals are true.
+-/
+def evalClause {k : ℕ} (clause : Clause_EGPT k) (assignment : Vector Bool k) : Bool :=
+  clause.any (fun lit => evalLiteral lit assignment)
+
+/--
+`evalCNF` evaluates a syntactic CNF formula. A formula is satisfied if all of its clauses are true.
+This function is the semantic interpreter for our constraints.
+-/
+def evalCNF {k : ℕ} (cnf : SyntacticCNF_EGPT k) (assignment : Vector Bool k) : Bool :=
+  cnf.all (fun clause => evalClause clause assignment)
+
+-- === Encodability and Equivalence to ParticlePath ===
+
+instance Literal_EGPT.encodable {k : ℕ} : Encodable (Literal_EGPT k) :=
+  Encodable.ofEquiv _ (Literal_EGPT.equivProd)
+
+
+instance Clause_EGPT.encodable {k : ℕ} : Encodable (Clause_EGPT k) :=
+    List.encodable -- Explicitly use List.encodable
+
+instance SyntacticCNF_EGPT.encodable {k : ℕ} : Encodable (SyntacticCNF_EGPT k) :=
+    List.encodable -- Explicitly use List.encodable
+
+open Function
+
+/-- A dummy literal needed to build an injection `ℕ → List (Literal_EGPT k)`.
+    We package the “`k ≠ 0`” assumption as a `Fact` so it can be found by
+    type-class resolution. -/
+instance {k : ℕ} [hk : Fact (0 < k)] : Inhabited (Literal_EGPT k) where
+  default := { particle_idx := ⟨0, hk.out⟩, polarity := false }
+
+/-- Lists of literals are infinite whenever `k ≠ 0`. -/
+instance Clause_EGPT.infinite {k : ℕ} [Fact (0 < k)] :
+    Infinite (Clause_EGPT k) := by
+  classical
+  let lit : Literal_EGPT k := default
+  have inj : Injective (fun n : ℕ ↦ List.replicate n lit) := by
+    intro m n hmn
+    simpa [List.length_replicate] using congrArg List.length hmn
+  exact Infinite.of_injective _ inj
+
+/-- `Clause_EGPT` is denumerable (countably infinite) as soon as it is infinite. -/
+instance Clause_EGPT.denumerable {k : ℕ} [Fact (0 < k)] :
+    Denumerable (Clause_EGPT k) :=
+  Denumerable.ofEncodableOfInfinite (Clause_EGPT k)
+
+/-- `SyntacticCNF_EGPT` inherits `Infinite` and `Denumerable` in the same way. -/
+instance SyntacticCNF_EGPT.infinite {k : ℕ} : -- Removed [Fact (0 < k)]
+    Infinite (SyntacticCNF_EGPT k) :=
+  -- SyntacticCNF_EGPT k is List (Clause_EGPT k).
+  -- Clause_EGPT k is List (Literal_EGPT k).
+  -- List (Literal_EGPT k) is Nonempty (it contains []). (via List.instNonempty)
+  -- Therefore, by instInfiniteListOfNonempty, List (Clause_EGPT k) is Infinite.
+  -- This should be found by typeclass inference.
+  inferInstance
+
+instance SyntacticCNF_EGPT.denumerable {k : ℕ} : -- Removed [Fact (0 < k)]
+    Denumerable (SyntacticCNF_EGPT k) :=
+  Denumerable.ofEncodableOfInfinite (SyntacticCNF_EGPT k)
+
+/--
+**The New Equivalence (Un-Axiomatized):**
+There exists a computable bijection between the syntactic representation of a
+CNF formula and the `ParticlePath` type. We state its existence via `Encodable`.
+-/
+noncomputable def equivSyntacticCNF_to_ParticlePath {k : ℕ} : SyntacticCNF_EGPT k ≃ EGPT.ParticlePath :=
+  -- We use the power of Lean's typeclass synthesis for Denumerable types.
+  -- `List`, `Fin k`, and `Bool` are all denumerable, so their product and list
+  -- combinations are also denumerable. `ParticlePath` is denumerable via its equiv to `ℕ`.
+  (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (EGPT.NumberTheory.Core.equivParticlePathToNat.symm)
+
+noncomputable def cnfToParticlePMF (full_cnf : Σ k, SyntacticCNF_EGPT k) : EGPT.NumberTheory.Core.ParticlePMF :=
+  -- 1. Encode the entire CNF structure (including k) into a single natural number.
+  let n := Encodable.encode full_cnf
+
+  -- 2. Convert the natural number to a rational using a simple construction
+  -- We can use the fact that every natural number corresponds to a rational
+  let q : ℚ := n
+
+  -- 3. Convert this rational number into its canonical EGPT representation (a ParticlePMF).
+  EGPT.NumberTheory.Core.fromRat q
+
+noncomputable def particlePMFToCnf (pmf : EGPT.NumberTheory.Core.ParticlePMF) : Σ k, SyntacticCNF_EGPT k :=
+  -- 1. Convert the ParticlePMF into its mathlib rational value.
+  let q := EGPT.NumberTheory.Core.toRat pmf
+
+  -- 2. Convert the rational back to a natural number (inverse of the injection we used)
+  -- Since we used simple coercion ℕ → ℚ, we can extract the numerator if denominator is 1
+  let n := q.num.natAbs -- This works for rationals that came from naturals
+
+  -- 3. Decode this natural number back into the full CNF structure.
+  -- The output is an Option; we can get the value because the encoding is total.
+  match Encodable.decode n with
+  | some cnf => cnf
+  | none => ⟨0, []⟩ -- Default empty CNF in case of decode failure
+
+
 
 /-!
-### Universal Problem Encoding
+### Canonical CNF and Unified Complexity
 
-The following function embodies a core tenet of the EGPT framework: that any
-computational task, no matter how complex, can be represented as a single,
-unambiguous piece of information—a single `ComputerTape`. This tape is conceptually
-equivalent to a single (potentially very large) number.
+This file formalizes the user's intuition that the "search cost" and "address
+cost" of verifying a solution should be the same. It does so by defining a
+**Canonical Form** for CNF formulas, where literals within each clause are
+sorted by their variable index. This makes the search order deterministic and
+directly related to the variable addresses.
 -/
 
 /--
-**The Universal Problem Encoder.**
-
-Encodes an entire `ConstrainedPathProblem` into a single, canonical `ComputerTape`.
-This function serializes the three distinct CNF formulas that define the problem
-into one continuous list of booleans.
-
-To ensure the encoding is unambiguous and can be uniquely parsed back into its
-three components, a special delimiter is used to separate the encoded tapes.
-
-**Encoding Format:**
-
-The final tape has the structure:
-`[ <encoded_initial_cnf> ] ++ <DELIMITER> ++ [ <encoded_path_cnf> ] ++ <DELIMITER> ++ [ <encoded_target_cnf> ]`
-
-Where:
-- Each `<encoded_..._cnf>` is generated by the `encodeCNF` function, which creates a
-  self-describing tape for a single `SyntacticCNF_EGPT`.
-- The `<DELIMITER>` is a sequence of three `false` bits `[false, false, false]`. This
-  was chosen because double `false` is already used as a separator within the
-  `encodeCNF` format, so a triple `false` provides a unique, higher-level separator.
-
-The resulting `ComputerTape` is the definitive "program tape" for this specific
-pathfinding problem. Its length serves as the input size for complexity analysis
-(e.g., in the definitions of `P_EGPT_CP` and `NP_EGPT_CP`).
+**Defines a canonical ordering for literals based on their variable index.**
+`l₁ ≤ l₂` if the index of `l₁` is less than or equal to the index of `l₂`.
 -/
-noncomputable def encode_pathfinding_problem {k : ℕ} (problem : ConstrainedPathProblem k) : ComputerTape :=
-  -- 1. Define the delimiter that will separate the three encoded CNF tapes.
-  let delimiter : ComputerTape := [false, false, false]
-
-  -- 2. Encode each of the three component CNF formulas into its own ComputerTape
-  --    using the existing `encodeCNF` utility.
-  let tape_initial := encodeCNF problem.initial_state_cnf
-  let tape_path    := encodeCNF problem.path_constraints
-  let tape_target  := encodeCNF problem.target_constraint
-
-  -- 3. Concatenate the three tapes with the delimiter in between to form the
-  --    final, unified problem tape.
-  List.append (List.append tape_initial delimiter) (List.append tape_path (List.append delimiter tape_target))
-
--- In EGPT/Complexity/Core.lean or a new file
+def literal_le {k : ℕ} (l₁ l₂ : Literal_EGPT k) : Bool :=
+  l₁.particle_idx.val ≤ l₂.particle_idx.val
 
 /--
-**The Revised Constrained Path Solver - Returns RejectionFilter.**
-
-Instead of searching for specific paths, this solver converts the
-`ConstrainedPathProblem` into a `RejectionFilter` that represents all valid
-states that could appear in solution paths. This captures the probabilistic
-structure of the solution space rather than finding individual solutions.
-
-The solver creates a filter based on the combined CNF formula that represents
-all constraints from the original path problem. The resulting `RejectionFilter`
-can then be used to generate the probability distribution over valid states.
+**Propositional version of literal ordering for use with List.Sorted.**
+`l₁ ≤ l₂` if the index of `l₁` is less than or equal to the index of `l₂`.
 -/
-noncomputable def ndm_constrained_path_solver {k : ℕ} (problem : ConstrainedPathProblem k) : Option (RejectionFilter k) :=
-  -- Convert the constrained path problem to a single CNF formula
-  let combined_cnf := constrainedPathToCNF problem
-
-  -- Check if there are any satisfying assignments
-  let satisfying_assignments := (Finset.univ : Finset (Vector Bool k)).filter (fun v => evalCNF combined_cnf v)
-
-  if h_nonempty : satisfying_assignments.Nonempty then
-    -- Create the RejectionFilter
-    let filter : RejectionFilter k := {
-      cnf := combined_cnf,
-      satisfying_assignments := satisfying_assignments,
-      is_satisfiable := h_nonempty,
-      ax_coherent := by
-        intros v h_v_in_sa
-        exact (Finset.mem_filter.mp h_v_in_sa).2
-    }
-    some filter
-  else
-    none -- No solutions exist
-
+def literal_le_prop {k : ℕ} (l₁ l₂ : Literal_EGPT k) : Prop :=
+  l₁.particle_idx.val ≤ l₂.particle_idx.val
 
 /--
-**Constructs the RejectionFilter representing the complete solution space for a
-set of physical constraints.**
-
-This function is the definitive, deterministic EGPT solver. It takes a set of
-physical laws, encoded as a `SyntacticCNF_EGPT`, and determines the complete
-set of all possible states that are consistent with those laws.
-
-Instead of simulating a non-deterministic random walk to find a single witness,
-this function performs a direct, deterministic analysis of the entire state space.
-
-- If the set of valid states (satisfying assignments) is non-empty, it
-  constructs and returns a `RejectionFilter` that encapsulates this entire
-  solution space.
-- If no state can satisfy the constraints, it returns `none`, signifying that
-  the physical system is impossible.
-
-This function represents a P-solver for an NP-complete problem. The core EGPT
-claim is that the time required for a physical, non-deterministic process to
-find a *single* solution is polynomially equivalent to the time required for
-this function to characterize the *entire* solution space.
+**Defines a canonical ordering for literals based on their variable index.**
+`literal_le_bool l₁ l₂` is true if the index of `l₁` is less than or equal to
+the index of `l₂`. We use a `Bool`-returning function as required by `mergeSort`.
 -/
-noncomputable def construct_solution_filter {k : ℕ} (constraints : SyntacticCNF_EGPT k) : Option (RejectionFilter k) :=
-  -- 1. Deterministically find ALL satisfying assignments by filtering the
-  --    entire state space (Finset.univ) against the constraint checker.
-  let satisfying_assignments := (Finset.univ : Finset (Vector Bool k)).filter (fun v => evalCNF constraints v)
+def literal_le_bool {k : ℕ} (l₁ l₂ : Literal_EGPT k) : Bool :=
+  l₁.particle_idx.val ≤ l₂.particle_idx.val
 
-  -- 2. Check if the resulting set of solutions is empty.
-  if h_nonempty : satisfying_assignments.Nonempty then
-    -- 3a. If solutions exist, package the complete solution space into a RejectionFilter.
-    --     The `is_satisfiable` proof is directly provided by `h_nonempty`.
-    let filter : RejectionFilter k := {
-      cnf := constraints,
-      satisfying_assignments := satisfying_assignments,
-      is_satisfiable := h_nonempty,
-      -- The coherence axiom is true by the definition of our filter.
-      ax_coherent := by
-        intros v h_v_in_sa
-        -- If v is in the filtered set, it must satisfy the filter's predicate.
-        exact (Finset.mem_filter.mp h_v_in_sa).2
-    }
-    some filter
-  else
-    -- 3b. If the set of solutions is empty, the system is unsolvable.
-    none
-
--- A Constrained System is defined by a single set of laws.
-abbrev ConstrainedSystem (k : ℕ) := SyntacticCNF_EGPT k
-
--- The verifier checks that EVERY state in the path obeys the laws.
-def DMachine_CS_verify {k : ℕ} (sys : ConstrainedSystem k) (path_cert : List (Vector Bool k)) : Bool :=
-  -- An empty path cannot be a valid solution certificate.
-  ¬path_cert.isEmpty ∧ path_cert.all (fun state => evalCNF sys state)
+-- Make literal_le_prop decidable
+instance {k : ℕ} : DecidableRel (@literal_le_prop k) :=
+  fun l₁ l₂ => by
+    unfold literal_le_prop
+    exact Nat.decLe l₁.particle_idx.val l₂.particle_idx.val
 
 
-theorem constrainedSystem_equiv_SAT {k : ℕ} (sys : ConstrainedSystem k) :
-  (∃ path : List (Vector Bool k), DMachine_CS_verify sys path = true) ↔
-  (∃ assignment : Vector Bool k, evalCNF sys assignment = true) :=
+-- The core idea is to represent numbers in unary using `true`s
+-- and use `false`s as delimiters.
+
+/-- Encodes a natural number `n` into a list of `n` `true`s. -/
+def encodeNat (n : ℕ) : ComputerTape :=
+  List.replicate n true
+
+/-- Encodes a single literal by encoding its index and prefixing its polarity. -/
+def encodeLiteral {k : ℕ} (l : Literal_EGPT k) : ComputerTape :=
+  l.polarity :: encodeNat l.particle_idx.val
+
+/-- Encodes a clause by joining its encoded literals with a single `false` delimiter. -/
+def encodeClause {k : ℕ} (c : Clause_EGPT k) : List Bool :=
+  c.foldl (fun acc l => List.append acc (List.append (encodeLiteral l) [false])) []
+
+/--
+**The Universal CNF Encoder.**
+
+Encodes a `SyntacticCNF_EGPT k` into a single `ComputerTape`.
+The format is: List.append to get `unary(k) ++ [F,F] ++ encoded_clauses`.
+A double `false` separates `k` from the body, and clauses are also
+separated by a double `false`.
+-/
+def encodeCNF {k : ℕ} (cnf : SyntacticCNF_EGPT k) : ComputerTape :=
+  List.append (encodeNat k) (List.append [false, false] (List.foldl List.append [] (cnf.map (fun c => List.append (encodeClause c) [false, false]))))
+
+/--
+**The Universal EGPT Bijection (Replaces the Axiom).**
+
+We now have a concrete, computable encoding `encodeCNF`. To form a full `Equiv`,
+we need its inverse `decodeCNF` and proofs. For our purposes, we don't need to
+write the complex `decodeCNF` parser. Instead, we can use the `Encodable`
+typeclass on a **universal `Sigma` type**, which guarantees a computable bijection exists.
+-/
+
+-- A Sigma type to hold a CNF formula along with its variable count `k`.
+abbrev UniversalCNF := Σ k : ℕ, SyntacticCNF_EGPT k
+
+-- This type is provably Encodable because its components are.
+instance : Encodable UniversalCNF := by infer_instance
+
+-- This type is also Denumerable (countably infinite) since its components are.
+instance : Denumerable UniversalCNF := by infer_instance
+
+/--
+**The New Provable Equivalence.**
+This defines a computable bijection from the space of all possible CNF formulas
+(over any number of variables) to the natural numbers, and thus to `ParticlePath`.
+-/
+noncomputable def equivUniversalCNF_to_ParticlePath : UniversalCNF ≃ ParticlePath :=
+  (Denumerable.eqv UniversalCNF).trans equivParticlePathToNat.symm
+
+/--
+**Theorem (Encoding Size Lower Bound):**
+The length of the `ComputerTape` generated by `encodeCNF` is always
+greater than or equal to `k`, the number of variables.
+
+This replaces the `encoding_size_ge_k` axiom with a direct proof based on our
+constructive encoding scheme.
+-/
+theorem encodeCNF_size_ge_k (k : ℕ) (cnf : SyntacticCNF_EGPT k) :
+  k ≤ (encodeCNF cnf).length :=
 by
-  -- To prove the iff (↔), we prove both directions.
-  constructor
+  -- 1. Unfold the definition of encodeCNF.
+  unfold encodeCNF
+  -- 2. Use the fact that List.length (encodeNat k) = k
+  have h_encode_nat_len : List.length (encodeNat k) = k := by
+    unfold encodeNat
+    simp [List.length_replicate]
+  -- 3. The total length is at least the length of the first component
+  calc k
+    = List.length (encodeNat k) := h_encode_nat_len.symm
+    _ ≤ (List.append (encodeNat k) _).length := by simp [List.length_append, Nat.le_add_right]
 
-  -- Part 1: Forward Direction (→)
-  -- If a valid path exists, then the CNF is satisfiable.
-  · intro h_path_exists
-    -- From the hypothesis, we get a specific path that is valid.
-    rcases h_path_exists with ⟨path, h_path_valid⟩
-
-    -- The verifier returns a Bool, so we have `DMachine_CS_verify sys path = true`
-    -- This means `decide (¬path.isEmpty ∧ path.all (fun state => evalCNF sys state)) = true`
-    simp only [DMachine_CS_verify] at h_path_valid
-
-    -- Since `decide` returns `true`, the inner proposition must be true
-    have h_inner : ¬path.isEmpty ∧ path.all (fun state => evalCNF sys state) := by
-      exact decide_eq_true_iff.mp h_path_valid
-
-    -- Extract the components
-    have h_path_nonempty : ¬path.isEmpty := h_inner.1
-    have h_all_states_valid : path.all (fun state => evalCNF sys state) := h_inner.2
-
-    -- Since the path is not empty, it must have a first element (a head).
-    have h_ne_nil : path ≠ [] := by
-      intro h_eq_nil
-      rw [h_eq_nil] at h_path_nonempty
-      simp at h_path_nonempty
-
-    cases path with
-    | nil => contradiction -- This case is impossible due to h_ne_nil
-    | cons head tail =>
-        -- We now have a specific state, `head`. We will show it is a satisfying assignment.
-        -- We need to prove `∃ assignment, evalCNF sys assignment = true`. We use `head`.
-        use head
-
-        -- The goal is to prove `evalCNF sys head = true`.
-        -- We know `(head :: tail).all (fun state => evalCNF sys state) = true`.
-        -- By the definition of `List.all`, this means the property holds for the head and for all elements in the tail.
-        simp [List.all_cons] at h_all_states_valid
-        -- `h_all_states_valid` is now `evalCNF sys head ∧ tail.all (fun state => evalCNF sys state)`.
-        -- The first part of this conjunction is exactly our goal.
-        exact h_all_states_valid.left
-
-  -- Part 2: Backward Direction (←)
-  -- If the CNF is satisfiable, then a valid path exists.
-  · intro h_assignment_exists
-    -- From the hypothesis, we get a specific assignment that satisfies the CNF.
-    rcases h_assignment_exists with ⟨assignment, h_assignment_valid⟩
-
-    -- We need to prove `∃ path, DMachine_CS_verify sys path = true`.
-    -- We can construct a trivial, single-state path using our valid assignment.
-    use [assignment]
-
-    -- The goal is to prove `DMachine_CS_verify sys [assignment] = true`.
-    -- Unfold the verifier's definition.
-    simp only [DMachine_CS_verify, List.isEmpty_cons, List.all_cons, List.all_nil, Bool.not_false]
-    -- The goal is now `true ∧ evalCNF sys assignment = true`.
-    -- Since we know `evalCNF sys assignment = true`, this simplifies to `true ∧ true = true`.
-    simp [h_assignment_valid]
-
--- Updated P_EGPT_CP definition using the new solver
-
-def P_EGPT_CP : Set (Π k, Lang_EGPT_ConstrainedPath k) :=
-{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p),
-      ∀ (k : ℕ) (problem : ConstrainedPathProblem k),
-        (problem ∈ L k) ↔
-          -- The solver succeeds in creating a RejectionFilter
-          ndm_constrained_path_solver problem ≠ none
-}
 
 /--
-The class NP_EGPT_CP: Problems for which a "yes" instance has a path certificate
-whose length is bounded by a polynomial in the size of the problem description.
+**Predicate to check if a single clause is in canonical (sorted) form.**
+A clause is canonical if it is sorted according to `literal_le_bool`.
+This uses the `List.Pairwise` predicate, which checks that the relation holds
+for all adjacent elements. For a sorted list, this is sufficient.
 -/
-def NP_EGPT_CP : Set (Π k, Lang_EGPT_ConstrainedPath k) :=
-{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p),
-      ∀ (k : ℕ) (problem : ConstrainedPathProblem k),
-        (problem ∈ L k) ↔ ∃ (path_cert : List (Vector Bool k)),
-          -- The certificate (path) must be of polynomial length.
-          path_cert.length ≤ p ((encode_pathfinding_problem problem).length) ∧
-          DMachine_CP_verify problem path_cert = true
-}
+def IsClauseCanonical {k : ℕ} (c : Clause_EGPT k) : Prop :=
+  c.Pairwise (fun l₁ l₂ => literal_le_bool l₁ l₂)
 
-
-
-
-/-!
-### Theorem: Underlying State Evolution is Memoryless (A Markov Process)
-
-This theorem formalizes the observation that the state transition function used by the
-`ndm_constrained_path_solver` is Markovian.
-
-Even though the solver carries a full path history (`current_path`), the generation
-of the *next candidate state* at each step depends **only on the most recent state**
-in that path and the current seed. It has no dependency on `s_{t-1}, s_{t-2}, ...`.
-
-The proof shows that the state generation logic inside the solver's loop is
-definitionally equal to a standalone, memoryless function (`potential_next_state`).
+/--
+**Predicate to check if an entire CNF formula is in canonical form.**
+A CNF is canonical if all of its clauses are canonical.
 -/
-theorem underlying_state_evolution_is_memoryless {k : ℕ} :
-    -- We want to prove that for any `current_state` and `current_seed` that might
-    -- appear inside the solver's loop...
-    ∀ (current_state : Vector Bool k) (current_seed : ℕ),
-      -- ...the `next_state` generated inside the loop...
-      (
-        let particle_states := Vector.ofFn (fun i => { value := current_state.get i, law := EGPT.NumberTheory.Core.fromRat 1})
-        get_system_state_vector (advance_state particle_states current_seed)
-      )
-      -- ...is equal to the output of our standalone, memoryless function.
-      = potential_next_state current_state current_seed :=
+def IsCNFCanonical {k : ℕ} (cnf : SyntacticCNF_EGPT k) : Prop :=
+  ∀ c ∈ cnf, IsClauseCanonical c
+
+/--
+**A type for CNF formulas that are proven to be in Canonical Form.**
+-/
+abbrev CanonicalCNF (k : ℕ) := { cnf : SyntacticCNF_EGPT k // IsCNFCanonical cnf }
+/--
+**A "Compiler" that converts any CNF into its unique Canonical Form.**
+This function sorts the literals within each clause using `mergeSort`,
+making the problem representation unambiguous and aligning the search order
+with the address order.
+-/
+def normalizeCNF {k : ℕ} (cnf : SyntacticCNF_EGPT k) : CanonicalCNF k :=
+  -- Create the new, sorted CNF by mapping `mergeSort` over the clauses.
+  let sorted_cnf := cnf.map (fun c => c.mergeSort literal_le_bool)
+  -- Package it with the proof that it is now canonical.
+  ⟨sorted_cnf, by
+    -- Proof: We need to show that every clause in `sorted_cnf` is canonical.
+    intro c h_c_mem
+    rw [List.mem_map] at h_c_mem
+    rcases h_c_mem with ⟨c_orig, _, h_c_eq⟩
+    -- The goal is to prove `IsClauseCanonical c`.
+    -- We know `c` is equal to `c_orig.mergeSort ...`, so we rewrite the goal.
+    rw [← h_c_eq] -- CORRECTED: Rewrite in reverse.
+    -- The goal is now `IsClauseCanonical (c_orig.mergeSort literal_le_bool)`.
+    unfold IsClauseCanonical
+    -- We must prove that `mergeSort` produces a `Pairwise` sorted list.
+    -- This is exactly what `List.sorted_mergeSort` guarantees.
+    apply List.sorted_mergeSort
+    · -- Prove transitivity for `literal_le_bool`.
+      intro l1 l2 l3 h1 h2
+      -- Unfold the definition to expose the underlying `≤` on natural numbers.
+      unfold literal_le_bool at *
+      -- Convert boolean decisions to propositions
+      have h1_prop : l1.particle_idx.val ≤ l2.particle_idx.val :=
+        of_decide_eq_true h1
+      have h2_prop : l2.particle_idx.val ≤ l3.particle_idx.val :=
+        of_decide_eq_true h2
+      -- Use transitivity and convert back to boolean
+      have h_trans : l1.particle_idx.val ≤ l3.particle_idx.val :=
+        Nat.le_trans h1_prop h2_prop
+      exact decide_eq_true_iff.mpr h_trans
+    · -- Prove totality for `literal_le_bool`.
+      intro l1 l2
+      unfold literal_le_bool
+      -- The goal is `(decide (l1.idx ≤ l2.idx) || decide (l2.idx ≤ l1.idx)) = true`.
+      -- This follows from the totality of `≤` on ℕ.
+      have h_total := Nat.le_total l1.particle_idx.val l2.particle_idx.val
+      cases h_total with
+      | inl h =>
+        simp [Bool.or_eq_true]
+        left
+        exact h
+      | inr h =>
+        simp [Bool.or_eq_true]
+        right
+        exact h
+  ⟩
+
+
+
+/--
+**Helper Lemma: `List.any` is invariant under permutations.**
+
+If two lists `l₁` and `l₂` are permutations of each other, then a predicate `p`
+holds for any element in `l₁` if and only if it holds for any element in `l₂`.
+-/
+lemma List.Perm.any_iff {α : Type} {p : α → Bool} {l₁ l₂ : List α} (h_perm : l₁.Perm l₂) :
+  l₁.any p = l₂.any p :=
 by
-  -- The proof is by definition. We introduce the variables and show both
-  -- sides of the equality are identical.
-  intro current_state current_seed
+  -- The proof is by induction on the permutation itself.
+  induction h_perm with
+  | nil => simp
+  | cons x _ ih => simp [ih]
+  | swap x y l =>
+    -- Need to prove: (y :: x :: l).any p = (x :: y :: l).any p
+    -- This expands to: (p y || (p x || l.any p)) = (p x || (p y || l.any p))
+    simp only [List.any_cons]
+    -- Use left commutativity of Bool.or: a || (b || c) = b || (a || c)
+    rw [Bool.or_left_comm]
+  | trans _ _ ih₁ ih₂ => rw [ih₁, ih₂]
 
-  -- Unfold the definition of `potential_next_state` on the right-hand side.
-  simp [potential_next_state]
-
-
-
-/-!
-### Additional Theorems for the Revised Framework
--/
 
 
 /--
-**Connection to Probability Theory**
-
-This function demonstrates how to extract a probability distribution from the
-solution structure discovered by the solver.
+**Equivalence of Evaluation:**
+Normalizing a CNF via `mergeSort` does not change its logical meaning, because
+`mergeSort` is a permutation of the original list, and `evalClause` (which uses
+`List.any`) is invariant under permutations.
 -/
-noncomputable def extractProbabilityDistribution {k : ℕ} (problem : ConstrainedPathProblem k) :
-  Option (Vector Bool k → ℚ) :=
-  match ndm_constrained_path_solver problem with
-  | none => none
-  | some filter => some (distOfRejectionFilter filter)
-
-/-!
-# END FROM SCRATCH
--/
-
-lemma encodeLiteral_nonempty {k : ℕ} (l : Literal_EGPT k) : 0 < (encodeLiteral l).length := by
-  unfold encodeLiteral
-  simp [encodeNat, List.length_append, List.length_cons, List.length_replicate]
-
--- Helper lemma for proving properties of foldl with append
-lemma foldl_append_flatten {β} (init : List β) (l : List (List β)) :
-  List.foldl List.append init l = List.append init (List.flatten l) := by
-  induction l generalizing init with
-  | nil => simp [List.foldl, List.flatten, List.append_nil]
-  | cons h t ih =>
-    simp only [List.foldl, List.flatten]
-    rw [ih (List.append init h)]
-    simp [List.append_assoc]
-
--- Helper lemma to relate foldl with append to flatten and map
-lemma foldl_append_flatten_map {α β} (g : α → List β) (c : List α) :
-  List.foldl (fun acc l => List.append acc (g l)) [] c = List.flatten (c.map g) := by
-  induction c with
-  | nil => simp [List.foldl, List.map, List.flatten]
-  | cons head tail ih =>
-    simp [List.foldl, List.map, List.flatten, ih]
-
-lemma length_encodeClause_eq_sum_of_lengths {k : ℕ} (c : Clause_EGPT k) :
-  (encodeClause c).length = List.sum (c.map (fun l => (encodeLiteral l).length + 1)) := by
-  let g : Literal_EGPT k → List Bool := fun l => List.append (encodeLiteral l) [false]
-  have h_eq_join_map : encodeClause c = List.flatten (c.map g) := by
-    unfold encodeClause
-    exact foldl_append_flatten_map g c
-  rw [h_eq_join_map]
-  rw [List.length_flatten]
-  simp only [List.map_map]
+theorem evalCNF_normalize_eq_evalCNF {k : ℕ} (cnf : SyntacticCNF_EGPT k) (assignment : Vector Bool k) :
+  evalCNF (normalizeCNF cnf).val assignment = evalCNF cnf assignment :=
+by
+  -- Unfold the definitions to get to the core of the proof.
+  unfold evalCNF normalizeCNF
+  simp only [Subtype.coe_eta]
+  -- The goal should now be about List.all over mapped list
+  -- We'll use simp to simplify List.all_map and then show function equivalence
+  simp only [List.all_map]
+  -- Goal is now showing function equivalence
   congr 1
-  ext l
-  simp [g, Function.comp, List.length_append, List.length_cons, List.length_nil]
+  ext c
+  -- Goal is: `evalClause (c.mergeSort ...) = evalClause c`.
+  unfold evalClause
+  -- The goal is now: `(c.mergeSort ...).any ... = c.any ...`.
+  -- We use the fact that `mergeSort` is a permutation (`List.mergeSort_perm`).
+  have h_perm : (c.mergeSort literal_le_bool).Perm c := List.mergeSort_perm c _
+  -- Now we apply our custom helper lemma.
+  exact List.Perm.any_iff h_perm
+
+
+
+/-!
+### Helper Lemmas for Analyzing `encodeCNF` Length
+
+The following lemmas prove properties about the syntactic structure of the
+`encodeCNF` function. They are proven using induction on the list structures
+and are essential for establishing concrete complexity bounds.
+-/
+
+/--
+Helper Lemma: The function `g(c) = encodeClause c ++ [false, false]` always
+produces a non-empty list. In fact, its length is at least 2.
+-/
+private lemma g_len_ge_two {k : ℕ} (c : Clause_EGPT k) :
+  2 ≤ (List.append (encodeClause c) [false, false]).length :=
+by
+  -- The length of `encodeClause c` is a natural number, so it is ≥ 0.
+  -- The length of `[false, false]` is 2.
+  simp [List.length_append]
+  -- The goal is `2 ≤ (encodeClause c).length + 2`.
+  -- This is true since `0 ≤ (encodeClause c).length`.
+
+
+/--
+Helper Lemma: Shows that `foldl` with `List.append` is equivalent to
+prepending an initial list to the flattened result of a map. This connects
+`foldl` to the more manageable `List.flatten`.
+-/
+private lemma foldl_append_eq_init_append_flatten {k : ℕ} (init : ComputerTape) (cnf : SyntacticCNF_EGPT k)
+  (g : Clause_EGPT k → ComputerTape) :
+  List.foldl List.append init (cnf.map g) = List.append init  (cnf.map g).flatten :=
+by
+  -- This is a standard property of foldl and flatten. We prove it by induction on the list.
+  induction cnf generalizing init with
+  | nil => simp [List.map, List.flatten, List.foldl]
+  | cons head tail ih =>
+    simp only [List.map_cons, List.foldl_cons]
+    -- Apply the induction hypothesis with the new init value
+    rw [ih]
+    -- Now we have: (List.append init (g head)).append (List.map g tail).flatten = List.append init (g head :: List.map g tail).flatten
+    -- Use the fact that (a :: l).flatten = a ++ l.flatten
+    simp [List.flatten_cons]
+    -- The goal is now: (List.append init (g head)).append (List.map g tail).flatten = List.append init (g head ++ (List.map g tail).flatten)
+    -- This follows from associativity of List.append: (a ++ b) ++ c = a ++ (b ++ c)
+    aesop
+
+
+/-!
+### Helper Lemmas for Analyzing `encodeCNF` Length
+
+The following lemmas prove properties about the syntactic structure of the
+`encodeCNF` function. They are proven using induction on the list structures
+and are essential for establishing concrete complexity bounds.
+-/
+
+/--
+**Helper Lemma:** The length of a list created by `foldl` with `List.append`
+is equal to the sum of the lengths of the initial list and all lists
+generated by mapping a function over the input list.
+
+This connects the `foldl` operation to the more algebraically manageable `List.sum`.
+-/
+private lemma length_foldl_append_map {α : Type} (init : List Bool) (l : List α) (g : α → List Bool) :
+  (List.foldl List.append init (l.map g)).length = init.length + (l.map (fun x => (g x).length)).sum :=
+by
+  -- The proof is by induction on the list `l`.
+  induction l generalizing init with
+  | nil =>
+    simp [List.map, List.foldl, List.sum]
+  | cons head tail ih =>
+    -- Goal for `head :: tail`:
+    -- `length (foldl append init (map g (h::t))) = init.length + sum (map (len ∘ g) (h::t))`
+    simp only [List.map_cons, List.foldl_cons, List.length_append, List.sum_cons]
+    -- Apply the induction hypothesis `ih` to the new initial value.
+    -- The new initial value for the recursive call is `List.append init (g head)`.
+    rw [ih (List.append init (g head))]
+    -- The goal now requires re-associating the additions.
+    -- `init.len + (g h).len + sum ... = init.len + ( (g h).len + sum ...)`
+    simp [Nat.add_assoc]
+
+/--
+**A General-Purpose Lemma for Bounding the Sum of a Mapped List.**
+
+This is a more powerful and reusable alternative to the missing `List.sum_le_sum_of_le`.
+It proves that the sum of a function `f` mapped over a list `l` is bounded by
+the length of the list times a uniform upper bound `M` on the value of `f`.
+
+**Proof by Induction:**
+- Base Case: For an empty list `[]`, the sum is 0 and the length is 0. `0 ≤ 0 * M` is true.
+- Inductive Step: For a list `h :: t`, `sum(map f (h::t)) = f(h) + sum(map f t)`.
+  By hypothesis, `f(h) ≤ M` and `sum(map f t) ≤ |t|*M`.
+  Therefore, the total sum is `≤ M + |t|*M`, which equals `(|t|+1)*M`.
+-/
+lemma sum_map_le_length_mul_bound {α : Type} (l : List α) (f : α → ℕ) (M : ℕ)
+  (h_bound : ∀ x ∈ l, f x ≤ M) : (l.map f).sum ≤ l.length * M :=
+by
+  induction l with
+  | nil =>
+    simp
+  | cons head tail ih =>
+    simp only [List.map_cons, List.sum_cons, List.length_cons]
+    -- The induction hypothesis `ih` applies to the tail of the list.
+    -- We need to prove the bound `h_bound` holds for the tail.
+    have h_bound_tail : ∀ x ∈ tail, f x ≤ M := by
+      intro x h_mem_tail
+      exact h_bound x (List.mem_cons_of_mem head h_mem_tail)
+    -- Apply the induction hypothesis.
+    specialize ih h_bound_tail
+    -- The bound `h_bound` also holds for the head.
+    have h_bound_head : f head ≤ M := h_bound head List.mem_cons_self
+    -- The goal is `f head + (tail.map f).sum ≤ (tail.length + 1) * M`.
+    -- We know `f head ≤ M` and `(tail.map f).sum ≤ tail.length * M`.
+    -- Adding these two inequalities gives the result.
+    calc
+      f head + (tail.map f).sum ≤ M + tail.length * M := Nat.add_le_add h_bound_head ih
+      _ = (1 + tail.length) * M := by ring
+      _ = (tail.length + 1) * M := by rw [Nat.add_comm]
+
+/--
+Helper Lemma: The function `g(c) = List.append (encodeClause c) [false, false]`
+always produces a list of length at least 1.
+-/
+private lemma clause_encoding_nonempty {k : ℕ} (c : Clause_EGPT k) :
+  1 ≤ (List.append (encodeClause c) [false, false]).length := by
+  -- The length of `encodeClause c` is a natural number, so it is ≥ 0.
+  -- The length of `[false, false]` is 2.
+  simp [List.length_append, encodeClause]
+
+
+/-- Helper Lemma: The encoding of a clause with separators has length ≥ 1. -/
+private lemma g_len_ge_one {k : ℕ} (c : Clause_EGPT k) :
+  1 ≤ (List.append (encodeClause c) [false, false]).length :=
+by
+  simp [List.length_append, encodeClause]
+  -- `(encodeClause c).length` is a Nat, so `0 ≤ (encodeClause c).length`.
+
+lemma add_le_of_le_right {n m k : Nat} (h : n ≤ m) : n + k ≤ m + k := by
+  exact Nat.add_le_add_right h k
+
+lemma le_add_of_le_right {m k n : Nat} (h : m ≤ k) : m ≤ k + n :=
+  h.trans (Nat.le_add_right k n)
+
+/-!
+### Final Proof for `encodeCNF_length_ge_num_clauses`
+
+This file provides a robust, `sorry`-free proof by breaking down the complex
+length calculation into algebraic components, avoiding tactical failures on
+nested expressions.
+-/
+
+/-- Helper: The encoding of a clause with separators has length at least 1. -/
+private lemma encoded_clause_sep_len_ge_one {k : ℕ} (c : Clause_EGPT k) :
+  1 ≤ (List.append (encodeClause c) [false, false]).length :=
+by
+  simp [List.length_append, encodeClause]
+
+lemma foldl_append_cons (init : List α) (h : List α) (t : List (List α)) :
+  List.foldl List.append (init.append h) t = init.append (List.foldl List.append h t) := by
+  induction t generalizing init h with
+  | nil => simp [List.foldl]
+  | cons head tail ih =>
+    simp only [List.foldl_cons]
+    rw [ih (init.append h) head]
+    simp [List.append_assoc]
+    aesop
+
+
+
+
+
+/-- Helper Lemma: The encoding of a clause with its separator has length ≥ 1. -/
+private theorem encoded_clause_with_sep_len_ge_one {k : ℕ} (c : Clause_EGPT k) :
+  1 ≤ (List.append (encodeClause c) [false, false]).length :=
+by
+  -- From the docs: `(as ++ bs).length = as.length + bs.length`
+  -- And `List.append a b` is definitionally `a ++ b`.
+  simp [List.length_append, List.length_cons, List.length_nil, Nat.add_zero]
+
+/--
+**Helper Lemma:** The length of a flattened, mapped list is the sum of the
+lengths of the generated lists. This is a core algebraic property we need.
+It is the modern replacement for `List.length_join`.
+-/
+private theorem length_flatten_map (g : α → List β) (l : List α) :
+  (l.map g).flatten.length = (l.map (fun x => (g x).length)).sum :=
+by
+  induction l with
+  | nil => simp [List.map, List.flatten, List.sum]
+  | cons h t ih =>
+    -- Goal for `h :: t`: `|(map g (h::t)).flatten| = sum (map (|g(·)|) (h::t))`
+    -- Unfold both sides using the `_cons` simp lemmas from the docs.
+    simp only [List.map_cons, List.flatten_cons, List.length_append, List.sum_cons]
+    -- The goal is now: `|g h| + |(map g t).flatten| = |g h| + sum (map |g(·)| t)`
+    -- We can apply the induction hypothesis `ih` to the `flatten` term.
+    rw [ih]
+
+/--
+**Helper Lemma:** Shows that `foldl (++) []` on a list of lists is equivalent
+to flattening the list. This is the crucial algebraic bridge.
+-/
+lemma foldl_append_nil_eq_flatten (l : List (List α)) :
+  List.foldl (· ++ ·) [] l = l.flatten :=
+by
+  induction l with
+  | nil =>
+    -- Base case: `foldl (++) [] []` is `[]`, and `[].flatten` is `[]`.
+    simp
+  | cons h t ih =>
+    -- Inductive step:
+    -- `foldl (++) [] (h::t) = foldl (++) (h) t`
+    -- `(h::t).flatten = h ++ t.flatten`
+    -- `foldl (++) h t = h ++ foldl (++) [] t` (This needs a small proof)
+    have h_fold_append : ∀ (init : List α) (l' : List (List α)),
+      List.foldl (· ++ ·) init l' = init ++ l'.flatten := by
+        intro init l'
+        induction l' generalizing init with
+        | nil => simp
+        | cons head tail ih_inner =>
+          simp only [List.foldl_cons, List.flatten_cons]
+          rw [ih_inner (init ++ head)]
+          rw [List.append_assoc]
+    rw [h_fold_append]
+    -- [] ++ (h :: t).flatten = (h :: t).flatten
+    simp
+
+/--
+**Helper Lemma:** Shows that `foldl List.append` is equivalent to `foldl (++)`.
+This bridges the gap between different append representations.
+-/
+@[simp] lemma foldl_List_append_eq_foldl_append (l : List (List α)) :
+  List.foldl List.append [] l = List.foldl (· ++ ·) [] l :=
+by
+  induction l with
+  | nil => rfl
+  | cons h t ih =>
+    simp only [List.foldl_cons]
+    -- We need to show that folding with List.append is the same as folding with ++
+    have h_equiv : ∀ (acc : List α) (rest : List (List α)),
+      List.foldl List.append acc rest = List.foldl (· ++ ·) acc rest := by
+      intro acc rest
+      induction rest generalizing acc with
+      | nil => rfl
+      | cons head tail ih_inner =>
+        simp only [List.foldl_cons]
+        -- Show that List.append = ++
+        rw [← List.append_eq]
+        rw [ih_inner]
+    exact h_equiv h t
+
+/--
+**Helper Lemma:** Direct version using `List.append` instead of `++`.
+-/
+@[simp] lemma foldl_List_append_nil_eq_flatten (l : List (List α)) :
+  List.foldl List.append [] l = l.flatten :=
+by
+  rw [foldl_List_append_eq_foldl_append, foldl_append_nil_eq_flatten]
+
+def append_clause_list_bool {k : ℕ} (c : Clause_EGPT k) (l : List Bool) : List Bool :=
+  List.append (encodeClause c) l
+
+/--
+**Helper Lemma: The length of a `foldl (++)` operation grows when a
+non-empty list is appended.**
+
+This lemma formalizes the intuition that folding in an additional non-empty
+list `h` will increase the total length of the final concatenated list.
+-/
+@[simp] lemma length_foldl_append_growth {α : Type} (h : List α) (t : List (List α)) :
+  (List.foldl (·++·) [] t).length ≤ (List.foldl (·++·) [] (h :: t)).length :=
+by
+  -- The core of the proof is to relate the two fold operations.
+  -- `foldl (++) [] (h::t)` is `foldl (++) h t`.
+  simp only [List.foldl_cons, List.nil_append]
+
+  -- We need to prove `|fold [] t| ≤ |fold h t|`.
+  -- We'll use our previous insight: `fold init l = init ++ fold [] l`.
+  have h_fold_append : ∀ (init : List α) (l' : List (List α)),
+      List.foldl (· ++ ·) init l' = init ++ l'.flatten := by
+        intro init l'
+        induction l' generalizing init with
+        | nil => simp [List.flatten]
+        | cons head tail ih_inner =>
+          simp only [List.foldl_cons, List.flatten_cons]
+          rw [ih_inner (init ++ head), List.append_assoc]
+  -- Now apply this to both sides of our goal.
+  rw [h_fold_append, h_fold_append]
+  -- The goal is now `|[] ++ t.flatten| ≤ |h ++ t.flatten|`.
+  simp only [List.nil_append, List.length_append]
+  -- The goal is `|t.flatten| ≤ |h| + |t.flatten|`.
+  -- This is true since `0 ≤ |h|`.
+  exact Nat.le_add_left _ _
+
+
+
+/-!
+### Final, Robust Proof for `encodeCNF_length_ge_num_clauses`
+
+This proof uses a clean, algebraic approach, leveraging a key identity between
+`foldl` and `flatten` to avoid the type-inference and tactical issues
+encountered in previous attempts.
+-/
+
+
+/--
+**Externalized Helper:** Defines the encoding for a single clause with its
+separator. By defining this at the top level, the dependent type `{k : ℕ}` is
+an explicit parameter, which resolves the type-inference issues that occur
+when using a local `let` binding inside a proof.
+-/
+def encode_clause_with_sep {k : ℕ} (c : Clause_EGPT k) : List Bool :=
+  List.append (encodeClause c) [false, false]
+
+
+/--
+**Theorem: The length of an encoded CNF is at least the number of its clauses.**
+-/
+theorem encodeCNF_length_ge_num_clauses {k : ℕ} (cnf : SyntacticCNF_EGPT k) :
+  cnf.length ≤ (encodeCNF cnf).length :=
+by
+  induction cnf with
+  | nil =>
+    simp [encodeCNF, encodeNat]
+  | cons head tail ih =>
+    calc
+      (head :: tail).length = tail.length + 1 := by simp [List.length]
+      _ ≤ (encodeCNF tail).length + 1 := Nat.add_le_add_right ih 1
+      _ ≤ (encodeCNF (head :: tail)).length := by
+        unfold encodeCNF
+        simp only [List.length_append, List.map_cons, List.foldl_cons]
+        -- Apply the same transformation to both sides
+        rw [foldl_List_append_nil_eq_flatten (List.map (fun c => (encodeClause c).append [false, false]) tail)]
+        -- Apply the general foldl transformation
+        have h_foldl_with_init : ∀ (init : List Bool) (l : List (List Bool)),
+          List.foldl List.append init l = init ++ l.flatten := by
+          intro init l
+          induction l generalizing init with
+          | nil => simp only [List.foldl_nil, List.flatten_nil, List.append_nil]
+          | cons h t ih =>
+            simp only [List.foldl_cons, List.flatten_cons]
+            rw [ih (List.append init  h)]
+            simp [List.append_assoc]
+        -- Apply to the right side
+        rw [h_foldl_with_init]
+        -- Simplify the append operations
+        simp [List.append_nil, List.length_append, List.flatten_cons]
+        -- The goal is now arithmetic: prove that adding the head clause increases length by at least 1
+        have h_head_nonempty : 1 ≤ ((encodeClause head).append [false, false]).length := by
+          simp [List.length_append]
+
+        linarith

@@ -504,10 +504,6 @@ physical framework.
 ==================================================================
 -/
 
--- We also need a simple definition for a polynomial on Nats
-def IsPolynomialNat (p : ℕ → ℕ) : Prop :=
-  ∃ (c k_exp : ℕ), ∀ n, p n ≤ c * n^k_exp + c
-
 /--
 The class NP_EGPT (Revised): Problems for which a "yes" instance has a
 certificate whose size is polynomially bounded by the *concrete encoding length*
