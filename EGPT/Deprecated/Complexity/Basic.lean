@@ -7,7 +7,7 @@ import EGPT.Physics.PhysicsDist -- Added
 import EGPT.Entropy.Common             -- Added
 import Std.Sat.CNF.Basic
 /- Complexity.lean -/
-namespace EGPT.Complexity.Basic
+namespace Deprecated.Complexity.Basic
 /-! DEPRECATED: This axiomatic non-constructive definition of complexity is replaced by Complexity/Core.lean
 
   Section 1: Foundational Definitions (Complexity, SAT, Entropy)

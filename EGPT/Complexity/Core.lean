@@ -147,10 +147,17 @@ instance IsPolynomialEGPT.id : IsPolynomialEGPT id where
 /--
 A predicate asserting that a complexity function is bounded by an EGPT-polynomial.
 -/
-def IsBoundedByPolynomial (complexity_of : EGPT_Input → ParticlePath) : Prop :=
+def ProgramIsBoundedByPolynomial (complexity_of : EGPT_Input → ParticlePath) : Prop :=
   ∃ (p : ParticlePath → ParticlePath), IsPolynomialEGPT p ∧
     ∀ (input : EGPT_Input), complexity_of input ≤ p (fromNat input) -- `fromNat` converts ℕ to ParticlePath
 
+
+/--
+A predicate asserting that a function `p : ℕ → ℕ` is bounded by a native
+EGPT polynomial. This is the canonical EGPT definition of a polynomial bound.
+-/
+def IsBoundedByEGPT_Polynomial (p : ℕ → ℕ) : Prop :=
+  ∃ (P : EGPT_Polynomial), ∀ n, p n ≤ toNat (P.eval (fromNat n))
 
 -- A predicate on the system's state vector. The NDMachine halts when this is true.
 abbrev TargetStatePredicate (n : ℕ) := (Vector ℤ n) → Bool
@@ -274,7 +281,6 @@ physical framework.
 
 
 
-
 /--
 **The Canonical NP-Complete Problem: `L_SAT`**
 
@@ -308,12 +314,9 @@ This definition avoids abstract Turing Machines and instead relies on the
 concrete, physical measure of program size.
 -/
 class IsPolynomialEGPT_Reducer (f : UniversalCNF → UniversalCNF) : Prop where
-  /-- The core property: there exists a polynomial `p` on natural numbers
-  that bounds the growth of the output tape length relative to the input
-  tape length. -/
-  is_poly : ∃ (p : ℕ → ℕ) (_hp : IsPolynomialNat p),
+  is_poly : ∃ (P : EGPT_Polynomial), -- The witness is now a native EGPT_Polynomial
     ∀ (ucnf : UniversalCNF),
-      (encodeCNF (f ucnf).2).length ≤ p (encodeCNF ucnf.2).length
+      (encodeCNF (f ucnf).2).length ≤ toNat (P.eval (fromNat (encodeCNF ucnf.2).length))
 
 /--
 **Instance for the Identity Reducer.**
@@ -325,20 +328,17 @@ bounded by the simple polynomial `p(n) = n`.
 -/
 instance IsPolynomialEGPT_Reducer.id : IsPolynomialEGPT_Reducer id where
   is_poly := by
-    -- 1. Provide the polynomial `p(n) = n` and its proof that it's polynomial.
-    use (fun n => n), ⟨1, 1, fun n => by
-      -- Goal: (fun n => n) n ≤ 1 * n^1 + 1
-      simp only [Function.id_def, pow_one, one_mul]
-      -- Goal: n ≤ n + 1
-      exact Nat.le_add_right n 1
-    ⟩
-    -- 2. Prove that the inequality holds for all `ucnf`.
+    -- The witness is the native identity polynomial.
+    use EGPT_Polynomial.id
     intro ucnf
-    -- The goal is `(encodeCNF (id ucnf).2).length ≤ (encodeCNF ucnf.2).length`.
-    -- Since `id ucnf` is just `ucnf`, this is `length ≤ length`.
-    simp only [id_eq]
-    -- This is true by reflexivity of `≤`.
-    exact le_refl _
+    -- The goal is: (encodeCNF (f ucnf).2).length ≤ toNat (EGPT_Polynomial.id.eval (fromNat (encodeCNF ucnf.2).length))
+    -- For f = id, (f ucnf).2 = ucnf.2
+    -- For EGPT_Polynomial.id.eval x = x
+    -- For toNat (fromNat n) = n (by left_inv)
+    simp only [id_eq, EGPT_Polynomial.eval]
+    -- Now the goal should be: (encodeCNF ucnf.2).length ≤ toNat (fromNat (encodeCNF ucnf.2).length)
+    rw [left_inv]
+    -- Now it's: (encodeCNF ucnf.2).length ≤ (encodeCNF ucnf.2).length
 /--
 **Destructor for `L_SAT` membership.**
 
@@ -684,238 +684,3 @@ direct, physical quantity.
 def PathToConstraint {k : ℕ} (l : Literal_EGPT k) : ParticlePath :=
   -- The complexity is the index of the particle/variable being constrained.
   fromNat l.particle_idx.val
-
-/--
-**The EGPT Satisfying Tableau.**
-
-This structure is the EGPT formalization of an NP certificate. It bundles:
-1.  `assignment`: The proposed solution (`Vector Bool k`).
-2.  `witness_paths`: A list of `ParticlePath`s. For each clause in the original
-    CNF, this list contains the path to the *specific literal* that was
-    satisfied by the assignment. This is the "proof of work."
-3.  `h_valid`: A proof that the assignment is indeed a valid solution.
--/
-structure SatisfyingTableau (k : ℕ) where
-  cnf : SyntacticCNF_EGPT k
-  assignment : Vector Bool k
-  witness_paths : List ParticlePath
-  h_valid : evalCNF cnf assignment = true
-
-/--
-**Measures the complexity of a Satisfying Tableau.**
-
-The complexity is not an abstract polynomial but a concrete natural number:
-the sum of the complexities (lengths) of all the witness paths. This is the
-total information cost required to specify the complete proof of satisfaction.
--/
-def SatisfyingTableau.complexity {k : ℕ} (tableau : SatisfyingTableau k) : ℕ :=
-  (tableau.witness_paths.map toNat).sum
-
-/--
-**Constructs a Satisfying Tableau from a known solution.**
-
-This is the core constructive function. Given a CNF and a proven satisfying
-assignment, it generates the canonical Tableau. It does this by iterating
-through each clause, finding the first literal that satisfies it (which is
-guaranteed to exist), and recording the `PathToConstraint` for that literal.
--/
-noncomputable def constructSatisfyingTableau {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) : SatisfyingTableau k :=
-  let assignment := solution.val
-  let h_valid := solution.property
-
-  -- For each clause, find the path to the literal that makes it true.
-  let witness_paths := cnf.map (fun clause =>
-    -- Since the assignment is valid, each clause must be satisfied.
-    -- This means `clause.any (evalLiteral · assignment)` is true.
-    -- Therefore, there MUST be a literal in the clause that evaluates to true.
-    -- We use `find?` to get the first such literal.
-    let witness_literal_opt := clause.find? (fun lit => evalLiteral lit assignment)
-    -- We know this is `some`, so we can extract the path.
-    -- If it were `none`, something is wrong with our `h_valid` premise.
-    match witness_literal_opt with
-    | some lit => PathToConstraint lit
-    | none => fromNat 0 -- Should be unreachable if h_valid is correct.
-  )
-
-  {
-    cnf := cnf,
-    assignment := assignment,
-    witness_paths := witness_paths,
-    h_valid := h_valid
-  }
-
-/--
-**Theorem: The complexity of a canonical Tableau is the sum of the path costs
-to its witness literals.**
-
-This theorem makes the user's intuition formal and provable. It confirms that
-the "size of a satisfying Tableau" is precisely the sum of the EGPT natural
-numbers (`ParticlePath`s) representing the work needed to verify each clause.
--/
-theorem tableauComplexity_eq_sum_of_paths {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) :
-  let tableau := constructSatisfyingTableau cnf solution
-  tableau.complexity = (tableau.witness_paths.map toNat).sum :=
-by
-  -- The proof is by definition.
-  intro tableau
-  simp [SatisfyingTableau.complexity]
-
-
-/--
-**The Definitive EGPT NP Class.**
-
-A language `L` (a set of CNF problems) is in `NP_EGPT` if for every "yes"
-instance `cnf ∈ L`, there exists a `SatisfyingTableau` whose complexity
-is polynomially bounded by the length of the encoded problem `encodeCNF cnf`.
-
-This definition replaces abstract polynomial bounds with a concrete, physical
-measure: the total information cost of the witness paths needed to verify
-the solution.
--/
-def NP_EGPT_Tableau : Set (Π k, Lang_EGPT_SAT k) :=
-{ L | ∃ (p : ℕ → ℕ) (_h_poly : IsPolynomialNat p),
-      ∀ (k : ℕ) (input_cnf : SyntacticCNF_EGPT k),
-        (input_cnf ∈ L k) ↔ ∃ (tableau : SatisfyingTableau k),
-          -- The tableau must be for the correct CNF
-          tableau.cnf = input_cnf ∧
-          -- The tableau's complexity must be polynomially bounded by the input size
-          tableau.complexity ≤ p (encodeCNF input_cnf).length
-          -- Note: tableau.h_valid is already guaranteed by the SatisfyingTableau structure
-}
-
-/--
-**Predicate for NP-Completeness in EGPT.**
-
-A language `L` is NP-Complete if it satisfies two conditions:
-1.  `L` is in the class `NP_EGPT_Tableau`.
-2.  `L` is NP-hard, meaning any other language `L'` in `NP_EGPT_Tableau` can be
-    reduced to `L` via a polynomial-time EGPT reducer.
-
-This definition replaces the previous `structure` to avoid type-inference issues
-and provide a more direct way of stating this property.
--/
-def IsNPComplete_EGPT (L : Π k, Lang_EGPT_SAT k) : Prop :=
-  -- Condition 1: The language is in NP.
-  (L ∈ NP_EGPT_Tableau) ∧
-  -- Condition 2: The language is NP-hard.
-  (∀ (L' : Π k, Lang_EGPT_SAT k), L' ∈ NP_EGPT_Tableau →
-    ∃ (f : UniversalCNF → UniversalCNF),
-      IsPolynomialEGPT_Reducer f ∧
-      (∀ ucnf : UniversalCNF,
-        (ucnf.2 ∈ L' ucnf.1) ↔ ((f ucnf).2 ∈ L (f ucnf).1)))
-/--
-**Helper Lemma: The cost to verify a single clause is bounded by `k`.**
-
-The "cost" is the EGPT ParticlePath to the witness literal. Its complexity is
-the literal's variable index, which is always less than `k`.
--/
-lemma cost_of_witness_le_k {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) (clause : Clause_EGPT k) (h_clause_in_cnf : clause ∈ cnf) :
-  -- The cost is the complexity of the path to the witness literal.
-  -- We define it using the `find?` operation from the tableau construction.
-  let witness_literal_opt := clause.find? (fun lit => evalLiteral lit solution.val)
-  -- The property we want to prove about this cost:
-  match witness_literal_opt with
-  | some lit => (PathToConstraint lit).val.length ≤ k
-  | none => 0 ≤ k -- This case is unreachable, so any true statement suffices.
-:= by
-  -- Let's deconstruct the `solution` into the assignment vector and the validity proof.
-  let assignment := solution.val
-  have h_valid_assignment : evalCNF cnf assignment = true := solution.property
-
-  -- Unfold the definition of `evalCNF` to use the validity proof.
-  unfold evalCNF at h_valid_assignment
-  -- `h_valid_assignment` is now `cnf.all (fun c => evalClause c assignment) = true`.
-  -- Since our `clause` is in `cnf`, it must be satisfied.
-  have h_clause_is_sat : evalClause clause assignment = true := by
-    rw [List.all_eq_true] at h_valid_assignment
-    exact h_valid_assignment clause h_clause_in_cnf
-
-  -- Unfold `evalClause` to show that *some* literal in it must be true.
-  unfold evalClause at h_clause_is_sat
-  -- `h_clause_is_sat` is now `clause.any (fun lit => evalLiteral lit assignment) = true`.
-
-  -- The `find?` operation will return `some` if there's a literal that evaluates to true.
-  -- We can directly work with the match expression in the goal
-  cases h_find_result : clause.find? (fun lit => evalLiteral lit assignment) with
-  | none =>
-    -- This case should be impossible - if no literal is found, but clause.any returns true
-    rw [List.any_eq_true] at h_clause_is_sat
-    obtain ⟨lit, h_mem, h_eval⟩ := h_clause_is_sat
-    -- Show contradiction: if find? returns none, then no element satisfies the predicate
-    have h_find_none := List.find?_eq_none.mp h_find_result
-    have h_not_eval := h_find_none lit h_mem
-    rw [h_eval] at h_not_eval
-    exact absurd rfl h_not_eval
-  | some witness_lit =>
-    -- This is the main case. We need to prove `(PathToConstraint witness_lit).val.length ≤ k`.
-    simp only [PathToConstraint, toNat, fromNat, List.length_replicate]
-    -- The goal simplifies to `witness_lit.particle_idx.val ≤ k`.
-    -- Since `witness_lit.particle_idx` is of type `Fin k`, its value is strictly less than k.
-    have h_lt : witness_lit.particle_idx.val < k := witness_lit.particle_idx.isLt
-    -- `a < b` implies `a ≤ b` for natural numbers.
-    exact Nat.le_of_lt h_lt
-
-
-
--- Helper lemma: The complexity of the path to any literal is bounded by k
-lemma path_complexity_le_k {k : ℕ} (clause : Clause_EGPT k) (solution : Vector Bool k) :
-  (toNat (match clause.find? (fun lit => evalLiteral lit solution) with
-   | some lit => fromNat lit.particle_idx.val
-   | none => fromNat 0)) ≤ k := by
-  cases h_find : clause.find? (fun lit => evalLiteral lit solution) with
-  | none =>
-    simp only [toNat, fromNat, List.length_replicate]
-    exact Nat.zero_le k
-  | some witness_lit =>
-    simp only [toNat, fromNat, List.length_replicate]
-    exact Nat.le_of_lt witness_lit.particle_idx.isLt
-
--- Final, clean proof of the main theorem.
-theorem tableauComplexity_upper_bound {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution : { v : Vector Bool k // evalCNF cnf v = true }) :
-  (constructSatisfyingTableau cnf solution).complexity ≤ cnf.length * k :=
-by
-  -- We'll use a simple approach: bound each element and use list induction
-  have h_bound_element : ∀ clause ∈ cnf,
-    (toNat (match clause.find? (fun lit => evalLiteral lit solution.val) with
-    | some lit => fromNat lit.particle_idx.val
-    | none => fromNat 0)) ≤ k := by
-    intro clause _
-    exact path_complexity_le_k clause solution.val
-
-  -- Use induction on cnf to prove the sum bound
-  unfold constructSatisfyingTableau SatisfyingTableau.complexity
-  simp [PathToConstraint, List.map_map, Function.comp]
-
-  induction cnf with
-  | nil => simp
-  | cons head tail ih =>
-    simp [List.map_cons, List.sum_cons, List.length_cons]
-    have h_head : (toNat (match head.find? (fun lit => evalLiteral lit solution.val) with
-      | some lit => fromNat lit.particle_idx.val
-      | none => fromNat 0)) ≤ k := path_complexity_le_k head solution.val
-
-    -- For the inductive step
-    have h_tail : (tail.map (toNat ∘ fun clause =>
-      match clause.find? (fun lit => evalLiteral lit solution.val) with
-      | some lit => fromNat lit.particle_idx.val
-      | none => fromNat 0)).sum ≤ tail.length * k := by
-      -- First, we need to show that our solution works for the tail
-      have h_tail_sat : evalCNF tail solution.val = true := by
-        have h_full_sat := solution.property
-        unfold evalCNF at h_full_sat ⊢
-        -- Use the fact that if (a && b) = true, then b = true
-        rw [List.all_cons] at h_full_sat
-        simp only [Bool.and_eq_true] at h_full_sat
-        exact h_full_sat.2
-
-      -- Create a solution specifically for the tail
-      let tail_solution : { v : Vector Bool k // evalCNF tail v = true } := ⟨solution.val, h_tail_sat⟩
-
-      -- Apply the inductive hypothesis
-      apply ih tail_solution
-
-      -- Prove that each clause in tail satisfies the bound
-      intro clause h_mem_tail
-      exact path_complexity_le_k clause solution.val
-
-    linarith [h_head, h_tail]

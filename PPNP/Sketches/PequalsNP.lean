@@ -4,13 +4,13 @@ import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Set.Defs
 
-import EGPT.Complexity.Basic
+import EGPT.Complexity.Core
 import EGPT.Physics.BoseEinstein -- For H_BE_from_Multiset_eq_C_shannon
 import EGPT.Physics.Common -- For H_physical_system, HasRotaEntropyProperties
 import EGPT.Entropy.RET -- For C_constant_real, RotaUniformTheorem
 import EGPT.Physics.PhysicsDist -- Placeholder for future generalized PhysicsDist
 
-open EGPT.Complexity.Basic
+open EGPT.Complexity
 open EGPT.Physics.Common
 open EGPT.Physics.BE -- To access specific BE results
 open EGPT.Entropy.RET
@@ -26,7 +26,7 @@ if they rely on excluded middle implicitly.
 open Classical
 
 -- Define DecisionProblem as an alias for Lang from Complexity.Basic
-abbrev DecisionProblem := Lang
+abbrev DecisionProblem := L_SAT
 
 /-!
 =================================================================

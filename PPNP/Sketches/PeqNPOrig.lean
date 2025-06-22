@@ -6,6 +6,7 @@ import Mathlib.Data.List.Basic -- For List.sum
 import Mathlib.Data.Set.Defs -- For Set type used by P and NP
 -- Using placeholder axioms for complexity theory results not readily available
 -- or easy to formalize at this level (like poly-time reduction transitivity).
+import EGPT.Deprecated.Complexity.Basic
 import EGPT.Core
 import EGPT.NumberTheory.Core
 import EGPT.Complexity.Core

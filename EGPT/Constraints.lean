@@ -8,6 +8,9 @@ import EGPT.NumberTheory.Core -- For ParticlePath and its equivalences
 namespace EGPT.Constraints
 
 open EGPT NumberTheory.Core
+
+
+
 /-!
 ==================================================================
 # EGPT Constraint Syntax
@@ -263,7 +266,7 @@ def encodeCNF {k : ℕ} (cnf : SyntacticCNF_EGPT k) : ComputerTape :=
   List.append (encodeNat k) (List.append [false, false] (List.foldl List.append [] (cnf.map (fun c => List.append (encodeClause c) [false, false]))))
 
 /--
-**The Universal EGPT Bijection (Replaces the Axiom).**
+**The Universal CNF to ParticlePath EGPT Bijection .**
 
 We now have a concrete, computable encoding `encodeCNF`. To form a full `Equiv`,
 we need its inverse `decodeCNF` and proofs. For our purposes, we don't need to
@@ -636,43 +639,6 @@ lemma length_foldl_mul
     simp [List.foldl_cons, ih, List.length_cons, Nat.add_mul, Nat.one_mul, Nat.add_comm]
     rw [Nat.mul_comm]
 
-
-/--
-**A Polynomial-Time EGPT Reducer to a Canonical Form.**
-
-This class defines what it means for a function `f` to be a "polynomial-time"
-reducer within the EGPT framework, specifically when the target of the
-reduction is a problem in a canonical (e.g., sorted) format.
-
-The EGPT definition of efficiency is based on information content, which is
-measured by the length of the `ComputerTape` that encodes a problem. A reduction
-function `f` is considered efficient if the length of its output tape is
-bounded by a polynomial function of the length of its input tape. This avoids
-abstract Turing Machines and relies instead on the concrete, physical measure
-of program size.
-
-- **`f`**: The reduction function. It takes a general problem instance, represented
-  as a `UniversalCNF`, and "compiles" it into its unique canonical form, a
-  `CanonicalCNF`. The `normalizeCNF` function is the canonical example of such
-  a reducer.
--/
-
--- We also need a simple definition for a polynomial on Nats
-def IsPolynomialNat (p : ℕ → ℕ) : Prop :=
-  ∃ (c k_exp : ℕ), ∀ n, p n ≤ c * n^k_exp + c
-
-class IsPolynomialEGPT_Reducer_Canonical (f : (ucnf : UniversalCNF) → CanonicalCNF ucnf.1) : Prop where
-  /--
-  The core property: there must exist a polynomial `p` on natural numbers that
-  bounds the growth of the output tape's length relative to the input tape's length.
-  This asserts that the reduction does not cause a super-polynomial explosion in
-  the information required to describe the problem.
-  -/
-  is_poly : ∃ (p : ℕ → ℕ) (_hp : IsPolynomialNat p),
-    ∀ (ucnf : UniversalCNF),
-      (encodeCNF (f ucnf).val).length ≤ p (encodeCNF ucnf.2).length
-
--- In a file like EGPT/Constraints.lean or a new EGPT/Complexity/ReducerUtils.lean
 
 /--
 **Helper: Length computation for single literal encoding**

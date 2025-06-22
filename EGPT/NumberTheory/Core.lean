@@ -78,6 +78,85 @@ instance mkBiasedIIDParticleSource (seed : ℕ) (p : ℕ) (q: ℕ) (_h : p + q >
     let genN := (List.range n).foldl (fun g _ => (stdNext g).2) gen0
     (randBool genN).1 }
 
+-- In EGPT/NumberTheory/Core.lean
+
+
+/--
+**Helper function for multiplication: recursively multiply by adding.**
+-/
+def mul_ParticlePath_rec (a : ParticlePath) : ℕ → ParticlePath
+  | 0 => fromNat 0 -- a * 0 = 0
+  | Nat.succ n => add_ParticlePath a (mul_ParticlePath_rec a n) -- a * (n+1) = a + (a * n)
+
+/--
+**Multiplies two `ParticlePath` numbers.**
+`mul_ParticlePath a b` is equivalent to adding `a` to itself `toNat(b)` times.
+This is the EGPT-native definition of multiplication as repeated concatenation.
+-/
+def mul_ParticlePath (a b : ParticlePath) : ParticlePath :=
+  mul_ParticlePath_rec a (toNat b)
+
+-- In `EGPT/Complexity/Core.lean` or a new `Polynomial.lean` file
+
+/--
+**An EGPT-Native Polynomial (`EGPT_Polynomial`).**
+
+This defines a polynomial function not by an abstract algebraic formula, but as a
+constructive object. An `EGPT_Polynomial` is any function on `ParticlePath`s that
+can be built from a finite number of additions, multiplications, constants, and
+the identity function. This is the pure EGPT definition of a polynomial, free
+from any external frameworks.
+-/
+inductive EGPT_Polynomial : Type
+  | const (c : ParticlePath) : EGPT_Polynomial -- The constant function `f(n) = c`
+  | id : EGPT_Polynomial                     -- The identity function `f(n) = n`
+  | add (p₁ p₂ : EGPT_Polynomial) : EGPT_Polynomial -- The sum of two polynomials
+  | mul (p₁ p₂ : EGPT_Polynomial) : EGPT_Polynomial -- The product of two polynomials
+
+/--
+**The `eval` function for an `EGPT_Polynomial`.**
+This function takes a polynomial `p` and an input `n`, and computes the result
+by recursively applying the native EGPT arithmetic operations.
+-/
+@[simp]
+def EGPT_Polynomial.eval (p : EGPT_Polynomial) (n : ParticlePath) : ParticlePath :=
+  match p with
+  | const c => c
+  | id => n
+  | add p₁ p₂ => add_ParticlePath (p₁.eval n) (p₂.eval n)
+  | mul p₁ p₂ => mul_ParticlePath (p₁.eval n) (p₂.eval n)
+/--
+**Lemma: `add_ParticlePath` respects the `toNat` bijection.**
+-/
+lemma toNat_add_ParticlePath (a b : ParticlePath) :
+  toNat (add_ParticlePath a b) = toNat a + toNat b :=
+by simp [add_ParticlePath, equivParticlePathToNat, toNat, fromNat]
+
+/--
+**Lemma: The `toNat` bijection respects EGPT multiplication.**
+This proves that our native `mul_ParticlePath` operation correctly corresponds
+to standard multiplication on natural numbers.
+-/
+theorem toNat_mul_ParticlePath (a b : ParticlePath) :
+  toNat (mul_ParticlePath a b) = toNat a * toNat b :=
+by
+  -- We prove this by induction on the natural number representation of `b`.
+  unfold mul_ParticlePath
+  -- The goal is now `toNat (mul_ParticlePath_rec a (toNat b)) = toNat a * toNat b`.
+  -- We prove this by induction on `toNat b`.
+  induction toNat b with
+  | zero =>
+    -- Base case: toNat b = 0
+    simp [mul_ParticlePath_rec, toNat, fromNat]
+  | succ i ih =>
+    -- Inductive step: prove toNat (mul_ParticlePath_rec a (i+1)) = toNat a * (i+1)
+    -- By definition: mul_ParticlePath_rec a (i+1) = add_ParticlePath a (mul_ParticlePath_rec a i)
+    show toNat (mul_ParticlePath_rec a (i + 1)) = toNat a * (i + 1)
+    rw [mul_ParticlePath_rec]  -- This should unfold the definition
+    rw [toNat_add_ParticlePath]
+    rw [ih]
+    ring
+
 /-!
 ## Integers As EGPT ChargedParticlePath: A Single Particle Path, with initial direction ("Charge"), for A "Fair" Random Walk
 ##############################################################################

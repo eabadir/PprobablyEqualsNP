@@ -132,6 +132,12 @@ structure RejectionFilter (k : ℕ) where
     intros v h_v_in_sa
     exact (Finset.mem_filter.mp h_v_in_sa).2
 
+-- Helper to get a witness from a RejectionFilter's proof of non-emptiness
+noncomputable def RejectionFilter.get_witness {k : ℕ} (filter : RejectionFilter k) :
+  { v : Vector Bool k // evalCNF filter.cnf v = true } :=
+  let v := filter.is_satisfiable.choose
+  ⟨v, filter.ax_coherent v filter.is_satisfiable.choose_spec⟩
+
 /--
 This lemma allows `simp` to unfold the definition of the `satisfying_assignments` field.
 It states that when a `RejectionFilter` is built with the default value for this field,
