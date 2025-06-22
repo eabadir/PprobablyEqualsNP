@@ -124,15 +124,14 @@ theorem f0_mono {H : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal}
     rw [← h_H_p_ext_eq_H_unif_n] -- Goal is now H p_ext ≤ H unif_n1_dist
     exact h_H_p_ext_le_H_unif_n1
 
--- New helper
 /--
-Helper function: Defines P(i,j) = prior(i) * q_const(j) using DependentPairDist.
+Helper function: Defines P(i,j) = prior(i) * q_const(j) using DependentPairDistSigma.
 -/
-noncomputable def dependentPairDist_of_independent
-  {N M : ℕ} [hN : NeZero N] [hM : NeZero M]
+noncomputable def dependentPairDistSigma_of_independent
+  {N M : ℕ} [NeZero N] [NeZero M]
   (prior : Fin N → NNReal) (q_const : Fin M → NNReal) :
-  Fin (N * M) → NNReal :=
-  @DependentPairDist N M hN hM prior (fun _i => q_const)
+  (Σ _ : Fin N, Fin M) → NNReal :=
+  DependentPairDistSigma prior (fun _ => M) (fun _ => q_const)
 
 -- New helper
 /--
@@ -188,47 +187,36 @@ lemma cond_add_for_independent_distributions
   -- This is sum_weighted_constant from EGPT.Entropy.RET (already proven)
   exact sum_weighted_constant hprior_sum_1
 -- This helper can be local to f0_mul_eq_add_f0 proof or kept if generally useful
--- noncomputable def DependentPairDist_of_independent_helper -- From Phase 2, might not be needed if  is direct.
---   {N M : ℕ} (hN_pos : N > 0) (hM_pos : M > 0) :
---   Fin (N * M) → NNReal :=
---   haveI : NeZero N := NeZero.of_pos hN_pos
---   haveI : NeZero M := NeZero.of_pos hM_pos
---   let prior_dist := uniformDist (by {rw [Fintype.card_fin]; exact hN_pos})
---   let q_const_dist := uniformDist (by {rw [Fintype.card_fin]; exact hM_pos})
---   dependentPairDist_of_independent prior_dist q_const_dist
 
--- Replaced: old `uniformProb_product_uniformProb_is_uniformProb`
--- This version is more direct for the proof of f0_mul_eq_add_f0.
 
 /--
 Helper Lemma: The joint distribution of two independent uniform random variables
-(on Fin N and Fin M) is equivalent to a uniform distribution on Fin (N*M).
-The result of `dependentPairDist_of_independent (uniformDist_N) (uniformDist_M)`
-is pointwise equal to `uniformDist_NM`.
+(on Fin N and Fin M) is equivalent to a uniform distribution on the Sigma type.
+The result of `dependentPairDistSigma_of_independent (uniformDist_N) (uniformDist_M)`
+is pointwise equal to the uniform distribution on `(Σ _ : Fin N, Fin M)`.
 -/
-lemma joint_uniform_is_flat_uniform
+lemma joint_uniform_is_sigma_uniform
     {N M : ℕ} (hN_pos : N > 0) (hM_pos : M > 0) :
     -- Local NeZero instances for the definition
     haveI : NeZero N := NeZero.of_pos hN_pos
     haveI : NeZero M := NeZero.of_pos hM_pos
     let unif_N_dist := uniformDist (by simp only [Fintype.card_fin]; exact hN_pos : 0 < Fintype.card (Fin N))
     let unif_M_dist := uniformDist (by simp only [Fintype.card_fin]; exact hM_pos : 0 < Fintype.card (Fin M))
-    let joint_dist := dependentPairDist_of_independent unif_N_dist unif_M_dist
-    let flat_uniform_dist := uniformDist (by simp only [Fintype.card_fin]; exact Nat.mul_pos hN_pos hM_pos : 0 < Fintype.card (Fin (N * M)))
-    joint_dist = flat_uniform_dist := by
+    let joint_dist := dependentPairDistSigma_of_independent unif_N_dist unif_M_dist
+    let sigma_uniform_dist := uniformDist (by simp only [Fintype.card_sigma, Fintype.card_fin, Finset.sum_const, Finset.card_univ]; exact Nat.mul_pos hN_pos hM_pos : 0 < Fintype.card (Σ _ : Fin N, Fin M))
+    joint_dist = sigma_uniform_dist := by
   -- Functional extensionality
-  funext k
+  funext sigma_pair
+  rcases sigma_pair with ⟨i, j⟩
 
   -- Unfold all relevant definitions.
-  -- `simp` will unfold `joint_dist`, `unif_N_dist`, `unif_M_dist`, `flat_uniform_dist`
-  -- as they are let-expressions in the goal.
-  simp only [dependentPairDist_of_independent, DependentPairDist, uniformDist]
+  simp only [dependentPairDistSigma_of_independent, DependentPairDistSigma, uniformDist]
 
   -- At this point, the goal should be:
-  -- (Fintype.card (Fin N))⁻¹ * (Fintype.card (Fin M))⁻¹ = (Fintype.card (Fin (N * M)))⁻¹
+  -- (Fintype.card (Fin N))⁻¹ * (Fintype.card (Fin M))⁻¹ = (Fintype.card (Σ _ : Fin N, Fin M))⁻¹
 
   -- Simplify Fintype.card values
-  simp only [Fintype.card_fin]
+  simp only [Fintype.card_fin, Fintype.card_sigma, Finset.sum_const, Finset.card_univ]
   -- Goal: (↑N)⁻¹ * (↑M)⁻¹ = (↑(N * M))⁻¹
 
   -- Use NNReal properties for inverses and Nat.cast properties

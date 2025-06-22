@@ -36,12 +36,6 @@ structure ParticleState_SAT where
   -- This is a ParticlePMF representing its bias (p, q).
   law : ParticlePMF
 
-/--
-The input for an EGPT-SAT problem is a syntactic CNF formula,
-which is encodable as a ParticlePath.
--/
-abbrev EGPT_SAT_Input (k : ℕ) := SyntacticCNF_EGPT k
-
 
 
 -- The full history of a single particle for `t` steps.
@@ -133,23 +127,27 @@ structure DMachine where
 -/
 
 
--- This is a predicate on functions, defining what it means to be polynomial.
--- A full formalization would build this inductively. For now, we state it as a Prop.
-class IsPolynomialEGPT (f : ParticlePath → ParticlePath) : Prop where
-  -- For example, one could define this as:
-  -- is_poly : ∃ (ops : List GNatOperation), compute_f_with_ops ops = f
-  -- where GNatOperation is an enum of {Add, Mul}.
-  -- For our purposes, we can treat this as a given property.
+/--
+A predicate asserting that a function `f` from one ParticlePath to another is
+computable by a native EGPT polynomial. The witness for this property is the
+`EGPT_Polynomial` structure itself.
+-/
+def IsPolynomialEGPT (f : ParticlePath → ParticlePath) : Prop :=
+  ∃ (P : EGPT_Polynomial), f = P.eval
 
 /-- The identity function on `ParticlePath` is polynomial. -/
-instance IsPolynomialEGPT.id : IsPolynomialEGPT id where
+instance IsPolynomialEGPT.id : IsPolynomialEGPT id := by
+  -- 1. The goal is `∃ (P : EGPT_Polynomial), id = P.eval`.
+  -- 2. We provide the native identity polynomial as the witness.
+  use EGPT_Polynomial.id
+  -- 3. The goal becomes `id = EGPT_Polynomial.id.eval`.
+  --    We use function extensionality to prove this.
+  ext n
+  -- 4. The goal is now `id n = EGPT_Polynomial.id.eval n`.
+  --    This simplifies by definition.
+  simp [EGPT_Polynomial.eval]
+  -- The proof is complete.
 
-/--
-A predicate asserting that a complexity function is bounded by an EGPT-polynomial.
--/
-def ProgramIsBoundedByPolynomial (complexity_of : EGPT_Input → ParticlePath) : Prop :=
-  ∃ (p : ParticlePath → ParticlePath), IsPolynomialEGPT p ∧
-    ∀ (input : EGPT_Input), complexity_of input ≤ p (fromNat input) -- `fromNat` converts ℕ to ParticlePath
 
 
 /--
@@ -194,7 +192,7 @@ providing an interpreter that gives this syntax its semantic meaning within our 
 -/
 
 -- A language is a set of satisfiable CNF formulas.
-abbrev Lang_EGPT_SAT (k : ℕ) := Set (EGPT_SAT_Input k)
+abbrev SATProblem (k : ℕ) := Set (SyntacticCNF_EGPT k)
 
 
 
@@ -281,114 +279,8 @@ physical framework.
 
 
 
-/--
-**The Canonical NP-Complete Problem: `L_SAT`**
-
-`L_SAT` is the language of all `SyntacticCNF_EGPT` formulas that are satisfiable.
-An instance `cnf` is in the language if there exists *any* assignment that makes
-`evalCNF cnf` true.
--/
-def L_SAT (k : ℕ) : Lang_EGPT_SAT k :=
-  { cnf | ∃ (assignment : Vector Bool k), evalCNF cnf assignment = true }
-
-/-!
-### Part 1: Proving `L_SAT` is in `NP_EGPT`
--/
-
--- This should go in a central complexity file, like EGPT/Complexity/Core.lean
-
--- In EGPT/Complexity/PPNP.lean or a dedicated complexity definitions file
-
-/--
-**A Polynomial-Time EGPT Reducer.**
-
-This class defines what it means for a function `f`, which transforms one
-CNF problem into another, to be "polynomial-time" within the EGPT framework.
-
-The EGPT definition of efficiency is based on information content, which is
-measured by the length of the `ComputerTape` that encodes a problem. A reduction
-`f` is considered efficient (polynomial-time) if the length of its output tape
-is bounded by a polynomial function of the length of its input tape.
-
-This definition avoids abstract Turing Machines and instead relies on the
-concrete, physical measure of program size.
--/
-class IsPolynomialEGPT_Reducer (f : UniversalCNF → UniversalCNF) : Prop where
-  is_poly : ∃ (P : EGPT_Polynomial), -- The witness is now a native EGPT_Polynomial
-    ∀ (ucnf : UniversalCNF),
-      (encodeCNF (f ucnf).2).length ≤ toNat (P.eval (fromNat (encodeCNF ucnf.2).length))
-
-/--
-**Instance for the Identity Reducer.**
-
-The identity function (`id`) is a trivial example of a polynomial-time reducer.
-This instance serves as a sanity check, demonstrating that the class is
-well-defined. The output length is identical to the input length, which is
-bounded by the simple polynomial `p(n) = n`.
--/
-instance IsPolynomialEGPT_Reducer.id : IsPolynomialEGPT_Reducer id where
-  is_poly := by
-    -- The witness is the native identity polynomial.
-    use EGPT_Polynomial.id
-    intro ucnf
-    -- The goal is: (encodeCNF (f ucnf).2).length ≤ toNat (EGPT_Polynomial.id.eval (fromNat (encodeCNF ucnf.2).length))
-    -- For f = id, (f ucnf).2 = ucnf.2
-    -- For EGPT_Polynomial.id.eval x = x
-    -- For toNat (fromNat n) = n (by left_inv)
-    simp only [id_eq, EGPT_Polynomial.eval]
-    -- Now the goal should be: (encodeCNF ucnf.2).length ≤ toNat (fromNat (encodeCNF ucnf.2).length)
-    rw [left_inv]
-    -- Now it's: (encodeCNF ucnf.2).length ≤ (encodeCNF ucnf.2).length
-/--
-**Destructor for `L_SAT` membership.**
-
-If we have a proof that `cnf ∈ L_SAT k`, this function uses `Classical.choice`
-to extract the satisfying assignment that is guaranteed to exist. This provides a
-concrete "witness" to the satisfiability of the CNF.
--/
-noncomputable def L_SAT.get_witness {k : ℕ} (cnf : SyntacticCNF_EGPT k) (h_in_lsat : cnf ∈ L_SAT k) :
-  { v : Vector Bool k // evalCNF cnf v = true } :=
-  -- The definition of L_SAT is `∃ v, evalCNF cnf v`.
-  -- We use Classical.choose to get the witness and Classical.choose_spec to get the proof
-  ⟨Classical.choose h_in_lsat, Classical.choose_spec h_in_lsat⟩
-
--- For convenience in proofs, a lemma form is often easier to use with `rcases`.
-lemma L_SAT.dest (k : ℕ) (cnf : SyntacticCNF_EGPT k) (h : cnf ∈ L_SAT k) :
-  ∃ (assignment : Vector Bool k), evalCNF cnf assignment = true := h
 
 
--- ==================================================================
--- == Final EGPT NP-Completeness Framework (Add this to your file) ==
--- ==================================================================
-
-/-!
-### Final Definitions for Reducibility and NP-Completeness
--/
-
-
--- In EGPT/Complexity/PPNP.lean
-
-
-
-/-!
-### The EGPT Cook-Levin Theorem: `L_SAT` is the Universal Bias
--/
-
-
-
-
-/--
-Interprets a ComputerTape as a CNF formula. Each bit of the tape
-constrains the state of the computation particle at the corresponding time step.
--/
-def constraints_from_tape (tape : ComputerTape) : SyntacticCNF_EGPT 1 :=
-  -- List.map a tape of length N into N unit clauses.
-  tape.zipIdx.map (fun (instruction, t) =>
-    -- At time `t`, the `instruction` bit becomes a constraint.
-    -- Example constraint: `polarity` = `instruction`.
-    -- This creates a CNF: (x₀=tape[0]) ∧ (x₁=tape[1]) ∧ ...
-    [{ particle_idx := ⟨0, by simp⟩, polarity := instruction }]
-  )
 
 
 /--

@@ -227,23 +227,6 @@ noncomputable def product_dist {n m : ℕ} (p : Fin n → NNReal) (q : Fin m →
     p ji.2 * q ji.1
 
 
-/-- Joint distribution `P(k) = prior(i) * P(j|i)` where `k` maps to `(i,j)`. -/
-noncomputable def DependentPairDist
-  {N M : ℕ} [NeZero N] [NeZero M]
-  (prior : Fin N → NNReal)
-  (P     : Fin N → Fin M → NNReal) :
-  Fin (N * M) → NNReal :=
-  fun k =>
-    let k_equiv := Equiv.cast (congrArg Fin (Nat.mul_comm N M)) k
-    let (i, j) := (finProdFinEquiv.symm (Fin.cast (Nat.mul_comm M N) k_equiv))
-    prior i * P i j
-
-/-- Coercion for `DependentPairDist`. -/
-noncomputable instance {N M : ℕ} [NeZero N] [NeZero M] : Coe
-  ((Fin N → NNReal) × (Fin N → Fin M → NNReal))
-  (Fin (N * M) → NNReal) where
-  coe := fun (⟨pr, P_cond⟩ : (Fin N → NNReal) × (Fin N → Fin M → NNReal)) => -- Renamed P to P_cond
-    DependentPairDist pr P_cond
 
 -- noncomputable instance {α β : Type*} :
 --   CoeTC ((β → NNReal) × (α ≃ β)) (α → NNReal) where
@@ -275,18 +258,7 @@ structure IsEntropyContinuous
                 (∀ i, |(q i : ℝ) - (p_center i : ℝ)| < δ) → |((H_func q) : ℝ) - ((H_func p_center) : ℝ)| < ε
                 -- Assuming H_func output is NNReal, so coercion to ℝ is needed for absolute difference.
 
-structure IsEntropyCondAdd
-  (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func
-: Prop where
-  cond_add :
-    ∀ {N M : ℕ} [NeZero N] [NeZero M]
-      (prior   : Fin N → NNReal)
-      (P_cond  : Fin N → Fin M → NNReal) -- Renamed P to P_cond
-      (_hP_sum_1 : ∀ i, ∑ j, P_cond i j = 1)
-      (_hprior_sum_1 : ∑ i, prior i = 1),
-    H_func (DependentPairDist prior P_cond) = H_func prior + ∑ i, prior i * H_func (fun j => P_cond i j)
-    -- Sum term: prior i is NNReal, H_func output is NNReal. Product is NNReal. Sum is NNReal.
-    -- H_func prior is NNReal. So RHS is NNReal. LHS H_func output is NNReal. Consistent.
+
 
 structure IsEntropyZeroInvariance
   (H_func : ∀ {α : Type} [Fintype α], (α → NNReal) → NNReal) -- Renamed H to H_func

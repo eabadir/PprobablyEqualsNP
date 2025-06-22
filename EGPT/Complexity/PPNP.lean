@@ -56,11 +56,6 @@ single, concrete polynomial for the entire canonical NP class.
 -/
 def canonical_poly (n : ℕ) : ℕ := n * n
 
-/--
-A proof that our `canonical_poly` satisfies the `IsPolynomialNat` class.
--/
-lemma canonical_poly_is_polynomial : IsPolynomialNat canonical_poly :=
-  ⟨1, 2, fun n => by simp [canonical_poly, pow_two]⟩
 
 /-- The canonical polynomial P(n) = n², used to bound NP certificate complexity. -/
 def canonical_np_poly : EGPT_Polynomial :=

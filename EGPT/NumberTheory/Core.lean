@@ -188,6 +188,8 @@ noncomputable def ParticlePathIntEquiv : ChargedParticlePath ≃ ℤ :=
 
 ############################################################################
 
+ The canonical form a rational number in traditional number theory is a fraction p/q where p is the numerator and q is the denominator. It represents a ratio of two quanities. We see this as counting the number of heads and tails in a single particle path - p = heads, q = tails. Similarly, we can view this as a probability mass function (PMF) for system of particles in one time step such that p + q is the total number of particles in the system, p/(p + q) is the probability of heads, and q/(p + q) is the probability of tails.
+
  While the Integer's corresponded to symmetric compressed paths, our ChargedParticlePaths, we need a representation for asymmetric paths and that is our ParticlePMF and we simply define it as a List Bool representing the "net" heads or tails. As with the ChargedParticlePaths, the leading sign bit allows for compression to just represent whether the 1's represent heads or tails. For example, a particle that goes up two times in a row ("heads") and then down 1 ("tails") is net positive heads and is written [1,1,1,0]. Likewise "down" two times in a row followed by heads once flips the sign bit to 0 [0,1,1,0]. We note that the first part of this represetnation is a string "p" which is ChargedParticlePath and the second part "q" is an inverted ParticlePath. Thus our ParticlePMF can be expressed as p/q where p is an ℤ and q is a ℕ. Unlike the EGPT Naturals (ParticlePath) and Integers (ChargedParticlePath) the ratio of 1's and 0's is the most compressed form for a single particle BUT, we achieve compression by allowing that all asymmetric paths (reorderings) will end in the same position AND allowing that concatenations of the same underlying path have the same ratio and are therefore equivalent to the shortest cananonical represetnation. This is the canonical form of an Rational in EGPT.
 
   1.  **Canonical Form:** A rational number is represented by a unique `List Bool`
@@ -234,9 +236,10 @@ normalized form for a rational number. This is the EGPT representation.
 abbrev ParticlePMF := { l : List Bool // CanonicalParticlePMF l }
 def EGPT.Rat := ParticlePMF
 
--- In EGPT/NumberTheory/Core.lean or your new Rational file
-
-
+/--
+A `ParticleWaveform` is a `List Bool` that represents a unique probability mass function - it is what one might see if we sample the positions of a countably infinite number of particles in a system, where each particle's next stochastic move contributes to the overall probability distribution of the system.
+-/
+abbrev ParticleWaveform := ParticlePMF
 
 /--
 Parses the numerator `p` (count of `true`s) from a canonical rational list.

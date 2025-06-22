@@ -1,4 +1,10 @@
 # Rota’s Entropy Theorem & Physics Distributions: Formalizing Entropy
+"If I can see further, it is by standing on the shoulders of giants."
+—Isaac Newton
+
+MIT Professor Gian-Carlo Rota (decd. 1999) was a true giant. The specific proof of RET (Rota's Entropy Theorem) is formalized here in Lean 4 and this acts as its first "peer review". Despite not being able to use the RET proof directly in the Lean form of the P=NP proof, RET and was absolutely foundational to the author's original proof of P=NP in the paper "P Probably Equals NP". More importantly, everything I was able to do in this project is only possible because of what I learned in Rota's class at MIT in 1993.
+
+
 ## What Is Entropy? "It's Not What You Think It Is"
 Rota's Entropy Theorem (RET) gives a precise and verifiable answer to that most slippery of questions addressing a concept which seems to underly all of science ... ***What is Entropy?***. RET settles the very question of ***what Entropy is***, and as such, I don't believe it is hyperbolic to say that RET is the most important theorem in all of science over the last 50 years ... yet it is all but unknown. For these reasons, I believe it is appropriate to provide more context and background on RET than is typical for a formalization and README in a code repository.
 
