@@ -147,6 +147,19 @@ the field is equal to that default value.
 lemma satisfying_assignments_def {k} (c : SyntacticCNF_EGPT k) (s) (h) (ax) : -- Added ax
     (RejectionFilter.mk c s h ax).satisfying_assignments = s := rfl
 
+/--
+The `RejectionFilter.of_satisfying_example` constructor takes a CNF and a single
+satisfying assignment and bundles them into a `RejectionFilter` object.
+-/
+def RejectionFilter.of_satisfying_example {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution_example : Vector Bool k) (h_ex : evalCNF cnf solution_example = true) : RejectionFilter k :=
+  { cnf := cnf,
+    is_satisfiable := ⟨solution_example, by {
+        -- Prove the example is in the satisfying_assignments finset
+        simp only [satisfying_assignments_def, Finset.mem_filter]
+        exact ⟨Finset.mem_univ _, h_ex⟩
+      }⟩
+  }
+
 
 instance instDecidableEqVectorBool (k : ℕ) : DecidableEq (Vector Bool k) :=
   inferInstance
@@ -254,3 +267,36 @@ noncomputable def eventsPMF {k : ℕ} (filter : RejectionFilter k) : PMF (Vector
     intro v hv; simp [f, hv]
   -- Construct the PMF using the mathlib constructor.
   PMF.ofFinset f s h_sum_one h_zero_outside
+
+
+/--
+**Constructs the RejectionFilter representing the complete solution space for a
+set of physical constraints.**
+The core EGPT
+claim is that the time required for a physical, non-deterministic process to
+find a *single* solution is polynomially equivalent to the time required for
+this function to characterize the *entire* solution space.
+-/
+noncomputable def construct_real_solution_space {k : ℕ} (constraints : CanonicalCNF k) : Option (RejectionFilter k) :=
+  -- 1. Deterministically find ALL satisfying assignments by filtering the
+  --    entire state space (Finset.univ) against the constraint checker.
+  let satisfying_assignments := (Finset.univ : Finset (Vector Bool k)).filter (fun v => evalCNF constraints v)
+
+  -- 2. Check if the resulting set of solutions is empty.
+  if h_nonempty : satisfying_assignments.Nonempty then
+    -- 3a. If solutions exist, package the complete solution space into a RejectionFilter.
+    --     The `is_satisfiable` proof is directly provided by `h_nonempty`.
+    let filter : RejectionFilter k := {
+      cnf := constraints,
+      satisfying_assignments := satisfying_assignments,
+      is_satisfiable := h_nonempty,
+      -- The coherence axiom is true by the definition of our filter.
+      ax_coherent := by
+        intros v h_v_in_sa
+        -- If v is in the filtered set, it must satisfy the filter's predicate.
+        exact (Finset.mem_filter.mp h_v_in_sa).2
+    }
+    some filter
+  else
+    -- 3b. If the set of solutions is empty, the system is unsolvable.
+    none

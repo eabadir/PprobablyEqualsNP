@@ -65,18 +65,6 @@ def get_system_state_vector {k : ℕ} (states : Vector ParticleState_SAT k) : Ve
 
 
 
-/--
-The `RejectionFilter.of_satisfying_example` constructor takes a CNF and a single
-satisfying assignment and bundles them into a `RejectionFilter` object.
--/
-def RejectionFilter.of_satisfying_example {k : ℕ} (cnf : SyntacticCNF_EGPT k) (solution_example : Vector Bool k) (h_ex : evalCNF cnf solution_example = true) : RejectionFilter k :=
-  { cnf := cnf,
-    is_satisfiable := ⟨solution_example, by {
-        -- Prove the example is in the satisfying_assignments finset
-        simp only [satisfying_assignments_def, Finset.mem_filter]
-        exact ⟨Finset.mem_univ _, h_ex⟩
-      }⟩
-  }
 
 
 -- A ProgramTape is the fundamental data structure for a path/program.

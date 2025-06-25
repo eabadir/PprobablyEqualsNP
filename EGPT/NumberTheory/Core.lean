@@ -7,6 +7,9 @@ import Mathlib.Data.Real.Cardinality
 import Mathlib.Control.Random
 import Mathlib.Data.Fintype.Vector
 import Mathlib.SetTheory.Cardinal.Basic   -- for `mul_eq_self`, `power_self_eq`
+import Mathlib.Algebra.Equiv.TransferInstance  -- the abbreviations
+import Mathlib.Analysis.Normed.Field.Basic     -- NormedField on ℝ, ℂ, …
+import Mathlib.Topology.UniformSpace.Completion -- CompleteSpace on ℝ
 
 import EGPT.Core
 

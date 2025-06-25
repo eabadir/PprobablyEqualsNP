@@ -1055,26 +1055,12 @@ noncomputable def ndm_constrained_path_solver {k : ℕ} (problem : ConstrainedPa
 /--
 **Constructs the RejectionFilter representing the complete solution space for a
 set of physical constraints.**
-
-This function is the definitive, deterministic EGPT solver. It takes a set of
-physical laws, encoded as a `SyntacticCNF_EGPT`, and determines the complete
-set of all possible states that are consistent with those laws.
-
-Instead of simulating a non-deterministic random walk to find a single witness,
-this function performs a direct, deterministic analysis of the entire state space.
-
-- If the set of valid states (satisfying assignments) is non-empty, it
-  constructs and returns a `RejectionFilter` that encapsulates this entire
-  solution space.
-- If no state can satisfy the constraints, it returns `none`, signifying that
-  the physical system is impossible.
-
-This function represents a P-solver for an NP-complete problem. The core EGPT
+The core EGPT
 claim is that the time required for a physical, non-deterministic process to
 find a *single* solution is polynomially equivalent to the time required for
 this function to characterize the *entire* solution space.
 -/
-noncomputable def construct_solution_filter {k : ℕ} (constraints : SyntacticCNF_EGPT k) : Option (RejectionFilter k) :=
+noncomputable def construct_real_solution_space {k : ℕ} (constraints : SyntacticCNF_EGPT k) : Option (RejectionFilter k) :=
   -- 1. Deterministically find ALL satisfying assignments by filtering the
   --    entire state space (Finset.univ) against the constraint checker.
   let satisfying_assignments := (Finset.univ : Finset (Vector Bool k)).filter (fun v => evalCNF constraints v)

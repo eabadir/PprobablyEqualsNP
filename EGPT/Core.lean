@@ -6,6 +6,7 @@ import Mathlib.Data.Rat.Lemmas
 import Mathlib.Data.Real.Cardinality
 import Mathlib.Control.Random
 import Mathlib.Data.Fintype.Vector
+import Mathlib.Data.Finset.Basic
 import EGPT.Basic
 
 open List
@@ -27,6 +28,12 @@ abbrev ParticlePath := { L : List Bool // PathCompress_AllTrue L }
 
 class IIDParticleSource (α : Type) where
   stream : ℕ → α
+
+class CanonicalIIDParticleSource extends IIDParticleSource (List Bool) where
+  -- The canonical IID source is one that produces a symmetric and sorted path.
+  -- This means that the order of choices does not matter, only the counts of `true` and `false`.
+  -- For example, `[true, true, false, false]` is the canonical representation of the path `[true, false, true, false]`.
+  toCanonical : ∀ (n : ℕ), stream n = (List.replicate n true ++ List.replicate n false).mergeSort (fun a b => !a && b)
 
 /-- The canonical representation of a particle path sampled from an IIDParticleSource is symmetric and sorted with 1s first. For example `[true, true, false, false]` is the canonical representation of the path `[true, false, true, false]`. This means that the order of choices does not matter, only the counts of `true` and `false` do. -/
 def CannonicalSymmetricParticlePath := List Bool
