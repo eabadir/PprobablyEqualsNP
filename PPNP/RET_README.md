@@ -8,6 +8,8 @@ MIT Professor Gian-Carlo Rota (decd. 1999) was a true giant. The specific proof 
 ## What Is Entropy? "It's Not What You Think It Is"
 Rota's Entropy Theorem (RET) gives a precise and verifiable answer to that most slippery of questions addressing a concept which seems to underly all of science ... ***What is Entropy?***. RET settles the very question of ***what Entropy is***, and as such, I don't believe it is hyperbolic to say that RET is the most important theorem in all of science over the last 50 years ... yet it is all but unknown. For these reasons, I believe it is appropriate to provide more context and background on RET than is typical for a formalization and README in a code repository.
 
+## Entropy's True Definition: How Many Calculations = Particle Movement = Particle Positions = How Many Bits To Describe a Physical System
+
 "No one really knows what entropy is," according to John von Neumann. Perhaps we have not known till now, but Rota's Entropy Theorem (RET) provides the first formalizable and precise definition of entropy and its implications are profound. In short, RET shows that Entropy is a measure of how many calculations are needed to compute a physical system's state.
 
 The deep link and mystery of entropy is that Von Neumann's version of it underlies the entire field of quantum information theory, while Claude Shannon's version of it underlies the entire field of information theory, and, arguably all of computer science by extension. This fact was not lost on either Von Neumann or Shannon, as the following quote from Shannon illustrates:

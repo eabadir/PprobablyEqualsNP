@@ -33,8 +33,8 @@ structure ParticleState_SAT where
   -- The current boolean value of the particle/variable.
   value : Bool
   -- The law governing its next state transition.
-  -- This is a ParticlePMF representing its bias (p, q).
-  law : ParticlePMF
+  -- This is a ParticleHistoryPMF representing its bias (p, q).
+  law : ParticleHistoryPMF
 
 
 
@@ -51,7 +51,7 @@ This is one step in the parallel Markov process.
 noncomputable def advance_state {k : ℕ} (current_states : Vector ParticleState_SAT k) (seed : ℕ) : Vector ParticleState_SAT k :=
   Vector.ofFn (fun i : Fin k =>
     let particle := current_states.get i
-    -- Use the particle's law (ParticlePMF) to create a biased source for this one step.
+    -- Use the particle's law (ParticleHistoryPMF) to create a biased source for this one step.
     let source := toBiasedSource particle.law (seed + i.val)
     let next_value := source.stream 0 -- Generate one new boolean value.
     { particle with value := next_value }
@@ -154,7 +154,7 @@ current position and its intrinsic physical law (movement bias).
 -/
 structure ParticleState where
   position : ParticlePosition
-  law      : ParticlePMF -- Corresponds to an EGPT.Rat, the particle's bias
+  law      : ParticleHistoryPMF -- Corresponds to an EGPT.Rat, the particle's bias
 
 
 
@@ -230,15 +230,15 @@ The process is a direct, computable chain:
 1.  The `RejectionFilter`'s information content is quantified as a single
     rational number by `characteristicRational`.
 2.  This rational number `ℚ` is converted into its canonical EGPT representation,
-    a `ParticlePMF`, using the `fromRat` bijection.
-3.  The underlying `List Bool` of the `ParticlePMF` is, by definition, the
+    a `ParticleHistoryPMF`, using the `fromRat` bijection.
+3.  The underlying `List Bool` of the `ParticleHistoryPMF` is, by definition, the
     canonical `ComputerTape` or "program" for that rational.
 -/
 noncomputable def EGPTProgramForRejectionFilter {k : ℕ} (filter : RejectionFilter k) : ComputerTape :=
   -- 1. Calculate the characteristic rational of the filter.
   let prob_success : ℚ := characteristicRational filter
   -- 2. Convert this rational number into its canonical EGPT representation.
-  let egpt_rational : ParticlePMF := fromRat prob_success
+  let egpt_rational : ParticleHistoryPMF := fromRat prob_success
   -- 3. The program is the underlying List Bool of the canonical EGPT rational.
   egpt_rational.val
 

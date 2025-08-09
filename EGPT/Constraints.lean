@@ -134,7 +134,7 @@ noncomputable def equivSyntacticCNF_to_ParticlePath {k : ℕ} : SyntacticCNF_EGP
   -- combinations are also denumerable. `ParticlePath` is denumerable via its equiv to `ℕ`.
   (Denumerable.eqv (SyntacticCNF_EGPT k)).trans (EGPT.NumberTheory.Core.equivParticlePathToNat.symm)
 
-noncomputable def cnfToParticlePMF (full_cnf : Σ k, SyntacticCNF_EGPT k) : EGPT.NumberTheory.Core.ParticlePMF :=
+noncomputable def cnfToParticleHistoryPMF (full_cnf : Σ k, SyntacticCNF_EGPT k) : EGPT.NumberTheory.Core.ParticleHistoryPMF :=
   -- 1. Encode the entire CNF structure (including k) into a single natural number.
   let n := Encodable.encode full_cnf
 
@@ -142,11 +142,11 @@ noncomputable def cnfToParticlePMF (full_cnf : Σ k, SyntacticCNF_EGPT k) : EGPT
   -- We can use the fact that every natural number corresponds to a rational
   let q : ℚ := n
 
-  -- 3. Convert this rational number into its canonical EGPT representation (a ParticlePMF).
+  -- 3. Convert this rational number into its canonical EGPT representation (a ParticleHistoryPMF).
   EGPT.NumberTheory.Core.fromRat q
 
-noncomputable def particlePMFToCnf (pmf : EGPT.NumberTheory.Core.ParticlePMF) : Σ k, SyntacticCNF_EGPT k :=
-  -- 1. Convert the ParticlePMF into its mathlib rational value.
+noncomputable def ParticleHistoryPMFToCnf (pmf : EGPT.NumberTheory.Core.ParticleHistoryPMF) : Σ k, SyntacticCNF_EGPT k :=
+  -- 1. Convert the ParticleHistoryPMF into its mathlib rational value.
   let q := EGPT.NumberTheory.Core.toRat pmf
 
   -- 2. Convert the rational back to a natural number (inverse of the injection we used)

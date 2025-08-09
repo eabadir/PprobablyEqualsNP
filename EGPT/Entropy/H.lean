@@ -208,7 +208,9 @@ theorem h_canonical_is_continuous : IsEntropyContinuous H_canonical_ln :=
       exact hq_dist i⟩
 
 /--
-**Helper 1: The product rule for `negMulLog`.**
+**Rota's Iron Law of Entropy: The product rule for `negMulLog`.**
+This is the helper we need to prove the core identity needed to prove everything else. H(k)= H(p) + H(q) ALWAYS because Shannon Encoding IS THE LOG2 FUNCTION in discrete space.
+
 Proves that `negMulLog(x*y) = y*negMulLog(x) + x*negMulLog(y)`.
 This is the analogue of `log(xy) = logx + logy`.
 -/

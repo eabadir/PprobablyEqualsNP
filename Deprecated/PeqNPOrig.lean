@@ -16,7 +16,11 @@ import EGPT.Entropy.Common -- For ShannonEntropyOfDist, stdShannonEntropyLn_unif
 open Classical EGPT EGPT.Complexity EGPT.NumberTheory.Core
 
 namespace PnPProofDetailedV2
-
+/-!
+=================================================================
+NOT WORKING ANYMORE, BUT LEFT FOR REFERENCE
+=================================================================
+-/
 /-!
 =================================================================
 Section 1: Foundational Definitions (Complexity, SAT, Entropy)

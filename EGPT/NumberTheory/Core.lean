@@ -19,8 +19,13 @@ open List EGPT
 
 
 /-!
-## EGPT Natural Numbers Are A Single Particle Path For A "Fair" Random Walk
+## EGPT Natural Numbers as ParticlePath: A Single Particle Path For A "Fair" Random Walk
 ##############################################################################
+A Single Particle Path For A "Fair" Random Walk
+
+ParticlePaths are the *Recorded History Stochastic Physical Events*
+Physics events are information. Addresses = particle positions = movements in time = computation steps. Entropy is the measure of information and Shannon Entropy bits to store the past or Shannon Entropy calculations to describe a possible futre.
+
 The "natural numbers" in EGPT can be thought of as the unique paths of random walks which return to their baseline (heads = tails) for the first time. For example, the number 1 is a path [1,0], 2 is [1,1,0,0], etc.. We can represent the same path in shorter form by dropping the trailing zeros and then the sum of 1's is the number itself. This is the canonical form of a natural number in EGPT.
 ##############################################################################
 -/
@@ -163,7 +168,7 @@ by
 /-!
 ## Integers As EGPT ChargedParticlePath: A Single Particle Path, with initial direction ("Charge"), for A "Fair" Random Walk
 ##############################################################################
-Symmetric particle paths could start up or down [1,1,0,0] and [0,0,1,1] return to baseline but our Nat/ParticlePath's limit our ability to indicate this difference. The "integers" in EGPT allow describing  two particles starting from the same position but initially moving in different directions paths resulting in the same return time to baseline. We use a single "charge" sign bit to indicate whether the particle went "up" or "down" first for the first half of the path and then did the opposite in the second. path is positive or negative. For example, for a particle that goes up ("heads") for the first part of the the number 1 is a path [1,1,0], and "down" first is -1 is [0,1,0], 2 is [1,1,1,0,0], and -2 is [0,1,1,0,0]. As with the EGPT Naturals (ParticlePath) we can represent ChargedParticlePath in the same path in shorter form by dropping the trailing zeros and then the sign and sum of 1's is the number itself. This is the canonical form of an integer in EGPT.
+Symmetric particle paths could start up or down [1,1,0,0] and [0,0,1,1] return to baseline but our Nat/ParticlePath's limit our ability to indicate this difference. The "integers" in EGPT allow describing  two particles starting from the same position but initially moving in different directions resulting in the same return time to baseline. We use a single "charge" sign bit to indicate whether the particle went "up" or "down" in the first for the first half of the path and then did the opposite in the second. Initial direction in the path is our definition then of positive or negative. For example, for a particle that goes up ("heads") for the first part of the the number 1 is a path [1,1,0], and "down" first is -1 is [0,1,0], 2 is [1,1,1,0,0], and -2 is [0,1,1,0,0]. As with the EGPT Naturals (ParticlePath) we can represent ChargedParticlePath in the same path in shorter form by dropping the trailing zeros and then the sign and sum of 1's is the number itself. This is the canonical form of an integer in EGPT.
 
 -- To establish ChargedParticlePath ≃ ℤ:
 -- 1. We have `ParticlePath ≃ ℕ` (via equivParticlePathToNat).
@@ -187,13 +192,13 @@ noncomputable def ParticlePathIntEquiv : ChargedParticlePath ≃ ℤ :=
 
 
 /-!
-## Rationals as EGPT ParticlePMF: Asymmetric Paths & The Positional Probability of a Single Particle Path Under Constraints (Probabality Mass Function)
+## Rationals as EGPT ParticleHistoryPMF: Asymmetric Paths & The Positional Probability of a Single Particle Path Under Constraints (Probabality Mass Function)
 
 ############################################################################
 
  The canonical form a rational number in traditional number theory is a fraction p/q where p is the numerator and q is the denominator. It represents a ratio of two quanities. We see this as counting the number of heads and tails in a single particle path - p = heads, q = tails. Similarly, we can view this as a probability mass function (PMF) for system of particles in one time step such that p + q is the total number of particles in the system, p/(p + q) is the probability of heads, and q/(p + q) is the probability of tails.
 
- While the Integer's corresponded to symmetric compressed paths, our ChargedParticlePaths, we need a representation for asymmetric paths and that is our ParticlePMF and we simply define it as a List Bool representing the "net" heads or tails. As with the ChargedParticlePaths, the leading sign bit allows for compression to just represent whether the 1's represent heads or tails. For example, a particle that goes up two times in a row ("heads") and then down 1 ("tails") is net positive heads and is written [1,1,1,0]. Likewise "down" two times in a row followed by heads once flips the sign bit to 0 [0,1,1,0]. We note that the first part of this represetnation is a string "p" which is ChargedParticlePath and the second part "q" is an inverted ParticlePath. Thus our ParticlePMF can be expressed as p/q where p is an ℤ and q is a ℕ. Unlike the EGPT Naturals (ParticlePath) and Integers (ChargedParticlePath) the ratio of 1's and 0's is the most compressed form for a single particle BUT, we achieve compression by allowing that all asymmetric paths (reorderings) will end in the same position AND allowing that concatenations of the same underlying path have the same ratio and are therefore equivalent to the shortest cananonical represetnation. This is the canonical form of an Rational in EGPT.
+ While the Integer's corresponded to our symmetric compressed paths ChargedParticlePaths, we need a representation for asymmetric paths and that is our ParticleHistoryPMF and we simply define it as a List Bool representing the "net" heads or tails. As with the ChargedParticlePaths, the leading sign bit allows for compression to just represent whether the 1's represent heads or tails. For example, a particle that goes up two times in a row ("heads") and then down 1 ("tails") is net positive heads and is written [1,1,1,0]. Likewise "down" two times in a row followed by heads once flips the sign bit to 0 [0,1,1,0]. We note that the first part of this represetnation is a string "p" which is ChargedParticlePath and the second part "q" is an inverted ParticlePath. Thus our ParticleHistoryPMF can be expressed as p/q where p is an ℤ and q is a ℕ. Unlike the EGPT Naturals (ParticlePath) and Integers (ChargedParticlePath) the ratio of 1's and 0's is the most compressed form for a single particle BUT, we achieve compression by allowing that all asymmetric paths (reorderings) will end in the same position AND allowing that concatenations of the same underlying path have the same ratio and are therefore equivalent to the shortest cananonical represetnation. This is the canonical form of a Rational in EGPT.
 
   1.  **Canonical Form:** A rational number is represented by a unique `List Bool`
       of the form `{sign bit} ++ {string of 1s} ++ {string of 0s}`. This
@@ -211,7 +216,7 @@ noncomputable def ParticlePathIntEquiv : ChargedParticlePath ≃ ℤ :=
       the bijection with Mathlib's `ℚ` clear and provable.
 
 **Partition Theory And "Fractal Compression"**
-For all the "detail" of the path we use the ParticlePath which is the "uncompressed" form. The ParticlePMF is the "compressed" form. The ParticlePMF is the sum of all the ParticlePath's that have the same probability distribution. For the advanced mathematician, we note that the ParticlePMF's compression is a "coarser" partition under Parition Theory and the ParticlePath is a "finer" partition. Parition Theory's fractal like recursive proofs of probablistic invariance under equal partitioning allows us to see that the ParticlePMF is scale invariant to the number of particles in the system.
+For all the "detail" of each of many paths we use the ParticlePath which is the "uncompressed" form. The ParticleHistoryPMF can be also viewed as the "compressed" form of multiple paths. The ParticleHistoryPMF is the sum of all the ParticlePath's that have the same probability distribution. For the advanced probability theorist, we note that the multi-particle view of the ParticleHistoryPMF's compression is a "coarser" partition under Parition Theory and the ParticlePath is a "finer" partition. Parition Theory's fractal like recursive proofs of probablistic invariance under equal partitioning allows us to see that the ParticleHistoryPMF is scale invariant to the number of particles in the system.
 
 ##############################################################################
 -/
@@ -222,7 +227,7 @@ The form is `sign :: 1...1 ++ 0...0`. We also enforce that the rational is
 normalized (numerator and denominator are coprime), the denominator is non-zero,
 and zero has a unique non-negative representation.
 -/
-def CanonicalParticlePMF (l : List Bool) : Prop :=
+def CanonicalParticleHistoryPMF (l : List Bool) : Prop :=
   ∃ (s : Bool) (p q : ℕ),
     -- The list has the exact canonical structure.
     l = [s] ++ List.replicate p true ++ List.replicate q false ∧
@@ -233,42 +238,42 @@ def CanonicalParticlePMF (l : List Bool) : Prop :=
     -- Canonical Zero: If the numerator is 0, the sign must be non-negative (true).
     (p = 0 → s = true)
 /--
-A `ParticlePMF` is a `List Bool` that is proven to be in the canonical,
+A `ParticleHistoryPMF` is a `List Bool` that is proven to be in the canonical,
 normalized form for a rational number. This is the EGPT representation.
 -/
-abbrev ParticlePMF := { l : List Bool // CanonicalParticlePMF l }
-def EGPT.Rat := ParticlePMF
+abbrev ParticleHistoryPMF := { l : List Bool // CanonicalParticleHistoryPMF l }
+def EGPT.Rat := ParticleHistoryPMF
 
 /--
 A `ParticleWaveform` is a `List Bool` that represents a unique probability mass function - it is what one might see if we sample the positions of a countably infinite number of particles in a system, where each particle's next stochastic move contributes to the overall probability distribution of the system.
 -/
-abbrev ParticleWaveform := ParticlePMF
+abbrev ParticleWaveform := ParticleHistoryPMF
 
 /--
 Parses the numerator `p` (count of `true`s) from a canonical rational list.
 -/
-def getNum (r : ParticlePMF) : ℕ :=
+def getNum (r : ParticleHistoryPMF) : ℕ :=
   r.val.tail.count true
 
 /--
 Parses the denominator `q` (count of `false`s) from a canonical rational list.
 -/
-def getDen (r : ParticlePMF) : ℕ :=
+def getDen (r : ParticleHistoryPMF) : ℕ :=
   r.val.tail.count false
 
 /--
 Parses the sign bit from a canonical rational list.
-Requires proof that the list is non-empty, which `CanonicalParticlePMF` provides.
+Requires proof that the list is non-empty, which `CanonicalParticleHistoryPMF` provides.
 -/
-def getSign (r : ParticlePMF) : Bool :=
-  -- The existential in `CanonicalParticlePMF` guarantees the list is non-empty.
+def getSign (r : ParticleHistoryPMF) : Bool :=
+  -- The existential in `CanonicalParticleHistoryPMF` guarantees the list is non-empty.
   r.val.head (by { rcases r.property with ⟨s, p, q, h_struct, _, _⟩; rw [h_struct]; simp })
 
 /--
 **`toRat`:** Decodes the abstract mathematical value `p/q` from its canonical
 EGPT `List Bool` representation.
 -/
-noncomputable def toRat (r : ParticlePMF) : ℚ :=
+noncomputable def toRat (r : ParticleHistoryPMF) : ℚ :=
   let s := getSign r
   let p := getNum r
   let q := getDen r
@@ -281,13 +286,13 @@ noncomputable def toRat (r : ParticlePMF) : ℚ :=
 **`fromRat`:** Encodes a standard `ℚ` into its canonical, normalized EGPT
 `List Bool` representation.
 -/
-noncomputable def fromRat (q_in : ℚ) : ParticlePMF :=
+noncomputable def fromRat (q_in : ℚ) : ParticleHistoryPMF :=
   let s := decide (0 ≤ q_in.num)
   -- Mathlib's `q.num` and `q.den` are already normalized (coprime).
   let p := q_in.num.natAbs
   let q := q_in.den
   let l := [s] ++ List.replicate p true ++ List.replicate q false
-  -- We package the list `l` with the proof that it satisfies `CanonicalParticlePMF`.
+  -- We package the list `l` with the proof that it satisfies `CanonicalParticleHistoryPMF`.
   ⟨l, by
     use s, p, q
     constructor
@@ -314,17 +319,17 @@ noncomputable def fromRat (q_in : ℚ) : ParticlePMF :=
 
 /--
 **Instantiates the Physical Process:**
-Takes the EGPT description of a ParticlePMF (rational number) and creates the corresponding
+Takes the EGPT description of a ParticleHistoryPMF (rational number) and creates the corresponding
 `BiasedIIDParticleSource` that generates `true` with probability `p/(p+q)`.
 This version uses a more explicit proof style that matches the provided `Filter.lean`.
 -/
-noncomputable def toBiasedSource (r : ParticlePMF) (seed : ℕ) : IIDParticleSource Bool :=
+noncomputable def toBiasedSource (r : ParticleHistoryPMF) (seed : ℕ) : IIDParticleSource Bool :=
   let p := getNum r
   let q := getDen r
   -- We need to prove `p + q > 0`. This follows from `q > 0` which is guaranteed
-  -- by the `CanonicalParticlePMF` property.
+  -- by the `CanonicalParticleHistoryPMF` property.
   have h_total_pos : p + q > 0 := by
-    -- 1. Deconstruct the `CanonicalParticlePMF` proof to get the parameters and properties.
+    -- 1. Deconstruct the `CanonicalParticleHistoryPMF` proof to get the parameters and properties.
     rcases r.property with ⟨s_prop, p_prop, q_prop, h_struct, h_q_pos, _⟩
     -- 2. Prove that our parsed denominator `q` is equal to the `q_prop` from the proof.
     have h_q_eq : q = q_prop := by
@@ -343,15 +348,15 @@ noncomputable def toBiasedSource (r : ParticlePMF) (seed : ℕ) : IIDParticleSou
              Bool.decEq ]
     -- 3. The goal is now `p + q > 0`. We substitute `q` with `q_prop`.
     rw [h_q_eq]
-    -- 4. The `CanonicalParticlePMF` property gives `h_q_pos : q_prop > 0`.
+    -- 4. The `CanonicalParticleHistoryPMF` property gives `h_q_pos : q_prop > 0`.
     --    Since `p` is a natural number, `p ≥ 0`. The sum is therefore > 0.
     exact add_pos_of_nonneg_of_pos (Nat.zero_le p) h_q_pos
   -- Construct the biased source using the parsed parameters and the now-proven hypothesis.
   mkBiasedIIDParticleSource seed p q h_total_pos
 
--- In the `equivParticlePMFtoRational` definition
+-- In the `equivParticleHistoryPMFtoRational` definition
 
-noncomputable def equivParticlePMFtoRational : ParticlePMF ≃ ℚ :=
+noncomputable def equivParticleHistoryPMFtoRational : ParticleHistoryPMF ≃ ℚ :=
 {
   toFun    := toRat,
   invFun   := fromRat,
@@ -510,7 +515,7 @@ noncomputable def equivParticlePMFtoRational : ParticlePMF ≃ ℚ :=
 
 
 /-!
-## Reals as EGPT ParticleSystemPDF: Probability Density Functions over Infinite Systems of Particle's:
+## Reals as EGPT ParticleFuturePDF: Probability Density Functions over Infinite Systems of Particle's:
      ###########################################################
      Reals as Boolean-valued *functions* on our emergent naturals
      *Constructive Interpretation of functions* --
@@ -518,26 +523,26 @@ noncomputable def equivParticlePMFtoRational : ParticlePMF ≃ ℚ :=
 
 /-- Emergent reals: the power set of `ParticlePath`, i.e. characteristic
     functions `ParticlePath → Bool`. -/
-abbrev ParticleSystemPDF := ParticlePath → Bool
-abbrev EGPT.Real := ParticleSystemPDF
+abbrev ParticleFuturePDF := ParticlePath → Bool
+abbrev EGPT.Real := ParticleFuturePDF
 
 
 
 /-- Transport along `ParticlePath ≃ ℕ`, giving `(ParticlePath → Bool) ≃ (ℕ → Bool)`. -/
-noncomputable def equivFunNat : ParticleSystemPDF ≃ (ℕ → Bool) :=
+noncomputable def equivFunNat : ParticleFuturePDF ≃ (ℕ → Bool) :=
   Equiv.arrowCongr equivParticlePathToNat (Equiv.refl Bool)
 
 
 open Cardinal
 
 
-/-- The cardinality of `ParticleSystemPDF` (functions from ParticlePath to Bool) is \(2^{\aleph_0}\). -/
-lemma cardinal_eq_two_pow_aleph0 : Cardinal.mk ParticleSystemPDF = 2 ^ Cardinal.aleph0 := by
+/-- The cardinality of `ParticleFuturePDF` (functions from ParticlePath to Bool) is \(2^{\aleph_0}\). -/
+lemma cardinal_eq_two_pow_aleph0 : Cardinal.mk ParticleFuturePDF = 2 ^ Cardinal.aleph0 := by
   calc
-    -- 1) By definition, ParticleSystemPDF is ParticlePath → Bool.
+    -- 1) By definition, ParticleFuturePDF is ParticlePath → Bool.
     --    Using the equivalence equivFunNat : (ParticlePath → Bool) ≃ (ℕ → Bool),
     --    their cardinalities are equal.
-    Cardinal.mk ParticleSystemPDF
+    Cardinal.mk ParticleFuturePDF
       = Cardinal.mk (ℕ → Bool)             := Cardinal.mk_congr equivFunNat
     -- 2) The cardinality of a function space #(A → B) is #B ^ #A.
     _ = Cardinal.mk Bool ^ Cardinal.mk ℕ   := by rw [Cardinal.power_def]
@@ -545,11 +550,11 @@ lemma cardinal_eq_two_pow_aleph0 : Cardinal.mk ParticleSystemPDF = 2 ^ Cardinal.
     _ = 2 ^ Cardinal.aleph0                := by aesop
 /-- The emergent reals have exactly the same cardinality as ℝ (the continuum). -/
 
-noncomputable def equivParticleSystemPMFtoReal : ParticleSystemPDF ≃ ℝ :=
+noncomputable def equivParticleSystemPMFtoReal : ParticleFuturePDF ≃ ℝ :=
   -- 1) combine your two cardinality proofs into `#G = #ℝ`
-  have h : mk ParticleSystemPDF = mk ℝ := by
+  have h : mk ParticleFuturePDF = mk ℝ := by
     calc
-      mk ParticleSystemPDF = 2 ^ aleph0    := cardinal_eq_two_pow_aleph0
+      mk ParticleFuturePDF = 2 ^ aleph0    := cardinal_eq_two_pow_aleph0
       _                 = #ℝ              := (Cardinal.mk_real).symm
   -- 2) use `Cardinal.eq` to get `Nonempty (G ≃ ℝ)`
   Classical.choice (Cardinal.eq.1 h)
@@ -576,9 +581,9 @@ lemma cardinal_ParticlePath : Cardinal.mk ParticlePath = Cardinal.aleph0 :=
 
 
 
-lemma cardinal_ParticleSystemPDF : Cardinal.mk ParticleSystemPDF = Cardinal.beth 1 := by
+lemma cardinal_ParticleFuturePDF : Cardinal.mk ParticleFuturePDF = Cardinal.beth 1 := by
   -- We previously proved `cardinal_eq_two_pow_aleph0`:
-  -- Cardinal.mk ParticleSystemPDF = 2 ^ Cardinal.aleph0
+  -- Cardinal.mk ParticleFuturePDF = 2 ^ Cardinal.aleph0
   rw [cardinal_eq_two_pow_aleph0]
   -- The definition of `beth 1` is exactly `2 ^ (beth 0)`,
   -- and `beth 0` is `aleph0`.
@@ -662,7 +667,7 @@ theorem cardinal_of_egpt_level (n : ℕ) :
         simp [Rat_L, Cardinal.mk_prod, h_nat_L0_card, beth_zero, aleph0_mul_aleph0]
       · -- Part 3:  `Real_L 0 = Nat_L 1 = ParticlePath → Bool`,
           -- whose cardinality we already computed.
-        simpa [Real_L, Nat_L] using cardinal_ParticleSystemPDF
+        simpa [Real_L, Nat_L] using cardinal_ParticleFuturePDF
 
   | succ k ih =>
     -- Inductive Step: Assume the theorem holds for `k`. Prove it for `k+1`.
@@ -735,6 +740,8 @@ theorem cardinal_L0_operator : Cardinal.mk (InterLevelOperator 0 0) = beth 2 :=
 /-!
 ## Example Dimensions in EGPT
 Per the physical observations of Hawking Radiation and the resultant Holographic Principle we see that mathematical dimensions are lossy compressions (operations on "coarser" partitions) of the underlying particle universe. Nat_L 0 is the finest partition of the particle universe (particles are discrete and countable). Nat_L 1 is the next coarser partition consisting of functions as the new fundamental objects - that is functions at L1 are manipulated in the same way as particles at L0. Etc..
+
+Some fun and somewhat arbitrary names for the dimensions of reality as we know it might be:
 -/
 def QuantumDimension := 0
 def NewtonianClassicalDimension := 1

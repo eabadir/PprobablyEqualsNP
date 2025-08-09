@@ -16,6 +16,12 @@ open EGPT.Physics.BE -- To access specific BE results
 open EGPT.Entropy.RET
 open EGPT.Entropy.Common -- For stdShannonEntropyLn
 
+/-!
+=================================================================
+A VERSION OF THE THE "INTERMEDIARY" PROOF SKETCH --- NOT WORKING ANYMORE, BUT LEFT FOR REFERENCE
+=================================================================
+-/
+
 /- PPNPlean -/
 namespace EGPT
 /-!

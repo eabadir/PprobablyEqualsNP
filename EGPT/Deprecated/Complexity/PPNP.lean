@@ -192,15 +192,15 @@ The process is a direct, computable chain:
 1.  The `RejectionFilter`'s information content is quantified as a single
     rational number by `characteristicRational`.
 2.  This rational number `ℚ` is converted into its canonical EGPT representation,
-    a `ParticlePMF`, using the `fromRat` bijection.
-3.  The underlying `List Bool` of the `ParticlePMF` is, by definition, the
+    a `ParticleHistoryPMF`, using the `fromRat` bijection.
+3.  The underlying `List Bool` of the `ParticleHistoryPMF` is, by definition, the
     canonical `ComputerTape` or "program" for that rational.
 -/
 noncomputable def EGPTProgramForRejectionFilter {k : ℕ} (filter : RejectionFilter k) : ComputerTape :=
   -- 1. Calculate the characteristic rational of the filter.
   let prob_success : ℚ := characteristicRational filter
   -- 2. Convert this rational number into its canonical EGPT representation.
-  let egpt_rational : ParticlePMF := fromRat prob_success
+  let egpt_rational : ParticleHistoryPMF := fromRat prob_success
   -- 3. The program is the underlying List Bool of the canonical EGPT rational.
   egpt_rational.val
 

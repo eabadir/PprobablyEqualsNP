@@ -71,7 +71,7 @@ noncomputable def constructSatisfyingTableau {k : ℕ} (cnf : SyntacticCNF_EGPT 
 **Theorem: The complexity of a canonical Tableau is the sum of the path costs
 to its witness literals.**
 
-This theorem makes the user's intuition formal and provable. It confirms that
+This theorem makes the claim formal and provable. It confirms that
 the "size of a satisfying Tableau" is precisely the sum of the EGPT natural
 numbers (`ParticlePath`s) representing the work needed to verify each clause.
 -/
