@@ -1,0 +1,11 @@
+{
+  "git.repositories.excludePattern": [
+    "**/.lake/packages/**"
+  ],
+  "files.exclude": {
+    "**/.lake/packages": true
+  },
+  "search.exclude": {
+    "**/.lake/packages": true
+  }
+}
